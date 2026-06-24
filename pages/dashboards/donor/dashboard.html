@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Donor Dashboard - Blood Bank Management System</title>
+  <link rel="stylesheet" href="../../../assets/css/global.css">
+  <link rel="stylesheet" href="../../../assets/css/dashboard.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="main-layout with-sidebar">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h3>BloodBank</h3>
+        <p id="donorName">Donor</p>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" onclick="navigateTo('dashboard')">
+          <i class="fas fa-chart-line"></i> Dashboard
+        </a>
+        <a href="#" class="nav-item" onclick="navigateTo('profile')">
+          <i class="fas fa-user"></i> Profile
+        </a>
+        <a href="#" class="nav-item" onclick="navigateTo('donation-history')">
+          <i class="fas fa-history"></i> Donation History
+        </a>
+        <a href="#" class="nav-item" onclick="navigateTo('blood-requests')">
+          <i class="fas fa-hand-holding-medical"></i> Blood Requests
+        </a>
+        <a href="#" class="nav-item" onclick="navigateTo('notifications')">
+          <i class="fas fa-bell"></i> Notifications
+          <span class="notification-badge" id="notificationBadge">0</span>
+        </a>
+        <a href="#" class="nav-item" onclick="navigateTo('settings')">
+          <i class="fas fa-cog"></i> Settings
+        </a>
+        <a href="#" class="nav-item" onclick="logout()">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Navbar -->
+      <nav class="navbar">
+        <div class="navbar-brand">
+          <i class="fas fa-droplet"></i>
+          <span>BloodBank - Donor Dashboard</span>
+        </div>
+        <div class="navbar-actions">
+          <div class="notification-bell" onclick="navigateTo('notifications')">
+            <i class="fas fa-bell"></i>
+            <span class="notification-badge" id="notificationBadge2">0</span>
+          </div>
+          <div class="dropdown">
+            <button class="btn btn-secondary btn-sm">
+              <i class="fas fa-user"></i> Profile <i class="fas fa-chevron-down"></i>
+            </button>
+            <div class="dropdown-menu">
+              <a href="#" onclick="navigateTo('profile')">View Profile</a>
+              <a href="#" onclick="navigateTo('settings')">Settings</a>
+              <a href="#" onclick="logout()">Logout</a>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Dashboard Content -->
+      <div class="dashboard-container">
+        <!-- Dashboard View -->
+        <div id="dashboardView" class="dashboard-view">
+          <div class="dashboard-header">
+            <h2>Welcome Back, <span id="welcomeName">Donor</span>!</h2>
+            <button class="btn btn-primary" onclick="navigateTo('profile')">
+              <i class="fas fa-user-edit"></i> Update Profile
+            </button>
+          </div>
+
+          <!-- Stats Cards -->
+          <div class="dashboard-grid">
+            <div class="card stat-card">
+              <h3 id="totalDonations">0</h3>
+              <p>Total Donations</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="bloodGroupDisplay">-</h3>
+              <p>Blood Group</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="eligibilityStatus">-</h3>
+              <p>Eligibility Status</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="pendingRequests">0</h3>
+              <p>Pending Requests</p>
+            </div>
+          </div>
+
+          <!-- Recent Activity -->
+          <div class="card">
+            <div class="card-header">
+              <h3>Recent Blood Requests</h3>
+              <button class="btn btn-primary btn-sm" onclick="navigateTo('blood-requests')">
+                View All
+              </button>
+            </div>
+            <div class="card-body">
+              <div id="recentRequestsTable" class="table-container">
+                <p class="text-center">No recent requests</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Profile View -->
+        <div id="profileView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>My Profile</h2>
+          </div>
+          <div class="card">
+            <form id="profileForm" class="profile-form">
+              <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" id="profileFullName" readonly>
+              </div>
+              <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="profileEmail" readonly>
+              </div>
+              <div class="form-group">
+                <label>Phone</label>
+                <input type="tel" id="profilePhone">
+              </div>
+              <div class="form-group">
+                <label>Blood Group</label>
+                <input type="text" id="profileBloodGroup" readonly>
+              </div>
+              <div class="form-group">
+                <label>Age</label>
+                <input type="number" id="profileAge" min="18" max="65">
+              </div>
+              <div class="form-group">
+                <label>Gender</label>
+                <input type="text" id="profileGender" readonly>
+              </div>
+              <div class="form-group">
+                <label>City</label>
+                <input type="text" id="profileCity">
+              </div>
+              <div class="form-group">
+                <label>Address</label>
+                <textarea id="profileAddress"></textarea>
+              </div>
+              <div class="card-footer">
+                <button type="button" class="btn btn-secondary" onclick="navigateTo('dashboard')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Donation History View -->
+        <div id="donationHistoryView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Donation History</h2>
+          </div>
+          <div class="card">
+            <div id="donationHistoryTable" class="table-container">
+              <p class="text-center">No donation history</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Blood Requests View -->
+        <div id="bloodRequestsView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Blood Requests</h2>
+          </div>
+          <div id="bloodRequestsList"></div>
+        </div>
+
+        <!-- Notifications View -->
+        <div id="notificationsView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Notifications</h2>
+          </div>
+          <div class="card">
+            <div id="notificationsList"></div>
+          </div>
+        </div>
+
+        <!-- Settings View -->
+        <div id="settingsView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Settings</h2>
+          </div>
+          <div class="card">
+            <form id="settingsForm">
+              <div class="form-group">
+                <label>Current Password</label>
+                <input type="password" id="currentPassword">
+              </div>
+              <div class="form-group">
+                <label>New Password</label>
+                <input type="password" id="newPassword">
+              </div>
+              <div class="form-group">
+                <label>Confirm New Password</label>
+                <input type="password" id="confirmNewPassword">
+              </div>
+              <div class="card-footer">
+                <button type="button" class="btn btn-secondary" onclick="navigateTo('dashboard')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Change Password</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Loading Spinner -->
+  <div id="loadingSpinner" class="loading-spinner hidden">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js"></script>
+
+  <!-- Scripts -->
+  <script src="../../../assets/js/firebase-config.js"></script>
+  <script src="../../../assets/js/auth.js"></script>
+  <script src="../../../assets/js/inventory.js"></script>
+  <script src="../../../assets/js/requests.js"></script>
+  <script src="donor-dashboard.js"></script>
+</body>
+</html>

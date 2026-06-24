@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blood Bank Management System</title>
+  <link rel="stylesheet" href="assets/css/global.css">
+  <link rel="stylesheet" href="assets/css/landing.css">
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <nav class="navbar landing-navbar">
+    <div class="navbar-brand">
+      <i class="fas fa-droplet"></i>
+      <span>BloodBank</span>
+    </div>
+    <ul class="navbar-nav">
+      <li><a href="#home">Home</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#about">About</a></li>
+      <li><a href="#contact">Contact</a></li>
+    </ul>
+    <div class="navbar-actions">
+      <a href="pages/auth/login.html" class="btn btn-secondary">Login</a>
+      <a href="pages/auth/register.html" class="btn btn-primary">Register</a>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero hero-banner" id="home">
+    <img class="hero-bg" src="assets/images/blood%20donation.jpg" alt="Blood donation background image">
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+      <span class="hero-eyebrow">Trusted blood network for donors, hospitals, and patients.</span>
+      <h1>Every Drop Saves a Life</h1>
+      <p>Connecting blood donors, hospitals, and patients through a secure and intelligent blood bank management platform.</p>
+      <div class="hero-actions">
+        <a href="pages/auth/register.html?role=donor" class="btn btn-primary btn-lg">
+          <i class="fas fa-tint"></i> Become a Donor
+        </a>
+        <a href="pages/auth/register.html?role=hospital" class="btn btn-secondary btn-lg">
+          <i class="fas fa-hospital"></i> Request Blood
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="features" id="features">
+    <div class="container">
+      <h2>Why Choose Us?</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <i class="fas fa-user-shield"></i>
+          </div>
+          <h3>Secure Authentication</h3>
+          <p>Firebase-powered secure login and registration for all user types.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <i class="fas fa-cube"></i>
+          </div>
+          <h3>Real-time Inventory</h3>
+          <p>Track blood stock in real-time across all organizations.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <i class="fas fa-bell"></i>
+          </div>
+          <h3>Instant Notifications</h3>
+          <p>Get notified about blood requests and donations instantly.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <i class="fas fa-chart-bar"></i>
+          </div>
+          <h3>Analytics & Reports</h3>
+          <p>Comprehensive reports and analytics for better decision making.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <i class="fas fa-map-location-dot"></i>
+          </div>
+          <h3>Location-Based Search</h3>
+          <p>Find blood availability near you instantly.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <i class="fas fa-users"></i>
+          </div>
+          <h3>Multiple Roles</h3>
+          <p>Support for Donors, Organizations, Hospitals, and Admins.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works Section -->
+  <section class="how-it-works">
+    <div class="container">
+      <h2>How It Works</h2>
+      <div class="steps-container">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3>Register</h3>
+          <p>Sign up as a Donor, Organization, Hospital, or Admin</p>
+        </div>
+        <div class="step-arrow">
+          <i class="fas fa-arrow-right"></i>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3>Login</h3>
+          <p>Access your personalized dashboard</p>
+        </div>
+        <div class="step-arrow">
+          <i class="fas fa-arrow-right"></i>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3>Manage</h3>
+          <p>Handle blood inventory and requests</p>
+        </div>
+        <div class="step-arrow">
+          <i class="fas fa-arrow-right"></i>
+        </div>
+        <div class="step">
+          <div class="step-number">4</div>
+          <h3>Connect</h3>
+          <p>Collaborate to save lives</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Blood Inventory Section -->
+  <section class="inventory-section">
+    <div class="container inventory-grid">
+      <div class="inventory-copy">
+        <span class="section-subtitle">Inventory Intelligence</span>
+        <h2>Real-Time Blood Inventory</h2>
+        <p>Monitor blood availability across all blood groups and ensure quick access during emergencies.</p>
+        <div class="inventory-features">
+          <div class="inventory-feature"><i class="fas fa-check-circle"></i> Blood Stock Tracking</div>
+          <div class="inventory-feature"><i class="fas fa-check-circle"></i> Blood Group Availability</div>
+          <div class="inventory-feature"><i class="fas fa-check-circle"></i> Hospital Integration</div>
+          <div class="inventory-feature"><i class="fas fa-check-circle"></i> Emergency Blood Requests</div>
+          <div class="inventory-feature"><i class="fas fa-check-circle"></i> Real-Time Updates</div>
+        </div>
+        <a href="pages/auth/login.html" class="btn btn-primary btn-lg">Explore Inventory</a>
+      </div>
+      <div class="inventory-image-card">
+        <img src="assets/images/blood%20inventory.jpg" alt="Blood inventory">
+      </div>
+    </div>
+  </section>
+
+  <!-- Emergency Requests Section -->
+  <section class="emergency-requests">
+    <div class="container emergency-card">
+      <div class="emergency-copy">
+        <span class="section-subtitle">Priority Support</span>
+        <h2>Emergency Requests</h2>
+        <p>Send urgent blood requests immediately to nearby donors and hospitals for fast lifesaving action.</p>
+      </div>
+      <a href="pages/auth/register.html?role=hospital" class="btn btn-secondary btn-lg">Submit Request</a>
+    </div>
+  </section>
+
+  <!-- User Roles Section -->
+  <section class="user-roles" id="about">
+    <div class="container">
+      <h2>For Everyone</h2>
+      <div class="roles-grid">
+        <div class="role-card donor-role">
+          <div class="role-icon">
+            <img class="role-img" src="assets/images/blood-donor.png" alt="Donor icon">
+          </div>
+          <h3>Donors</h3>
+          <p>Donate blood, track donation history, and receive urgent blood requests.</p>
+        </div>
+        <div class="role-card org-role">
+          <div class="role-icon">
+            <img class="role-img" src="assets/images/organization icon.png" alt="Organization icon">
+          </div>
+          <h3>Organizations</h3>
+          <p>Manage blood inventory, approve requests, and connect donors with hospitals.</p>
+        </div>
+        <div class="role-card hospital-role">
+          <div class="role-icon">
+            <img class="role-img" src="assets/images/hospital icon.png" alt="Hospital icon">
+          </div>
+          <h3>Hospitals</h3>
+          <p>Request blood, track availability, and manage patient requirements.</p>
+        </div>
+        <div class="role-card admin-role">
+          <div class="role-icon">
+            <img class="role-img" src="assets/images/admin icon.png" alt="Admin icon">
+          </div>
+          <h3>Admins</h3>
+          <p>Monitor system, manage users, and generate comprehensive reports.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact Section -->
+  <section class="contact" id="contact">
+    <div class="container">
+      <h2>Get in Touch</h2>
+      <div class="contact-content">
+        <div class="contact-info">
+          <div class="contact-item">
+            <i class="fas fa-phone"></i>
+            <div>
+              <h4>Phone</h4>
+              <p>+1 (555) 123-4567</p>
+            </div>
+          </div>
+          <div class="contact-item">
+            <i class="fas fa-envelope"></i>
+            <div>
+              <h4>Email</h4>
+              <p>info@bloodbank.com</p>
+            </div>
+          </div>
+          <div class="contact-item">
+            <i class="fas fa-map-pin"></i>
+            <div>
+              <h4>Address</h4>
+              <p>123 Medical Lane, Health City</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-section">
+          <h4>About</h4>
+          <ul>
+            <li><a href="#about">About Us</a></li>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#contact">Contact</a></li>
+          </ul>
+        </div>
+        <div class="footer-section">
+          <h4>Quick Links</h4>
+          <ul>
+            <li><a href="pages/auth/login.html">Login</a></li>
+            <li><a href="pages/auth/register.html">Register</a></li>
+            <li><a href="#home">Home</a></li>
+          </ul>
+        </div>
+        <div class="footer-section">
+          <h4>Legal</h4>
+          <ul>
+            <li><a href="privacy-policy.html">Privacy Policy</a></li>
+            <li><a href="terms-of-service.html">Terms of Service</a></li>
+            <li><a href="cookie-policy.html">Cookie Policy</a></li>
+          </ul>
+        </div>
+        <div class="footer-section">
+          <h4>Follow Us</h4>
+          <div class="social-links">
+            <a href="#" title="Facebook"><i class="fab fa-facebook"></i></a>
+            <a href="#" title="Twitter"><i class="fab fa-twitter"></i></a>
+            <a href="#" title="Instagram"><i class="fab fa-instagram"></i></a>
+            <a href="#" title="LinkedIn"><i class="fab fa-linkedin"></i></a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2024 Blood Bank Management System. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/landing.js"></script>
+</body>
+</html>

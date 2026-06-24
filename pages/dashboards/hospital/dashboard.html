@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hospital Dashboard - Blood Bank Management System</title>
+  <link rel="stylesheet" href="../../../assets/css/global.css">
+  <link rel="stylesheet" href="../../../assets/css/dashboard.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="main-layout with-sidebar">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h3>BloodBank</h3>
+        <p id="hospitalName">Hospital</p>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" onclick="navigateTo('dashboard')">
+          <i class="fas fa-chart-line"></i> Dashboard
+        </a>
+        <a href="#" class="nav-item" onclick="navigateTo('request-blood')">
+          <i class="fas fa-hand-holding-medical"></i> Request Blood
+        </a>
+        <a href="#" class="nav-item" onclick="navigateTo('blood-availability')">
+          <i class="fas fa-cube"></i> Blood Availability
+        </a>
+        <a href="#" class="nav-item" onclick="navigateTo('request-history')">
+          <i class="fas fa-history"></i> Request History
+        </a>
+        <a href="#" class="nav-item" onclick="navigateTo('notifications')">
+          <i class="fas fa-bell"></i> Notifications
+          <span class="notification-badge" id="notificationBadge">0</span>
+        </a>
+        <a href="#" class="nav-item" onclick="navigateTo('settings')">
+          <i class="fas fa-cog"></i> Settings
+        </a>
+        <a href="#" class="nav-item" onclick="logout()">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Navbar -->
+      <nav class="navbar">
+        <div class="navbar-brand">
+          <i class="fas fa-droplet"></i>
+          <span>BloodBank - Hospital Dashboard</span>
+        </div>
+        <div class="navbar-actions">
+          <div class="notification-bell" onclick="navigateTo('notifications')">
+            <i class="fas fa-bell"></i>
+            <span class="notification-badge" id="notificationBadge2">0</span>
+          </div>
+          <div class="dropdown">
+            <button class="btn btn-secondary btn-sm">
+              <i class="fas fa-user"></i> Profile <i class="fas fa-chevron-down"></i>
+            </button>
+            <div class="dropdown-menu">
+              <a href="#" onclick="navigateTo('settings')">Settings</a>
+              <a href="#" onclick="logout()">Logout</a>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Dashboard Content -->
+      <div class="dashboard-container">
+        <!-- Dashboard View -->
+        <div id="dashboardView" class="dashboard-view">
+          <div class="dashboard-header">
+            <h2>Hospital Dashboard</h2>
+          </div>
+
+          <!-- Stats Cards -->
+          <div class="dashboard-grid">
+            <div class="card stat-card">
+              <h3 id="activeRequests">0</h3>
+              <p>Active Requests</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="approvedRequests">0</h3>
+              <p>Approved Requests</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="pendingRequests">0</h3>
+              <p>Pending Requests</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="rejectedRequests">0</h3>
+              <p>Rejected Requests</p>
+            </div>
+          </div>
+
+          <!-- Recent Requests -->
+          <div class="card">
+            <div class="card-header">
+              <h3>Recent Requests</h3>
+              <button class="btn btn-primary btn-sm" onclick="navigateTo('request-history')">View All</button>
+            </div>
+            <div class="card-body">
+              <div id="recentRequestsList"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Request Blood View -->
+        <div id="request-bloodView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Request Blood</h2>
+          </div>
+          <div class="card">
+            <form id="requestBloodForm">
+              <div class="form-group">
+                <label>Blood Group</label>
+                <select id="requestBloodGroup" required>
+                  <option value="">Select blood group</option>
+                  <option value="A+">A+</option>
+                  <option value="A-">A-</option>
+                  <option value="B+">B+</option>
+                  <option value="B-">B-</option>
+                  <option value="AB+">AB+</option>
+                  <option value="AB-">AB-</option>
+                  <option value="O+">O+</option>
+                  <option value="O-">O-</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Units Required</label>
+                <input type="number" id="requestUnits" min="1" required>
+              </div>
+
+              <div class="form-group">
+                <label>Patient Name</label>
+                <input type="text" id="requestPatientName">
+              </div>
+
+              <div class="form-group">
+                <label>Patient Age</label>
+                <input type="number" id="requestPatientAge">
+              </div>
+
+              <div class="form-group">
+                <label>Purpose</label>
+                <textarea id="requestPurpose" placeholder="Enter the purpose of blood request"></textarea>
+              </div>
+
+              <div class="form-group">
+                <label>Urgency Level</label>
+                <select id="requestUrgency" required>
+                  <option value="Normal">Normal</option>
+                  <option value="Urgent">Urgent</option>
+                  <option value="Emergency">Emergency</option>
+                </select>
+              </div>
+
+              <div class="card-footer">
+                <button type="button" class="btn btn-secondary" onclick="navigateTo('dashboard')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Submit Request</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Blood Availability View -->
+        <div id="blood-availabilityView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Blood Availability</h2>
+            <input type="text" id="searchCity" placeholder="Search by city..." style="padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+          </div>
+          <div id="availabilityResults"></div>
+        </div>
+
+        <!-- Request History View -->
+        <div id="request-historyView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Request History</h2>
+          </div>
+          <div id="requestHistoryList"></div>
+        </div>
+
+        <!-- Notifications View -->
+        <div id="notificationsView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Notifications</h2>
+          </div>
+          <div class="card">
+            <div id="notificationsList"></div>
+          </div>
+        </div>
+
+        <!-- Settings View -->
+        <div id="settingsView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Settings</h2>
+          </div>
+          <div class="card">
+            <form id="settingsForm">
+              <div class="form-group">
+                <label>Hospital Name</label>
+                <input type="text" id="settingsHospitalName">
+              </div>
+              <div class="form-group">
+                <label>Phone</label>
+                <input type="tel" id="settingsPhone">
+              </div>
+              <div class="form-group">
+                <label>Address</label>
+                <textarea id="settingsAddress"></textarea>
+              </div>
+              <div class="form-group">
+                <label>City</label>
+                <input type="text" id="settingsCity">
+              </div>
+              <div class="card-footer">
+                <button type="button" class="btn btn-secondary" onclick="navigateTo('dashboard')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Loading Spinner -->
+  <div id="loadingSpinner" class="loading-spinner hidden">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js"></script>
+
+  <!-- Scripts -->
+  <script src="../../../assets/js/firebase-config.js"></script>
+  <script src="../../../assets/js/auth.js"></script>
+  <script src="../../../assets/js/inventory.js"></script>
+  <script src="../../../assets/js/requests.js"></script>
+  <script src="hospital-dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,256 @@
+/* ===== ADDITIONAL DASHBOARD UTILITIES ===== */
+
+/* Availability Items */
+.availability-item {
+  padding: 15px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  background-color: var(--bg-color);
+}
+
+.availability-item p {
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+.availability-item strong {
+  color: var(--primary-color);
+}
+
+/* Empty State Styling */
+.empty-state {
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.empty-state-icon {
+  font-size: 64px;
+  color: var(--text-light);
+  margin-bottom: 20px;
+  opacity: 0.5;
+}
+
+.empty-state-title {
+  font-size: 24px;
+  color: var(--text-color);
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.empty-state-message {
+  color: var(--text-light);
+  font-size: 16px;
+  max-width: 400px;
+  margin: 0 auto 20px;
+}
+
+/* Status Badge Colors */
+.badge-pending {
+  background-color: rgba(245, 124, 0, 0.1);
+  color: var(--warning-color);
+  border: 1px solid var(--warning-color);
+}
+
+.badge-approved {
+  background-color: rgba(46, 125, 50, 0.1);
+  color: var(--success-color);
+  border: 1px solid var(--success-color);
+}
+
+.badge-rejected {
+  background-color: rgba(211, 47, 47, 0.1);
+  color: var(--danger-color);
+  border: 1px solid var(--danger-color);
+}
+
+.badge-completed {
+  background-color: rgba(0, 150, 136, 0.1);
+  color: #009688;
+  border: 1px solid #009688;
+}
+
+/* Dashboard Grid Adjustments */
+@media (max-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .request-card {
+    padding: 15px;
+  }
+
+  .request-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .request-actions {
+    width: 100%;
+  }
+
+  .request-actions .btn {
+    width: 100%;
+  }
+
+  .notification-item {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .availability-item {
+    padding: 10px;
+    margin-bottom: 8px;
+  }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-color);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-dark);
+}
+
+/* Print Styles */
+@media print {
+  .sidebar,
+  .navbar,
+  .dashboard-header button,
+  .request-actions,
+  .modal {
+    display: none;
+  }
+
+  .main-layout.with-sidebar {
+    margin-left: 0;
+  }
+
+  .dashboard-container {
+    padding: 0;
+  }
+
+  .card {
+    page-break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid var(--border-color);
+  }
+}
+
+/* Animation for data loading */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.loading {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Dropdown Enhancement */
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown:hover .dropdown-menu {
+  display: block;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Form Input Focus States */
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(193, 18, 31, 0.1);
+}
+
+/* Pagination Styles (if needed) */
+.pagination {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.pagination a,
+.pagination span {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  text-decoration: none;
+  color: var(--primary-color);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.pagination a:hover,
+.pagination .active {
+  background-color: var(--primary-color);
+  color: var(--secondary-color);
+}
+
+/* Success/Error Indicators */
+.success-indicator {
+  color: var(--success-color);
+  font-weight: 600;
+}
+
+.error-indicator {
+  color: var(--danger-color);
+  font-weight: 600;
+}
+
+.warning-indicator {
+  color: var(--warning-color);
+  font-weight: 600;
+}
+
+/* Chart Container (for future chart integration) */
+.chart-container {
+  position: relative;
+  width: 100%;
+  height: 300px;
+  margin: 20px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-color);
+  border-radius: 8px;
+  border: 1px dashed var(--border-color);
+}
+
+.chart-placeholder {
+  text-align: center;
+  color: var(--text-light);
+  font-size: 14px;
+}

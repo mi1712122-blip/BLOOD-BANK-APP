@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Organization Dashboard - Blood Bank Management System</title>
+  <link rel="stylesheet" href="../../../assets/css/global.css">
+  <link rel="stylesheet" href="../../../assets/css/dashboard.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="main-layout with-sidebar">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h3>BloodBank</h3>
+        <p id="orgName">Organization</p>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" onclick="navigateTo('dashboard')">
+          <i class="fas fa-chart-line"></i> Dashboard
+        </a>
+        <a href="#" class="nav-item" onclick="navigateTo('inventory')">
+          <i class="fas fa-cube"></i> Blood Inventory
+        </a>
+        <a href="#" class="nav-item" onclick="navigateTo('donors')">
+          <i class="fas fa-users"></i> Donors
+        </a>
+        <a href="#" class="nav-item" onclick="navigateTo('hospitals')">
+          <i class="fas fa-hospital"></i> Hospitals
+        </a>
+        <a href="#" class="nav-item" onclick="navigateTo('requests')">
+          <i class="fas fa-hand-holding-medical"></i> Requests
+        </a>
+        <a href="#" class="nav-item" onclick="navigateTo('notifications')">
+          <i class="fas fa-bell"></i> Notifications
+          <span class="notification-badge" id="notificationBadge">0</span>
+        </a>
+        <a href="#" class="nav-item" onclick="navigateTo('settings')">
+          <i class="fas fa-cog"></i> Settings
+        </a>
+        <a href="#" class="nav-item" onclick="logout()">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Navbar -->
+      <nav class="navbar">
+        <div class="navbar-brand">
+          <i class="fas fa-droplet"></i>
+          <span>BloodBank - Organization Dashboard</span>
+        </div>
+        <div class="navbar-actions">
+          <div class="notification-bell" onclick="navigateTo('notifications')">
+            <i class="fas fa-bell"></i>
+            <span class="notification-badge" id="notificationBadge2">0</span>
+          </div>
+          <div class="dropdown">
+            <button class="btn btn-secondary btn-sm">
+              <i class="fas fa-user"></i> Profile <i class="fas fa-chevron-down"></i>
+            </button>
+            <div class="dropdown-menu">
+              <a href="#" onclick="navigateTo('settings')">Settings</a>
+              <a href="#" onclick="logout()">Logout</a>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Dashboard Content -->
+      <div class="dashboard-container">
+        <!-- Dashboard View -->
+        <div id="dashboardView" class="dashboard-view">
+          <div class="dashboard-header">
+            <h2>Organization Dashboard</h2>
+          </div>
+
+          <!-- Stats Cards -->
+          <div class="dashboard-grid">
+            <div class="card stat-card">
+              <h3 id="totalBloodUnits">0</h3>
+              <p>Total Blood Units</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="totalDonors">0</h3>
+              <p>Registered Donors</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="pendingRequests">0</h3>
+              <p>Pending Requests</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="connectedHospitals">0</h3>
+              <p>Connected Hospitals</p>
+            </div>
+          </div>
+
+          <!-- Blood Inventory Overview -->
+          <div class="card">
+            <div class="card-header">
+              <h3>Blood Inventory Overview</h3>
+              <button class="btn btn-primary btn-sm" onclick="navigateTo('inventory')">Manage</button>
+            </div>
+            <div class="card-body">
+              <div id="inventoryOverview" class="inventory-grid"></div>
+            </div>
+          </div>
+
+          <!-- Recent Requests -->
+          <div class="card">
+            <div class="card-header">
+              <h3>Recent Blood Requests</h3>
+              <button class="btn btn-primary btn-sm" onclick="navigateTo('requests')">View All</button>
+            </div>
+            <div class="card-body">
+              <div id="recentRequests"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Blood Inventory View -->
+        <div id="inventoryView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Blood Inventory Management</h2>
+            <button class="btn btn-primary" onclick="openAddBloodModal()">
+              <i class="fas fa-plus"></i> Add Blood
+            </button>
+          </div>
+          <div id="bloodInventoryTable"></div>
+        </div>
+
+        <!-- Donors View -->
+        <div id="donorsView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Registered Donors</h2>
+          </div>
+          <div id="donorsTable"></div>
+        </div>
+
+        <!-- Hospitals View -->
+        <div id="hospitalsView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Connected Hospitals</h2>
+          </div>
+          <div id="hospitalsTable"></div>
+        </div>
+
+        <!-- Requests View -->
+        <div id="requestsView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Blood Requests</h2>
+          </div>
+          <div id="requestsList"></div>
+        </div>
+
+        <!-- Notifications View -->
+        <div id="notificationsView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Notifications</h2>
+          </div>
+          <div class="card">
+            <div id="notificationsList"></div>
+          </div>
+        </div>
+
+        <!-- Settings View -->
+        <div id="settingsView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Settings</h2>
+          </div>
+          <div class="card">
+            <form id="settingsForm">
+              <div class="form-group">
+                <label>Organization Name</label>
+                <input type="text" id="settingsOrgName">
+              </div>
+              <div class="form-group">
+                <label>Phone</label>
+                <input type="tel" id="settingsPhone">
+              </div>
+              <div class="form-group">
+                <label>Address</label>
+                <textarea id="settingsAddress"></textarea>
+              </div>
+              <div class="form-group">
+                <label>City</label>
+                <input type="text" id="settingsCity">
+              </div>
+              <div class="card-footer">
+                <button type="button" class="btn btn-secondary" onclick="navigateTo('dashboard')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add Blood Modal -->
+  <div id="addBloodModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Add Blood to Inventory</h2>
+        <button type="button" class="modal-close" onclick="closeAddBloodModal()">&times;</button>
+      </div>
+      <form id="addBloodForm">
+        <div class="form-group">
+          <label>Blood Group</label>
+          <select id="bloodGroupSelect" required>
+            <option value="">Select blood group</option>
+            <option value="A+">A+</option>
+            <option value="A-">A-</option>
+            <option value="B+">B+</option>
+            <option value="B-">B-</option>
+            <option value="AB+">AB+</option>
+            <option value="AB-">AB-</option>
+            <option value="O+">O+</option>
+            <option value="O-">O-</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Units</label>
+          <input type="number" id="unitsInput" min="1" required>
+        </div>
+        <div class="form-group">
+          <label>Expiry Date</label>
+          <input type="date" id="expiryDateInput" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeAddBloodModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Add Blood</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Loading Spinner -->
+  <div id="loadingSpinner" class="loading-spinner hidden">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js"></script>
+
+  <!-- Scripts -->
+  <script src="../../../assets/js/firebase-config.js"></script>
+  <script src="../../../assets/js/auth.js"></script>
+  <script src="../../../assets/js/inventory.js"></script>
+  <script src="../../../assets/js/requests.js"></script>
+  <script src="organization-dashboard.js"></script>
+</body>
+</html>
