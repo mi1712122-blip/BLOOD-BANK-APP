@@ -1,3 +1,5 @@
+import { authManager } from '../../assets/js/auth.js';
+
 // Register Page Script
 let selectedRole = null;
 
@@ -16,6 +18,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (roleParam && ['donor', 'organization', 'hospital'].includes(roleParam)) {
     selectRole(roleParam);
   }
+
+  document.querySelectorAll('.toggle-password').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      const fieldId = button.dataset.target;
+      if (fieldId) {
+        togglePasswordVisibility(event, fieldId);
+      }
+    });
+  });
 });
 
 // Role selection
@@ -64,10 +75,12 @@ function goBackToRoleSelection() {
 }
 
 // Toggle password visibility
-function togglePasswordVisibility(fieldId) {
+function togglePasswordVisibility(event, fieldId) {
   const field = document.getElementById(fieldId);
-  const btn = event.target.closest('.toggle-password');
-  const icon = btn.querySelector('i');
+  const btn = event.currentTarget || event.target.closest('.toggle-password');
+  const icon = btn?.querySelector('i');
+
+  if (!field || !btn || !icon) return;
   
   if (field.type === 'password') {
     field.type = 'text';

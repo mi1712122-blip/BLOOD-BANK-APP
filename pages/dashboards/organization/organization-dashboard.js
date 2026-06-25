@@ -1,3 +1,7 @@
+import { authManager } from '../../../assets/js/auth.js';
+import { bloodInventoryManager } from '../../../assets/js/inventory.js';
+import { bloodRequestManager } from '../../../assets/js/requests.js';
+
 // Organization Dashboard Script
 let currentOrganization = null;
 
@@ -105,10 +109,10 @@ function displayRecentRequests(requests) {
           </div>
           ${req.status === 'Pending' ? `
             <div class="request-actions">
-              <button class="btn btn-success btn-sm" onclick="approveRequest('${req.id}')">
+              <button class="btn btn-primary btn-sm" onclick="approveRequest('${req.id}')">
                 <i class="fas fa-check"></i> Approve
               </button>
-              <button class="btn btn-danger btn-sm" onclick="openRejectModal('${req.id}')">
+              <button class="btn btn-secondary btn-sm" onclick="openRejectModal('${req.id}')">
                 <i class="fas fa-times"></i> Reject
               </button>
             </div>

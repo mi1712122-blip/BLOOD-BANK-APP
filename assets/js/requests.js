@@ -1,4 +1,16 @@
-// Blood Request Module
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  query,
+  updateDoc,
+  where
+} from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
+import { db } from './firebase-config.js';
+
 class BloodRequestManager {
   constructor() {
     this.requestStatus = {
@@ -9,7 +21,6 @@ class BloodRequestManager {
     };
   }
 
-  // Create blood request
   async createBloodRequest(requestData) {
     try {
       const request = {
@@ -27,9 +38,8 @@ class BloodRequestManager {
         updatedAt: new Date()
       };
 
-      const docRef = await firebase.firestore().collection('bloodRequests').add(request);
-      
-      // Send notification
+      const docRef = await addDoc(collection(db, 'bloodRequests'), request);
+
       await this.sendNotification({
         type: 'blood_request',
         title: 'New Blood Request',
@@ -44,18 +54,17 @@ class BloodRequestManager {
     }
   }
 
-  // Get requests for hospital
   async getHospitalRequests(hospitalId) {
     try {
-      const snapshot = await firebase.firestore()
-        .collection('bloodRequests')
-        .where('hospitalId', '==', hospitalId)
-        .orderBy('createdAt', 'desc')
-        .get();
+      const requestQuery = query(
+        collection(db, 'bloodRequests'),
+        where('hospitalId', '==', hospitalId)
+      );
+      const snapshot = await getDocs(requestQuery);
 
       const requests = [];
-      snapshot.forEach(doc => {
-        requests.push({ id: doc.id, ...doc.data() });
+      snapshot.forEach((docSnap) => {
+        requests.push({ id: docSnap.id, ...docSnap.data() });
       });
 
       return { success: true, data: requests };
@@ -64,18 +73,17 @@ class BloodRequestManager {
     }
   }
 
-  // Get requests for organization
   async getOrganizationRequests(organizationId) {
     try {
-      const snapshot = await firebase.firestore()
-        .collection('bloodRequests')
-        .where('organizationId', '==', organizationId)
-        .orderBy('createdAt', 'desc')
-        .get();
+      const requestQuery = query(
+        collection(db, 'bloodRequests'),
+        where('organizationId', '==', organizationId)
+      );
+      const snapshot = await getDocs(requestQuery);
 
       const requests = [];
-      snapshot.forEach(doc => {
-        requests.push({ id: doc.id, ...doc.data() });
+      snapshot.forEach((docSnap) => {
+        requests.push({ id: docSnap.id, ...docSnap.data() });
       });
 
       return { success: true, data: requests };
@@ -84,19 +92,17 @@ class BloodRequestManager {
     }
   }
 
-  // Approve request
   async approveRequest(requestId, organizationId) {
     try {
-      const requestDoc = await firebase.firestore().collection('bloodRequests').doc(requestId).get();
+      const requestDoc = await getDoc(doc(db, 'bloodRequests', requestId));
       const request = requestDoc.data();
 
-      await firebase.firestore().collection('bloodRequests').doc(requestId).update({
+      await updateDoc(doc(db, 'bloodRequests', requestId), {
         status: this.requestStatus.APPROVED,
-        organizationId: organizationId,
+        organizationId,
         approvedAt: new Date()
       });
 
-      // Send notification to hospital
       await this.sendNotification({
         type: 'request_approved',
         title: 'Blood Request Approved',
@@ -110,19 +116,17 @@ class BloodRequestManager {
     }
   }
 
-  // Reject request
   async rejectRequest(requestId, reason) {
     try {
-      const requestDoc = await firebase.firestore().collection('bloodRequests').doc(requestId).get();
+      const requestDoc = await getDoc(doc(db, 'bloodRequests', requestId));
       const request = requestDoc.data();
 
-      await firebase.firestore().collection('bloodRequests').doc(requestId).update({
+      await updateDoc(doc(db, 'bloodRequests', requestId), {
         status: this.requestStatus.REJECTED,
         rejectionReason: reason,
         rejectedAt: new Date()
       });
 
-      // Send notification
       await this.sendNotification({
         type: 'request_rejected',
         title: 'Blood Request Rejected',
@@ -136,7 +140,6 @@ class BloodRequestManager {
     }
   }
 
-  // Send notification
   async sendNotification(notificationData) {
     try {
       const notification = {
@@ -148,26 +151,25 @@ class BloodRequestManager {
         createdAt: new Date()
       };
 
-      await firebase.firestore().collection('notifications').add(notification);
+      await addDoc(collection(db, 'notifications'), notification);
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
     }
   }
 
-  // Get notifications
   async getNotifications(userId) {
     try {
-      const snapshot = await firebase.firestore()
-        .collection('notifications')
-        .where('recipientId', '==', userId)
-        .orderBy('createdAt', 'desc')
-        .limit(50)
-        .get();
+      const notificationQuery = query(
+        collection(db, 'notifications'),
+        where('recipientId', '==', userId),
+        limit(50)
+      );
+      const snapshot = await getDocs(notificationQuery);
 
       const notifications = [];
-      snapshot.forEach(doc => {
-        notifications.push({ id: doc.id, ...doc.data() });
+      snapshot.forEach((docSnap) => {
+        notifications.push({ id: docSnap.id, ...docSnap.data() });
       });
 
       return { success: true, data: notifications };
@@ -176,10 +178,9 @@ class BloodRequestManager {
     }
   }
 
-  // Mark notification as read
   async markNotificationAsRead(notificationId) {
     try {
-      await firebase.firestore().collection('notifications').doc(notificationId).update({
+      await updateDoc(doc(db, 'notifications', notificationId), {
         isRead: true
       });
       return { success: true };
@@ -188,14 +189,14 @@ class BloodRequestManager {
     }
   }
 
-  // Get unread notification count
   async getUnreadNotificationCount(userId) {
     try {
-      const snapshot = await firebase.firestore()
-        .collection('notifications')
-        .where('recipientId', '==', userId)
-        .where('isRead', '==', false)
-        .get();
+      const notificationQuery = query(
+        collection(db, 'notifications'),
+        where('recipientId', '==', userId),
+        where('isRead', '==', false)
+      );
+      const snapshot = await getDocs(notificationQuery);
 
       return { success: true, count: snapshot.size };
     } catch (error) {
@@ -204,5 +205,5 @@ class BloodRequestManager {
   }
 }
 
-// Create global instance
-const bloodRequestManager = new BloodRequestManager();
+export const bloodRequestManager = new BloodRequestManager();
+window.bloodRequestManager = bloodRequestManager;

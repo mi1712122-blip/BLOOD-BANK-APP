@@ -1,4 +1,15 @@
-// Blood Inventory Module
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  query,
+  updateDoc,
+  where
+} from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
+import { db } from './firebase-config.js';
+
 class BloodInventoryManager {
   constructor() {
     this.bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -14,11 +25,10 @@ class BloodInventoryManager {
     };
   }
 
-  // Add blood to inventory
   async addBlood(organizationId, bloodData) {
     try {
       const bloodRecord = {
-        organizationId: organizationId,
+        organizationId,
         bloodGroup: bloodData.bloodGroup,
         units: bloodData.units,
         expiryDate: bloodData.expiryDate,
@@ -28,27 +38,27 @@ class BloodInventoryManager {
         createdAt: new Date()
       };
 
-      const docRef = await firebase.firestore().collection('bloodInventory').add(bloodRecord);
+      const docRef = await addDoc(collection(db, 'bloodInventory'), bloodRecord);
       return { success: true, id: docRef.id };
     } catch (error) {
       return { success: false, error: error.message };
     }
   }
 
-  // Get blood inventory by organization
   async getInventoryByOrganization(organizationId) {
     try {
-      const snapshot = await firebase.firestore()
-        .collection('bloodInventory')
-        .where('organizationId', '==', organizationId)
-        .where('status', '==', 'Available')
-        .get();
+      const inventoryQuery = query(
+        collection(db, 'bloodInventory'),
+        where('organizationId', '==', organizationId),
+        where('status', '==', 'Available')
+      );
+      const snapshot = await getDocs(inventoryQuery);
 
       const inventory = {};
-      this.bloodGroups.forEach(group => inventory[group] = 0);
+      this.bloodGroups.forEach((group) => inventory[group] = 0);
 
-      snapshot.forEach(doc => {
-        const data = doc.data();
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
         inventory[data.bloodGroup] = (inventory[data.bloodGroup] || 0) + data.units;
       });
 
@@ -58,10 +68,9 @@ class BloodInventoryManager {
     }
   }
 
-  // Update blood quantity
   async updateBloodQuantity(bloodId, newUnits) {
     try {
-      await firebase.firestore().collection('bloodInventory').doc(bloodId).update({
+      await updateDoc(doc(db, 'bloodInventory', bloodId), {
         units: newUnits,
         updatedAt: new Date()
       });
@@ -71,44 +80,44 @@ class BloodInventoryManager {
     }
   }
 
-  // Delete blood record
   async deleteBlood(bloodId) {
     try {
-      await firebase.firestore().collection('bloodInventory').doc(bloodId).delete();
+      await deleteDoc(doc(db, 'bloodInventory', bloodId));
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
     }
   }
 
-  // Search blood availability
   async searchBloodAvailability(bloodGroup, city) {
     try {
-      const snapshot = await firebase.firestore()
-        .collection('organizations')
-        .where('city', '==', city)
-        .where('isApproved', '==', true)
-        .get();
+      const organizationQuery = query(
+        collection(db, 'organizations'),
+        where('city', '==', city),
+        where('isApproved', '==', true)
+      );
+      const snapshot = await getDocs(organizationQuery);
 
       const availability = [];
       for (const org of snapshot.docs) {
-        const inventorySnapshot = await firebase.firestore()
-          .collection('bloodInventory')
-          .where('organizationId', '==', org.id)
-          .where('bloodGroup', '==', bloodGroup)
-          .where('status', '==', 'Available')
-          .get();
+        const inventoryQuery = query(
+          collection(db, 'bloodInventory'),
+          where('organizationId', '==', org.id),
+          where('bloodGroup', '==', bloodGroup),
+          where('status', '==', 'Available')
+        );
+        const inventorySnapshot = await getDocs(inventoryQuery);
 
         let totalUnits = 0;
-        inventorySnapshot.forEach(doc => {
-          totalUnits += doc.data().units;
+        inventorySnapshot.forEach((docSnap) => {
+          totalUnits += docSnap.data().units;
         });
 
         if (totalUnits > 0) {
           availability.push({
             organizationId: org.id,
             organizationName: org.data().organizationName,
-            bloodGroup: bloodGroup,
+            bloodGroup,
             units: totalUnits,
             phone: org.data().phone,
             address: org.data().address
@@ -122,11 +131,10 @@ class BloodInventoryManager {
     }
   }
 
-  // Get color for blood group
   getBloodGroupColor(bloodGroup) {
     return this.bloodGroupColors[bloodGroup] || '#333333';
   }
 }
 
-// Create global instance
-const bloodInventoryManager = new BloodInventoryManager();
+export const bloodInventoryManager = new BloodInventoryManager();
+window.bloodInventoryManager = bloodInventoryManager;

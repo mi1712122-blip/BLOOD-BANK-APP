@@ -18,16 +18,16 @@
 :root {
   --primary-color: #C1121F;
   --primary-dark: #8B0C1A;
-  --secondary-color: #FFFFFF;
-  --bg-color: #F5F5F5;
+  --secondary-color: #fcf7f3;
+  --bg-color: #f7efe8;
   --success-color: #2E7D32;
   --warning-color: #F57C00;
   --danger-color: #D32F2F;
   --text-color: #333333;
   --text-light: #666666;
-  --border-color: #DDDDDD;
-  --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 4px 20px rgba(0, 0, 0, 0.15);
+  --border-color: #e7d8cc;
+  --shadow: 0 8px 22px rgba(17, 24, 39, 0.08);
+  --shadow-lg: 0 14px 34px rgba(17, 24, 39, 0.14);
   --transition: all 0.3s ease;
   
   /* Fonts */
@@ -70,18 +70,26 @@ p {
 /* ===== BUTTONS ===== */
 .btn {
   padding: 12px 24px;
-  border: none;
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
   font-family: var(--font-primary);
   font-size: var(--font-size-base);
   font-weight: 600;
   cursor: pointer;
-  transition: var(--transition);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   text-decoration: none;
+  line-height: 1.2;
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.06);
+}
+
+.btn-lg {
+  padding: 14px 28px;
+  font-size: 15px;
+  border-radius: 10px;
 }
 
 .btn:disabled {
@@ -90,64 +98,47 @@ p {
 }
 
 /* Primary Button */
-.btn-primary {
-  background-color: var(--primary-color);
-  color: var(--secondary-color);
-  border: 2px solid var(--primary-color);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background-color: var(--primary-dark);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
-}
-
-.btn-primary:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-/* Secondary Button */
+.btn-primary,
 .btn-secondary {
-  background-color: var(--secondary-color);
-  color: var(--primary-color);
-  border: 2px solid var(--primary-color);
+  background: linear-gradient(135deg, #d62828 0%, #b91c1c 100%);
+  color: #ffffff;
+  border-color: #b91c1c;
 }
 
+.btn-primary:hover:not(:disabled),
 .btn-secondary:hover:not(:disabled) {
-  background-color: #F0F0F0;
-  transform: translateY(-2px);
+  background: linear-gradient(135deg, #e53935 0%, #c62828 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 28px rgba(185, 28, 28, 0.22);
 }
 
-/* Success Button */
-.btn-success {
-  background-color: var(--success-color);
-  color: var(--secondary-color);
+.btn-primary:active:not(:disabled),
+.btn-secondary:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 6px 16px rgba(185, 28, 28, 0.18);
 }
 
-.btn-success:hover:not(:disabled) {
-  background-color: #1B5E20;
-  transform: translateY(-2px);
-}
-
-/* Danger Button */
-.btn-danger {
-  background-color: var(--danger-color);
-  color: var(--secondary-color);
-}
-
-.btn-danger:hover:not(:disabled) {
-  background-color: #B71C1C;
-  transform: translateY(-2px);
-}
-
-/* Warning Button */
+/* Legacy action classes now use the standard button system */
+.btn-success,
+.btn-danger,
 .btn-warning {
-  background-color: var(--warning-color);
-  color: var(--secondary-color);
+  background: linear-gradient(135deg, #d62828 0%, #b91c1c 100%);
+  color: #ffffff;
+  border-color: #b91c1c;
 }
 
+.btn-success:hover:not(:disabled),
+.btn-danger:hover:not(:disabled),
 .btn-warning:hover:not(:disabled) {
-  background-color: #E65100;
+  background: linear-gradient(135deg, #e53935 0%, #c62828 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 28px rgba(185, 28, 28, 0.22);
+}
+
+/* Focus States */
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.22);
 }
 
 /* Small Button */
@@ -527,9 +518,10 @@ tr:last-child td {
 }
 
 .alert-danger {
-  background-color: rgba(211, 47, 47, 0.1);
-  border-left: 4px solid var(--danger-color);
-  color: var(--danger-color);
+  background: rgba(255, 241, 241, 0.95);
+  border-left: 4px solid #c62828;
+  color: #b91c1c;
+  box-shadow: 0 8px 18px rgba(185, 28, 28, 0.12);
 }
 
 .alert-info {

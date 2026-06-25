@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Blood Bank Management System</title>
   <link rel="stylesheet" href="assets/css/global.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
   <link rel="stylesheet" href="assets/css/landing.css">
   <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -30,22 +31,78 @@
 
   <!-- Hero Section -->
   <section class="hero hero-banner" id="home">
-    <img class="hero-bg" src="assets/images/blood%20donation.jpg" alt="Blood donation background image">
+    <video class="hero-video" autoplay muted loop playsinline poster="assets/images/blood%20donation.jpg">
+      <source src="videos/hero page vid.mp4" type="video/mp4">
+    </video>
     <div class="hero-overlay"></div>
     <div class="hero-content">
-      <span class="hero-eyebrow">Trusted blood network for donors, hospitals, and patients.</span>
-      <h1>Every Drop Saves a Life</h1>
-      <p>Connecting blood donors, hospitals, and patients through a secure and intelligent blood bank management platform.</p>
-      <div class="hero-actions">
-        <a href="pages/auth/register.html?role=donor" class="btn btn-primary btn-lg">
-          <i class="fas fa-tint"></i> Become a Donor
-        </a>
-        <a href="pages/auth/register.html?role=hospital" class="btn btn-secondary btn-lg">
-          <i class="fas fa-hospital"></i> Request Blood
-        </a>
+      <span class="hero-eyebrow animate__animated animate__fadeInDown">Trusted blood network for donors, hospitals, and patients</span>
+      <h1 class="animate__animated animate__fadeInDown animate__delay-1s">A Simple Way to Save Lives</h1>
+      <p class="animate__animated animate__fadeInUp animate__delay-2s">A secure platform that helps donors, hospitals, and organizations connect with clarity, reliability, and purpose.</p>
+    </div>
+  </section>
+
+  <section class="trust-strip" aria-label="Trust highlights">
+    <div class="container trust-strip-inner">
+      <div class="trust-item">
+        <i class="fas fa-shield-alt"></i>
+        <div>
+          <strong>Secure</strong>
+          <span>Protected connections</span>
+        </div>
+      </div>
+      <div class="trust-item">
+        <i class="fas fa-bolt"></i>
+        <div>
+          <strong>Fast</strong>
+          <span>Instant coordination</span>
+        </div>
+      </div>
+      <div class="trust-item">
+        <i class="fas fa-heartbeat"></i>
+        <div>
+          <strong>Reliable</strong>
+          <span>Life-saving support</span>
+        </div>
       </div>
     </div>
   </section>
+
+  <section class="stats-section" aria-label="Platform stats">
+    <div class="container stats-grid">
+      <div class="stat-card">
+        <strong>1K+</strong>
+        <span>Active Donors</span>
+      </div>
+      <div class="stat-card">
+        <strong>24/7</strong>
+        <span>Support Access</span>
+      </div>
+      <div class="stat-card">
+        <strong>100%</strong>
+        <span>Real-Time Updates</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="highlight-row" aria-label="Highlights">
+    <div class="container highlight-row-inner">
+      <div class="highlight-item">
+        <i class="fas fa-check-circle"></i>
+        <span>Trusted coordination for critical moments</span>
+      </div>
+      <div class="highlight-item">
+        <i class="fas fa-check-circle"></i>
+        <span>Designed for donors, hospitals, and organizations</span>
+      </div>
+      <div class="highlight-item">
+        <i class="fas fa-check-circle"></i>
+        <span>Elegant, simple, and built for reliability</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
 
   <!-- Features Section -->
   <section class="features" id="features">

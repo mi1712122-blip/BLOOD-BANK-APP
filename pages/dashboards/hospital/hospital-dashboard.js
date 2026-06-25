@@ -1,3 +1,6 @@
+import { authManager } from '../../../assets/js/auth.js';
+import { bloodRequestManager } from '../../../assets/js/requests.js';
+
 // Hospital Dashboard Script
 let currentHospital = null;
 

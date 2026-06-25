@@ -1,4 +1,19 @@
-// Authentication Module
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  sendPasswordResetEmail
+} from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc
+} from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
+import { auth, db } from './firebase-config.js';
+console.log('Auth module loaded with Firebase project:', auth?.app?.options?.projectId || 'unknown');
+
 class AuthManager {
   constructor() {
     this.currentUser = null;
@@ -6,30 +21,44 @@ class AuthManager {
     this.currentUserData = null;
   }
 
-  // Register new user
+  setSessionUser(user, role, data) {
+    this.currentUser = user;
+    this.currentUserRole = role;
+    this.currentUserData = data;
+
+    if (user && role) {
+      sessionStorage.setItem('userRole', role);
+      sessionStorage.setItem('userId', user.uid);
+    }
+  }
+
+  clearSessionUser() {
+    this.currentUser = null;
+    this.currentUserRole = null;
+    this.currentUserData = null;
+    sessionStorage.removeItem('userRole');
+    sessionStorage.removeItem('userId');
+  }
+
   async register(email, password, userData) {
     try {
-      // Create user account
-      const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Store additional user data in Firestore
       const userDocData = {
         uid: user.uid,
-        email: email,
+        email,
         role: userData.role,
         createdAt: new Date(),
         ...userData
       };
 
-      // Create collection based on role
-      await firebase.firestore().collection('users').doc(user.uid).set(userDocData);
+      await setDoc(doc(db, 'users', user.uid), userDocData);
 
-      // Create role-specific collection entry
       if (userData.role === 'donor') {
-        await firebase.firestore().collection('donors').doc(user.uid).set({
+        await setDoc(doc(db, 'donors', user.uid), {
           uid: user.uid,
-          email: email,
+          email,
           fullName: userData.fullName,
           phone: userData.phone,
           bloodGroup: userData.bloodGroup,
@@ -44,9 +73,9 @@ class AuthManager {
           createdAt: new Date()
         });
       } else if (userData.role === 'organization') {
-        await firebase.firestore().collection('organizations').doc(user.uid).set({
+        await setDoc(doc(db, 'organizations', user.uid), {
           uid: user.uid,
-          email: email,
+          email,
           organizationName: userData.organizationName,
           phone: userData.phone,
           address: userData.address,
@@ -56,9 +85,9 @@ class AuthManager {
           createdAt: new Date()
         });
       } else if (userData.role === 'hospital') {
-        await firebase.firestore().collection('hospitals').doc(user.uid).set({
+        await setDoc(doc(db, 'hospitals', user.uid), {
           uid: user.uid,
-          email: email,
+          email,
           hospitalName: userData.hospitalName,
           phone: userData.phone,
           address: userData.address,
@@ -69,101 +98,109 @@ class AuthManager {
         });
       }
 
-      return { success: true, user: user };
+      return { success: true, user };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('Firebase auth register error:', error);
+      console.error('Registration error code:', error?.code);
+      console.error('Registration error message:', error?.message);
+      return { success: false, error: error.message || error?.code || 'Registration failed' };
     }
   }
 
-  // Login user
   async login(email, password) {
     try {
-      const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+      const userDocRef = await getDoc(doc(db, 'users', user.uid));
 
-      // Fetch user data from Firestore
-      const userDoc = await firebase.firestore().collection('users').doc(user.uid).get();
-      
-      if (userDoc.exists) {
-        this.currentUser = user;
-        this.currentUserRole = userDoc.data().role;
-        this.currentUserData = userDoc.data();
-        
-        // Store in sessionStorage for persistence
-        sessionStorage.setItem('userRole', this.currentUserRole);
-        sessionStorage.setItem('userId', user.uid);
-        
-        return { success: true, user: user, role: this.currentUserRole };
-      } else {
-        return { success: false, error: 'User data not found' };
+      if (userDocRef.exists()) {
+        const role = userDocRef.data().role;
+        this.setSessionUser(user, role, userDocRef.data());
+        return { success: true, user, role };
       }
+
+      return { success: false, error: 'User data not found' };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('Firebase auth login error:', error);
+      console.error('Login error code:', error?.code);
+      console.error('Login error message:', error?.message);
+      return { success: false, error: error.message || error?.code || 'Login failed' };
     }
   }
 
-  // Logout user
   async logout() {
     try {
-      await firebase.auth().signOut();
-      this.currentUser = null;
-      this.currentUserRole = null;
-      this.currentUserData = null;
-      sessionStorage.removeItem('userRole');
-      sessionStorage.removeItem('userId');
+      await signOut(auth);
+      this.clearSessionUser();
       return { success: true };
     } catch (error) {
+      console.error('Firebase auth logout error:', error);
       return { success: false, error: error.message };
     }
   }
 
-  // Get current user
   async getCurrentUser() {
     return new Promise((resolve) => {
-      firebase.auth().onAuthStateChanged(async (user) => {
-        if (user) {
-          const userDoc = await firebase.firestore().collection('users').doc(user.uid).get();
-          this.currentUser = user;
-          this.currentUserRole = userDoc.data().role;
-          this.currentUserData = userDoc.data();
-          resolve({ user: user, role: this.currentUserRole, data: userDoc.data() });
-        } else {
+      const unsubscribe = onAuthStateChanged(auth, async (user) => {
+        unsubscribe();
+
+        if (!user) {
+          this.clearSessionUser();
+          resolve(null);
+          return;
+        }
+
+        try {
+          const userDocRef = await getDoc(doc(db, 'users', user.uid));
+          if (userDocRef.exists()) {
+            const data = userDocRef.data();
+            const role = data.role;
+            this.setSessionUser(user, role, data);
+            resolve({ user, role, data });
+          } else {
+            this.clearSessionUser();
+            resolve(null);
+          }
+        } catch (error) {
+          console.error('Error loading current user:', error);
+          this.clearSessionUser();
           resolve(null);
         }
       });
     });
   }
 
-  // Update user profile
   async updateProfile(uid, updateData) {
     try {
-      await firebase.firestore().collection('users').doc(uid).update(updateData);
-      
-      // Update role-specific collection
-      if (this.currentUserRole === 'donor') {
-        await firebase.firestore().collection('donors').doc(uid).update(updateData);
-      } else if (this.currentUserRole === 'organization') {
-        await firebase.firestore().collection('organizations').doc(uid).update(updateData);
-      } else if (this.currentUserRole === 'hospital') {
-        await firebase.firestore().collection('hospitals').doc(uid).update(updateData);
+      await updateDoc(doc(db, 'users', uid), updateData);
+
+      const role = this.currentUserRole || this.currentUserData?.role;
+      if (role === 'donor') {
+        await updateDoc(doc(db, 'donors', uid), updateData);
+      } else if (role === 'organization') {
+        await updateDoc(doc(db, 'organizations', uid), updateData);
+      } else if (role === 'hospital') {
+        await updateDoc(doc(db, 'hospitals', uid), updateData);
       }
 
       return { success: true };
     } catch (error) {
+      console.error('Firebase profile update error:', error);
       return { success: false, error: error.message };
     }
   }
 
-  // Reset password
   async resetPassword(email) {
     try {
-      await firebase.auth().sendPasswordResetEmail(email);
+      await sendPasswordResetEmail(auth, email);
       return { success: true };
     } catch (error) {
+      console.error('Firebase password reset error:', error);
       return { success: false, error: error.message };
     }
   }
 }
 
-// Create global instance
-const authManager = new AuthManager();
+export { AuthManager };
+export const authManager = new AuthManager();
+window.authManager = authManager;

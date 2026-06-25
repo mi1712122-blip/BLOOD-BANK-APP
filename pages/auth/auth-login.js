@@ -1,21 +1,26 @@
+import { authManager } from '../../assets/js/auth.js';
+
 // Login Page Script
 const loginForm = document.getElementById('loginForm');
 const alertContainer = document.getElementById('alertContainer');
 const loadingSpinner = document.getElementById('loadingSpinner');
 
 // Toggle password visibility
-function togglePasswordVisibility() {
+function togglePasswordVisibility(event) {
   const passwordInput = document.getElementById('password');
-  const toggleBtn = document.querySelector('.toggle-password i');
+  const toggleBtn = event.currentTarget || event.target.closest('.toggle-password');
+  const icon = toggleBtn?.querySelector('i');
+
+  if (!passwordInput || !toggleBtn || !icon) return;
   
   if (passwordInput.type === 'password') {
     passwordInput.type = 'text';
-    toggleBtn.classList.remove('fa-eye');
-    toggleBtn.classList.add('fa-eye-slash');
+    icon.classList.remove('fa-eye');
+    icon.classList.add('fa-eye-slash');
   } else {
     passwordInput.type = 'password';
-    toggleBtn.classList.remove('fa-eye-slash');
-    toggleBtn.classList.add('fa-eye');
+    icon.classList.remove('fa-eye-slash');
+    icon.classList.add('fa-eye');
   }
 }
 
@@ -134,4 +139,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('email').value = rememberedEmail;
     document.getElementById('rememberMe').checked = true;
   }
+
+  document.querySelector('.toggle-password')?.addEventListener('click', (event) => {
+    togglePasswordVisibility(event);
+  });
 });

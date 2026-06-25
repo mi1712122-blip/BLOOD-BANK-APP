@@ -1,3 +1,5 @@
+import { authManager } from '../../../assets/js/auth.js';
+
 // Donor Dashboard Script
 let currentDonor = null;
 let currentView = 'dashboard';
@@ -139,10 +141,10 @@ function displayAllBloodRequests(requests) {
           </div>
           ${req.status === 'Pending' ? `
             <div class="request-actions">
-              <button class="btn btn-success" onclick="acceptRequest('${req.id}')">
+              <button class="btn btn-primary" onclick="acceptRequest('${req.id}')">
                 <i class="fas fa-check"></i> Accept
               </button>
-              <button class="btn btn-danger" onclick="rejectRequest('${req.id}')">
+              <button class="btn btn-secondary" onclick="rejectRequest('${req.id}')">
                 <i class="fas fa-times"></i> Reject
               </button>
             </div>

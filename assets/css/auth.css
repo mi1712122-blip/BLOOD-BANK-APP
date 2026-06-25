@@ -185,13 +185,17 @@
 }
 
 .auth-card .form-group select {
-  color: #fff;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(6px);
+  color-scheme: dark;
 }
 
 .auth-card .form-group select option,
 .auth-card .form-group select optgroup {
-  color: #fff;
-  background: rgba(10,10,10,0.95);
+  color: #111827;
+  background: #ffffff;
 }
 
 .auth-card .form-group input::placeholder {
@@ -280,7 +284,8 @@
 
 /* Removed unused forgot password and Google login styles */
 
-.btn-primary {
+.auth-form .btn {
+  width: 100%;
   padding: 14px 20px;
   font-size: 16px;
 }
