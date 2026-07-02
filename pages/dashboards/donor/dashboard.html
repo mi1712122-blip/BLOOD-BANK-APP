@@ -17,26 +17,26 @@
         <p id="donorName">Donor</p>
       </div>
       <nav class="sidebar-nav">
-        <a href="#" class="nav-item active" onclick="navigateTo('dashboard')">
+        <a href="#" class="nav-item active" data-view="dashboard">
           <i class="fas fa-chart-line"></i> Dashboard
         </a>
-        <a href="#" class="nav-item" onclick="navigateTo('profile')">
+        <a href="#" class="nav-item" data-view="profile">
           <i class="fas fa-user"></i> Profile
         </a>
-        <a href="#" class="nav-item" onclick="navigateTo('donation-history')">
+        <a href="#" class="nav-item" data-view="donation-history">
           <i class="fas fa-history"></i> Donation History
         </a>
-        <a href="#" class="nav-item" onclick="navigateTo('blood-requests')">
+        <a href="#" class="nav-item" data-view="blood-requests">
           <i class="fas fa-hand-holding-medical"></i> Blood Requests
         </a>
-        <a href="#" class="nav-item" onclick="navigateTo('notifications')">
+        <a href="#" class="nav-item" data-view="notifications">
           <i class="fas fa-bell"></i> Notifications
           <span class="notification-badge" id="notificationBadge">0</span>
         </a>
-        <a href="#" class="nav-item" onclick="navigateTo('settings')">
+        <a href="#" class="nav-item" data-view="settings">
           <i class="fas fa-cog"></i> Settings
         </a>
-        <a href="#" class="nav-item" onclick="logout()">
+        <a href="#" class="nav-item" data-action="logout">
           <i class="fas fa-sign-out-alt"></i> Logout
         </a>
       </nav>
@@ -51,18 +51,18 @@
           <span>BloodBank - Donor Dashboard</span>
         </div>
         <div class="navbar-actions">
-          <div class="notification-bell" onclick="navigateTo('notifications')">
+          <div class="notification-bell" data-view="notifications">
             <i class="fas fa-bell"></i>
             <span class="notification-badge" id="notificationBadge2">0</span>
           </div>
           <div class="dropdown">
-            <button class="btn btn-secondary btn-sm">
+            <button class="btn btn-secondary btn-sm" type="button">
               <i class="fas fa-user"></i> Profile <i class="fas fa-chevron-down"></i>
             </button>
             <div class="dropdown-menu">
-              <a href="#" onclick="navigateTo('profile')">View Profile</a>
-              <a href="#" onclick="navigateTo('settings')">Settings</a>
-              <a href="#" onclick="logout()">Logout</a>
+              <a href="#" data-view="profile">View Profile</a>
+              <a href="#" data-view="settings">Settings</a>
+              <a href="#" data-action="logout">Logout</a>
             </div>
           </div>
         </div>
@@ -74,7 +74,7 @@
         <div id="dashboardView" class="dashboard-view">
           <div class="dashboard-header">
             <h2>Welcome Back, <span id="welcomeName">Donor</span>!</h2>
-            <button class="btn btn-primary" onclick="navigateTo('profile')">
+            <button type="button" class="btn btn-primary" data-view="profile">
               <i class="fas fa-user-edit"></i> Update Profile
             </button>
           </div>
@@ -103,7 +103,7 @@
           <div class="card">
             <div class="card-header">
               <h3>Recent Blood Requests</h3>
-              <button class="btn btn-primary btn-sm" onclick="navigateTo('blood-requests')">
+              <button type="button" class="btn btn-primary btn-sm" data-view="blood-requests">
                 View All
               </button>
             </div>
@@ -155,7 +155,7 @@
                 <textarea id="profileAddress"></textarea>
               </div>
               <div class="card-footer">
-                <button type="button" class="btn btn-secondary" onclick="navigateTo('dashboard')">Cancel</button>
+                <button type="button" class="btn btn-secondary" data-view="dashboard">Cancel</button>
                 <button type="submit" class="btn btn-primary">Save Changes</button>
               </div>
             </form>
@@ -212,7 +212,7 @@
                 <input type="password" id="confirmNewPassword">
               </div>
               <div class="card-footer">
-                <button type="button" class="btn btn-secondary" onclick="navigateTo('dashboard')">Cancel</button>
+                <button type="button" class="btn btn-secondary" data-view="dashboard">Cancel</button>
                 <button type="submit" class="btn btn-primary">Change Password</button>
               </div>
             </form>

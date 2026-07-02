@@ -1,10 +1,12 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
   limit,
+  onSnapshot,
   query,
   updateDoc,
   where
@@ -147,6 +149,9 @@ class BloodRequestManager {
         type: notificationData.type,
         title: notificationData.title,
         message: notificationData.message,
+        senderId: notificationData.senderId || null,
+        senderRole: notificationData.senderRole || null,
+        senderName: notificationData.senderName || null,
         isRead: false,
         createdAt: new Date()
       };
@@ -178,11 +183,83 @@ class BloodRequestManager {
     }
   }
 
+  listenNotifications(userId, callback) {
+    try {
+      const notificationQuery = query(
+        collection(db, 'notifications'),
+        where('recipientId', '==', userId),
+        limit(50)
+      );
+
+      return onSnapshot(
+        notificationQuery,
+        (snapshot) => {
+          const notifications = [];
+          snapshot.forEach((docSnap) => {
+            notifications.push({ id: docSnap.id, ...docSnap.data() });
+          });
+
+          notifications.sort((a, b) => {
+            const aTime = a.createdAt?.seconds ?? a.createdAt?.toMillis?.() ?? 0;
+            const bTime = b.createdAt?.seconds ?? b.createdAt?.toMillis?.() ?? 0;
+            return bTime - aTime;
+          });
+
+          callback({ success: true, data: notifications });
+        },
+        (error) => {
+          callback({ success: false, error: error.message });
+        }
+      );
+    } catch (error) {
+      callback({ success: false, error: error.message });
+      return () => {};
+    }
+  }
+
   async markNotificationAsRead(notificationId) {
     try {
       await updateDoc(doc(db, 'notifications', notificationId), {
-        isRead: true
+        isRead: true,
+        updatedAt: new Date()
       });
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  async markAllNotificationsRead(userId) {
+    try {
+      const notificationQuery = query(
+        collection(db, 'notifications'),
+        where('recipientId', '==', userId),
+        where('isRead', '==', false)
+      );
+      const snapshot = await getDocs(notificationQuery);
+      const promises = [];
+      snapshot.forEach((docSnap) => {
+        promises.push(updateDoc(doc(db, 'notifications', docSnap.id), { isRead: true, updatedAt: new Date() }));
+      });
+      await Promise.all(promises);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  async clearAllNotifications(userId) {
+    try {
+      const notificationQuery = query(
+        collection(db, 'notifications'),
+        where('recipientId', '==', userId)
+      );
+      const snapshot = await getDocs(notificationQuery);
+      const promises = [];
+      snapshot.forEach((docSnap) => {
+        promises.push(deleteDoc(doc(db, 'notifications', docSnap.id)));
+      });
+      await Promise.all(promises);
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };

@@ -17,28 +17,31 @@
         <p>Admin Panel</p>
       </div>
       <nav class="sidebar-nav">
-        <a href="#" class="nav-item active" onclick="navigateTo('dashboard')">
+        <a href="#" class="nav-item active" data-view="dashboard">
           <i class="fas fa-chart-line"></i> Dashboard
         </a>
-        <a href="#" class="nav-item" onclick="navigateTo('donors')">
-          <i class="fas fa-user-heartbeat"></i> Donors
+        <a href="#" class="nav-item" data-view="donors">
+          <i class="fas fa-users"></i> Donors
         </a>
-        <a href="#" class="nav-item" onclick="navigateTo('organizations')">
+        <a href="#" class="nav-item" data-view="organizations">
           <i class="fas fa-building"></i> Organizations
         </a>
-        <a href="#" class="nav-item" onclick="navigateTo('hospitals')">
+        <a href="#" class="nav-item" data-view="hospitals">
           <i class="fas fa-hospital"></i> Hospitals
         </a>
-        <a href="#" class="nav-item" onclick="navigateTo('inventory')">
+        <a href="#" class="nav-item" data-view="sendNotification">
+          <i class="fas fa-envelope"></i> Send Notification
+        </a>
+        <a href="#" class="nav-item" data-view="inventory">
           <i class="fas fa-cube"></i> Blood Inventory
         </a>
-        <a href="#" class="nav-item" onclick="navigateTo('analytics')">
+        <a href="#" class="nav-item" data-view="analytics">
           <i class="fas fa-chart-bar"></i> Analytics
         </a>
-        <a href="#" class="nav-item" onclick="navigateTo('settings')">
+        <a href="#" class="nav-item" data-view="settings">
           <i class="fas fa-cog"></i> Settings
         </a>
-        <a href="#" class="nav-item" onclick="logout()">
+        <a href="#" class="nav-item" data-action="logout">
           <i class="fas fa-sign-out-alt"></i> Logout
         </a>
       </nav>
@@ -58,8 +61,8 @@
               <i class="fas fa-user"></i> Admin <i class="fas fa-chevron-down"></i>
             </button>
             <div class="dropdown-menu">
-              <a href="#" onclick="navigateTo('settings')">Settings</a>
-              <a href="#" onclick="logout()">Logout</a>
+              <a href="#" data-view="settings">Settings</a>
+              <a href="#" data-action="logout">Logout</a>
             </div>
           </div>
         </div>
@@ -120,6 +123,45 @@
             <h2>Manage Organizations</h2>
           </div>
           <div id="organizationsList" class="table-container"></div>
+        </div>
+
+        <!-- Send Notification View -->
+        <div id="sendNotificationView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Send Notification</h2>
+          </div>
+          <div class="card">
+            <form id="notificationForm">
+              <div class="form-group">
+                <label>Recipient Type</label>
+                <select id="recipientType" required>
+                  <option value="specificDonor">Specific Donor</option>
+                  <option value="specificHospital">Specific Hospital</option>
+                  <option value="specificOrganization">Specific Organization</option>
+                  <option value="allDonors">All Donors</option>
+                  <option value="allHospitals">All Hospitals</option>
+                  <option value="allOrganizations">All Organizations</option>
+                  <option value="allUsers">All Users</option>
+                </select>
+              </div>
+              <div class="form-group" id="recipientSelectorGroup">
+                <label>Select Recipient</label>
+                <select id="recipientSelector" required></select>
+              </div>
+              <div class="form-group">
+                <label>Title</label>
+                <input type="text" id="notificationTitle" maxlength="100" placeholder="Enter notification title" required>
+              </div>
+              <div class="form-group">
+                <label>Message</label>
+                <textarea id="notificationMessage" rows="5" maxlength="500" placeholder="Enter notification message" required></textarea>
+              </div>
+              <div class="card-footer">
+                <button type="button" class="btn btn-secondary" data-view="dashboard">Cancel</button>
+                <button type="submit" class="btn btn-primary">Send Notification</button>
+              </div>
+            </form>
+          </div>
         </div>
 
         <!-- Hospitals Management View -->
@@ -183,7 +225,7 @@
                 <textarea id="eligibilityCriteria" placeholder="Define eligibility criteria..."></textarea>
               </div>
               <div class="card-footer">
-                <button type="button" class="btn btn-secondary" onclick="navigateTo('dashboard')">Cancel</button>
+                <button type="button" class="btn btn-secondary" data-view="dashboard">Cancel</button>
                 <button type="submit" class="btn btn-primary">Save Settings</button>
               </div>
             </form>

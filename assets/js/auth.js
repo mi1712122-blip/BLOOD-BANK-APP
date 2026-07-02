@@ -26,9 +26,19 @@ class AuthManager {
     this.currentUserRole = role;
     this.currentUserData = data;
 
-    if (user && role) {
-      sessionStorage.setItem('userRole', role);
-      sessionStorage.setItem('userId', user.uid);
+    if (role) {
+      try {
+        sessionStorage.setItem('userRole', role);
+        if (user && user.uid) {
+          sessionStorage.setItem('userId', user.uid);
+        }
+        localStorage.setItem('userRole', role);
+        if (user && user.uid) {
+          localStorage.setItem('userId', user.uid);
+        }
+      } catch (error) {
+        console.warn('Storage unavailable, auth session persistence may not work:', error);
+      }
     }
   }
 
@@ -36,8 +46,14 @@ class AuthManager {
     this.currentUser = null;
     this.currentUserRole = null;
     this.currentUserData = null;
-    sessionStorage.removeItem('userRole');
-    sessionStorage.removeItem('userId');
+    try {
+      sessionStorage.removeItem('userRole');
+      sessionStorage.removeItem('userId');
+      localStorage.removeItem('userRole');
+      localStorage.removeItem('userId');
+    } catch (error) {
+      console.warn('Unable to clear stored auth state:', error);
+    }
   }
 
   async register(email, password, userData) {
@@ -145,6 +161,22 @@ class AuthManager {
         unsubscribe();
 
         if (!user) {
+          const storedUid = sessionStorage.getItem('userId');
+          const storedRole = sessionStorage.getItem('userRole');
+          if (storedUid && storedRole) {
+            try {
+              const userDocRef = await getDoc(doc(db, 'users', storedUid));
+              if (userDocRef.exists()) {
+                const data = userDocRef.data();
+                this.setSessionUser(null, storedRole, data);
+                resolve({ user: null, role: storedRole, data });
+                return;
+              }
+            } catch (error) {
+              console.error('Error reloading current user from session storage:', error);
+            }
+          }
+
           this.clearSessionUser();
           resolve(null);
           return;

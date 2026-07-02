@@ -4,6 +4,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  onSnapshot,
   query,
   updateDoc,
   where
@@ -31,11 +32,14 @@ class BloodInventoryManager {
         organizationId,
         bloodGroup: bloodData.bloodGroup,
         units: bloodData.units,
-        expiryDate: bloodData.expiryDate,
-        collectionDate: new Date(),
+        expiryDate: bloodData.expiryDate ? new Date(bloodData.expiryDate) : null,
+        collectionDate: bloodData.collectionDate ? new Date(bloodData.collectionDate) : new Date(),
         donorId: bloodData.donorId || null,
+        storageLocation: bloodData.storageLocation || null,
+        notes: bloodData.notes || null,
         status: 'Available',
-        createdAt: new Date()
+        createdAt: new Date(),
+        updatedAt: new Date()
       };
 
       const docRef = await addDoc(collection(db, 'bloodInventory'), bloodRecord);
@@ -65,6 +69,48 @@ class BloodInventoryManager {
       return { success: true, data: inventory };
     } catch (error) {
       return { success: false, error: error.message };
+    }
+  }
+
+  async getInventoryItemsByOrganization(organizationId) {
+    try {
+      const inventoryQuery = query(
+        collection(db, 'bloodInventory'),
+        where('organizationId', '==', organizationId)
+      );
+      const snapshot = await getDocs(inventoryQuery);
+      const items = [];
+      snapshot.forEach((docSnap) => {
+        items.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      return { success: true, data: items };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  listenOrganizationInventory(organizationId, callback) {
+    try {
+      const inventoryQuery = query(
+        collection(db, 'bloodInventory'),
+        where('organizationId', '==', organizationId)
+      );
+      return onSnapshot(
+        inventoryQuery,
+        (snapshot) => {
+          const items = [];
+          snapshot.forEach((docSnap) => {
+            items.push({ id: docSnap.id, ...docSnap.data() });
+          });
+          callback({ success: true, data: items });
+        },
+        (error) => {
+          callback({ success: false, error: error.message });
+        }
+      );
+    } catch (error) {
+      callback({ success: false, error: error.message });
+      return () => {};
     }
   }
 

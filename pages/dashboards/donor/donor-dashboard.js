@@ -1,41 +1,64 @@
 import { authManager } from '../../../assets/js/auth.js';
+import { bloodRequestManager } from '../../../assets/js/requests.js';
 
 // Donor Dashboard Script
 let currentDonor = null;
 let currentView = 'dashboard';
+let notificationsListener = null;
 
-// Initialize
-document.addEventListener('DOMContentLoaded', async () => {
+const viewSelectors = {
+  dashboard: 'dashboardView',
+  profile: 'profileView',
+  'donation-history': 'donationHistoryView',
+  'blood-requests': 'bloodRequestsView',
+  notifications: 'notificationsView',
+  settings: 'settingsView'
+};
+
+document.addEventListener('DOMContentLoaded', initDashboard);
+
+async function initDashboard() {
   await checkAuthAndLoadDonor();
-  loadDashboardData();
-});
+  setupNavigation();
+  setupRequestActions();
+  setupForms();
+  showView('dashboard');
+  await loadDashboardData();
+}
 
-// Check authentication
 async function checkAuthAndLoadDonor() {
   const user = await authManager.getCurrentUser();
-  
   if (!user || user.role !== 'donor') {
     window.location.href = '../../auth/login.html';
     return;
   }
-  
+
   currentDonor = user.data;
   document.getElementById('donorName').textContent = currentDonor.fullName || 'Donor';
   document.getElementById('welcomeName').textContent = currentDonor.fullName || 'Donor';
-  
-  // Load notifications
-  loadNotifications();
+
+  if (notificationsListener) {
+    notificationsListener();
+  }
+
+  notificationsListener = bloodRequestManager.listenNotifications(currentDonor.uid, (result) => {
+    if (!result.success) return;
+    const notifications = result.data || [];
+    const unreadCount = notifications.filter((item) => !item.isRead).length;
+    document.getElementById('notificationBadge').textContent = unreadCount;
+    document.getElementById('notificationBadge2').textContent = unreadCount;
+    if (currentView === 'notifications') {
+      displayNotifications(notifications);
+    }
+  });
 }
 
-// Load dashboard data
 async function loadDashboardData() {
   try {
-    // Load donor stats
     document.getElementById('totalDonations').textContent = currentDonor.totalDonations || 0;
     document.getElementById('bloodGroupDisplay').textContent = currentDonor.bloodGroup || '-';
     document.getElementById('eligibilityStatus').textContent = currentDonor.isEligible ? 'Eligible' : 'Not Eligible';
-    
-    // Load profile fields
+
     document.getElementById('profileFullName').value = currentDonor.fullName || '';
     document.getElementById('profileEmail').value = currentDonor.email || '';
     document.getElementById('profilePhone').value = currentDonor.phone || '';
@@ -44,66 +67,64 @@ async function loadDashboardData() {
     document.getElementById('profileGender').value = currentDonor.gender || '';
     document.getElementById('profileCity').value = currentDonor.city || '';
     document.getElementById('profileAddress').value = currentDonor.address || '';
-    
-    // Load blood requests
+
     await loadBloodRequests();
   } catch (error) {
     console.error('Error loading dashboard data:', error);
   }
 }
 
-// Load blood requests
 async function loadBloodRequests() {
   try {
     const result = await bloodRequestManager.getHospitalRequests(currentDonor.uid);
-    
-    if (result.success && result.data.length > 0) {
-      // Show recent requests
-      const recentRequests = result.data.slice(0, 3);
-      displayRecentRequests(recentRequests);
-      
-      // Count pending
-      const pendingCount = result.data.filter(r => r.status === 'Pending').length;
-      document.getElementById('pendingRequests').textContent = pendingCount;
-      
-      // Load all for requests view
-      displayAllBloodRequests(result.data);
+    if (!result.success) {
+      document.getElementById('recentRequestsTable').innerHTML = '<p class="text-center">Unable to load requests</p>';
+      document.getElementById('bloodRequestsList').innerHTML = '<p class="text-center">Unable to load requests</p>';
+      return;
     }
+
+    const requests = result.data || [];
+    const recentRequests = requests.slice(0, 3);
+    displayRecentRequests(recentRequests);
+    displayAllBloodRequests(requests);
+
+    const pendingCount = requests.filter((r) => r.status === 'Pending').length;
+    document.getElementById('pendingRequests').textContent = pendingCount;
   } catch (error) {
     console.error('Error loading blood requests:', error);
   }
 }
 
-// Display recent requests
 function displayRecentRequests(requests) {
-  if (requests.length === 0) {
-    document.getElementById('recentRequestsTable').innerHTML = '<p class="text-center">No recent requests</p>';
+  const container = document.getElementById('recentRequestsTable');
+  if (!container) return;
+
+  if (!requests || requests.length === 0) {
+    container.innerHTML = '<p class="text-center">No recent requests</p>';
     return;
   }
-  
+
   let html = '<table><thead><tr><th>Hospital</th><th>Blood Group</th><th>Units</th><th>Status</th></tr></thead><tbody>';
-  
-  requests.forEach(req => {
+  requests.forEach((req) => {
     html += `
       <tr>
-        <td>${req.hospitalName}</td>
-        <td>${req.bloodGroup}</td>
-        <td>${req.units}</td>
-        <td><span class="badge badge-${req.status.toLowerCase()}">${req.status}</span></td>
+        <td>${req.hospitalName || 'N/A'}</td>
+        <td>${req.bloodGroup || 'N/A'}</td>
+        <td>${req.units || 0}</td>
+        <td><span class="badge badge-${(req.status || '').toLowerCase()}">${req.status || 'Unknown'}</span></td>
       </tr>
     `;
   });
-  
   html += '</tbody></table>';
-  document.getElementById('recentRequestsTable').innerHTML = html;
+  container.innerHTML = html;
 }
 
-// Display all blood requests
 function displayAllBloodRequests(requests) {
-  let html = '';
-  
-  if (requests.length === 0) {
-    html = `
+  const container = document.getElementById('bloodRequestsList');
+  if (!container) return;
+
+  if (!requests || requests.length === 0) {
+    container.innerHTML = `
       <div class="card">
         <div class="empty-state">
           <div class="empty-state-icon"><i class="fas fa-inbox"></i></div>
@@ -112,55 +133,56 @@ function displayAllBloodRequests(requests) {
         </div>
       </div>
     `;
-  } else {
-    requests.forEach(req => {
-      const statusClass = req.status.toLowerCase();
-      html += `
-        <div class="request-card ${statusClass}">
-          <div class="request-header">
-            <div class="request-title">${req.hospitalName}</div>
-            <span class="request-status status-${statusClass}">${req.status}</span>
-          </div>
-          <div class="request-details">
-            <div class="request-detail">
-              <span class="request-detail-label">Blood Group</span>
-              <span class="request-detail-value">${req.bloodGroup}</span>
-            </div>
-            <div class="request-detail">
-              <span class="request-detail-label">Units Needed</span>
-              <span class="request-detail-value">${req.units}</span>
-            </div>
-            <div class="request-detail">
-              <span class="request-detail-label">Urgency</span>
-              <span class="request-detail-value">${req.urgencyLevel}</span>
-            </div>
-            <div class="request-detail">
-              <span class="request-detail-label">Purpose</span>
-              <span class="request-detail-value">${req.purpose || 'N/A'}</span>
-            </div>
-          </div>
-          ${req.status === 'Pending' ? `
-            <div class="request-actions">
-              <button class="btn btn-primary" onclick="acceptRequest('${req.id}')">
-                <i class="fas fa-check"></i> Accept
-              </button>
-              <button class="btn btn-secondary" onclick="rejectRequest('${req.id}')">
-                <i class="fas fa-times"></i> Reject
-              </button>
-            </div>
-          ` : ''}
-        </div>
-      `;
-    });
+    return;
   }
-  
-  document.getElementById('bloodRequestsList').innerHTML = html;
+
+  let html = '';
+  requests.forEach((req) => {
+    const statusClass = (req.status || 'pending').toLowerCase();
+    html += `
+      <div class="request-card ${statusClass}">
+        <div class="request-header">
+          <div class="request-title">${req.hospitalName || 'Hospital'}</div>
+          <span class="request-status status-${statusClass}">${req.status || 'Unknown'}</span>
+        </div>
+        <div class="request-details">
+          <div class="request-detail">
+            <span class="request-detail-label">Blood Group</span>
+            <span class="request-detail-value">${req.bloodGroup || 'N/A'}</span>
+          </div>
+          <div class="request-detail">
+            <span class="request-detail-label">Units Needed</span>
+            <span class="request-detail-value">${req.units || 0}</span>
+          </div>
+          <div class="request-detail">
+            <span class="request-detail-label">Urgency</span>
+            <span class="request-detail-value">${req.urgencyLevel || 'Normal'}</span>
+          </div>
+          <div class="request-detail">
+            <span class="request-detail-label">Purpose</span>
+            <span class="request-detail-value">${req.purpose || 'N/A'}</span>
+          </div>
+        </div>
+        ${req.status === 'Pending' ? `
+          <div class="request-actions">
+            <button type="button" class="btn btn-primary" data-action="accept-request" data-request-id="${req.id}">
+              <i class="fas fa-check"></i> Accept
+            </button>
+            <button type="button" class="btn btn-secondary" data-action="reject-request" data-request-id="${req.id}">
+              <i class="fas fa-times"></i> Reject
+            </button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
 }
 
-// Accept blood request
 async function acceptRequest(requestId) {
   if (!confirm('Are you sure you want to accept this request?')) return;
-  
+
   try {
     const result = await bloodRequestManager.approveRequest(requestId, currentDonor.uid);
     if (result.success) {
@@ -175,11 +197,10 @@ async function acceptRequest(requestId) {
   }
 }
 
-// Reject blood request
 async function rejectRequest(requestId) {
   const reason = prompt('Please provide a reason for rejection:');
   if (!reason) return;
-  
+
   try {
     const result = await bloodRequestManager.rejectRequest(requestId, reason);
     if (result.success) {
@@ -194,127 +215,164 @@ async function rejectRequest(requestId) {
   }
 }
 
-// Load notifications
 async function loadNotifications() {
   try {
     const result = await bloodRequestManager.getNotifications(currentDonor.uid);
-    
-    if (result.success) {
-      const unreadCount = result.data.filter(n => !n.isRead).length;
-      document.getElementById('notificationBadge').textContent = unreadCount;
-      document.getElementById('notificationBadge2').textContent = unreadCount;
-      
-      displayNotifications(result.data);
-    }
+    if (!result.success) return;
+
+    const notifications = result.data || [];
+    const unreadCount = notifications.filter((item) => !item.isRead).length;
+    document.getElementById('notificationBadge').textContent = unreadCount;
+    document.getElementById('notificationBadge2').textContent = unreadCount;
+    displayNotifications(notifications);
   } catch (error) {
     console.error('Error loading notifications:', error);
   }
 }
 
-// Display notifications
 function displayNotifications(notifications) {
-  let html = '';
-  
-  if (notifications.length === 0) {
-    html = `
+  const container = document.getElementById('notificationsList');
+  if (!container) return;
+
+  if (!notifications || notifications.length === 0) {
+    container.innerHTML = `
       <div class="empty-state">
         <div class="empty-state-icon"><i class="fas fa-bell"></i></div>
         <div class="empty-state-title">No Notifications</div>
         <p class="empty-state-message">You're all caught up!</p>
       </div>
     `;
-  } else {
-    notifications.forEach(notif => {
-      const date = new Date(notif.createdAt.seconds * 1000);
-      const timeAgo = getTimeAgo(date);
-      
-      html += `
-        <div class="notification-item ${!notif.isRead ? 'unread' : ''}">
-          <div class="notification-icon">
-            <i class="fas fa-bell"></i>
-          </div>
-          <div class="notification-content">
-            <div class="notification-title">${notif.title}</div>
-            <div class="notification-message">${notif.message}</div>
-            <div class="notification-time">${timeAgo}</div>
-          </div>
-        </div>
-      `;
-    });
+    return;
   }
-  
-  document.getElementById('notificationsList').innerHTML = html;
+
+  let html = '';
+  notifications.forEach((notif) => {
+    const createdAt = notif.createdAt ? new Date(notif.createdAt.seconds * 1000) : new Date();
+    const timeAgo = getTimeAgo(createdAt);
+    const formattedDateTime = createdAt.toLocaleString();
+    const senderLabel = notif.senderName ? `From: ${notif.senderName}` : 'From: System';
+    html += `
+      <div class="notification-item ${notif.isRead ? '' : 'unread'}">
+        <div class="notification-icon">
+          <i class="fas fa-bell"></i>
+        </div>
+        <div class="notification-content">
+          <div class="notification-title">${notif.title || 'Notification'}</div>
+          <div class="notification-sender">${senderLabel}</div>
+          <div class="notification-message">${notif.message || ''}</div>
+          <div class="notification-time">${timeAgo} · ${formattedDateTime}</div>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
 }
 
-// Get time ago string
 function getTimeAgo(date) {
   const seconds = Math.floor((new Date() - date) / 1000);
-  
   if (seconds < 60) return 'Just now';
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-  
   return date.toLocaleDateString();
 }
 
-// Navigate between views
-function navigateTo(view) {
-  // Hide all views
-  document.querySelectorAll('.dashboard-view').forEach(v => v.classList.add('hidden'));
-  
-  // Show selected view
-  document.getElementById(view + 'View').classList.remove('hidden');
-  
-  // Update sidebar
-  document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-  event.target.closest('.nav-item').classList.add('active');
-  
-  currentView = view;
+function setupNavigation() {
+  document.querySelectorAll('[data-view]').forEach((element) => {
+    element.addEventListener('click', (event) => {
+      event.preventDefault();
+      const view = element.dataset.view;
+      if (view) showView(view);
+    });
+  });
+
+  document.querySelectorAll('[data-action="logout"]').forEach((element) => {
+    element.addEventListener('click', (event) => {
+      event.preventDefault();
+      logout();
+    });
+  });
 }
 
-// Profile form submission
-document.getElementById('profileForm')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  
-  const updateData = {
-    phone: document.getElementById('profilePhone').value,
-    age: parseInt(document.getElementById('profileAge').value),
-    city: document.getElementById('profileCity').value,
-    address: document.getElementById('profileAddress').value
-  };
-  
-  try {
-    const result = await authManager.updateProfile(currentDonor.uid, updateData);
-    if (result.success) {
-      alert('Profile updated successfully!');
-      location.reload();
-    } else {
-      alert('Failed to update profile');
-    }
-  } catch (error) {
-    console.error('Error updating profile:', error);
-    alert('An error occurred');
+function showView(view) {
+  const viewId = viewSelectors[view];
+  if (!viewId) return;
+
+  document.querySelectorAll('.dashboard-view').forEach((section) => {
+    section.classList.add('hidden');
+  });
+
+  const target = document.getElementById(viewId);
+  if (target) target.classList.remove('hidden');
+
+  document.querySelectorAll('.nav-item').forEach((item) => {
+    item.classList.toggle('active', item.dataset.view === view);
+  });
+
+  currentView = view;
+
+  if (view === 'notifications') {
+    loadNotifications();
   }
-});
+}
 
-// Settings form submission
-document.getElementById('settingsForm')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  alert('Password change functionality coming soon!');
-});
+function setupRequestActions() {
+  const container = document.getElementById('bloodRequestsList');
+  if (!container) return;
 
-// Logout
+  container.addEventListener('click', async (event) => {
+    const button = event.target.closest('button[data-action]');
+    if (!button) return;
+
+    const action = button.dataset.action;
+    const requestId = button.dataset.requestId;
+    if (!requestId) return;
+
+    event.preventDefault();
+    if (action === 'accept-request') {
+      await acceptRequest(requestId);
+    } else if (action === 'reject-request') {
+      await rejectRequest(requestId);
+    }
+  });
+}
+
+function setupForms() {
+  document.getElementById('profileForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const updateData = {
+      phone: document.getElementById('profilePhone').value,
+      age: parseInt(document.getElementById('profileAge').value, 10) || null,
+      city: document.getElementById('profileCity').value,
+      address: document.getElementById('profileAddress').value
+    };
+
+    try {
+      const result = await authManager.updateProfile(currentDonor.uid, updateData);
+      if (result.success) {
+        alert('Profile updated successfully!');
+        await checkAuthAndLoadDonor();
+        await loadDashboardData();
+        showView('profile');
+      } else {
+        alert('Failed to update profile');
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      alert('An error occurred');
+    }
+  });
+
+  document.getElementById('settingsForm')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    alert('Password change functionality coming soon!');
+  });
+}
+
 async function logout() {
   if (!confirm('Are you sure you want to logout?')) return;
-  
   const result = await authManager.logout();
-  if (result.success) {
-    window.location.href = '../../auth/login.html';
-  }
+  if (result.success) window.location.href = '../../auth/login.html';
 }
 
-// Initialize sidebar active state
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelector('[onclick="navigateTo(\'dashboard\')"]').classList.add('active');
-});

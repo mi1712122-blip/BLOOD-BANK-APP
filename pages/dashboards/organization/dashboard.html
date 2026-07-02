@@ -10,51 +10,60 @@
 </head>
 <body>
   <div class="main-layout with-sidebar">
-    <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-header">
         <h3>BloodBank</h3>
         <p id="orgName">Organization</p>
       </div>
       <nav class="sidebar-nav">
-        <a href="#" class="nav-item active" onclick="navigateTo('dashboard')">
+        <a href="#" class="nav-item active" data-view="dashboard">
           <i class="fas fa-chart-line"></i> Dashboard
         </a>
-        <a href="#" class="nav-item" onclick="navigateTo('inventory')">
+        <a href="#" class="nav-item" data-view="inventory">
           <i class="fas fa-cube"></i> Blood Inventory
         </a>
-        <a href="#" class="nav-item" onclick="navigateTo('donors')">
+        <a href="#" class="nav-item" data-view="donations">
+          <i class="fas fa-hand-holding-heart"></i> Donations
+        </a>
+        <a href="#" class="nav-item" data-view="requests">
+          <i class="fas fa-hospital-user"></i> Hospital Requests
+        </a>
+        <a href="#" class="nav-item" data-view="issueHistory">
+          <i class="fas fa-file-medical-alt"></i> Issue History
+        </a>
+        <a href="#" class="nav-item" data-view="donationHistory">
+          <i class="fas fa-history"></i> Donation History
+        </a>
+        <a href="#" class="nav-item" data-view="inventoryHistory">
+          <i class="fas fa-clipboard-list"></i> Inventory History
+        </a>
+        <a href="#" class="nav-item" data-view="donors">
           <i class="fas fa-users"></i> Donors
         </a>
-        <a href="#" class="nav-item" onclick="navigateTo('hospitals')">
+        <a href="#" class="nav-item" data-view="hospitals">
           <i class="fas fa-hospital"></i> Hospitals
         </a>
-        <a href="#" class="nav-item" onclick="navigateTo('requests')">
-          <i class="fas fa-hand-holding-medical"></i> Requests
-        </a>
-        <a href="#" class="nav-item" onclick="navigateTo('notifications')">
+        <a href="#" class="nav-item" data-view="notifications">
           <i class="fas fa-bell"></i> Notifications
           <span class="notification-badge" id="notificationBadge">0</span>
         </a>
-        <a href="#" class="nav-item" onclick="navigateTo('settings')">
+        <a href="#" class="nav-item" data-view="settings">
           <i class="fas fa-cog"></i> Settings
         </a>
-        <a href="#" class="nav-item" onclick="logout()">
+        <a href="#" class="nav-item" data-action="logout">
           <i class="fas fa-sign-out-alt"></i> Logout
         </a>
       </nav>
     </aside>
 
-    <!-- Main Content -->
     <main class="main-content">
-      <!-- Navbar -->
       <nav class="navbar">
         <div class="navbar-brand">
           <i class="fas fa-droplet"></i>
           <span>BloodBank - Organization Dashboard</span>
         </div>
         <div class="navbar-actions">
-          <div class="notification-bell" onclick="navigateTo('notifications')">
+          <div class="notification-bell" data-view="notifications" title="Open notifications">
             <i class="fas fa-bell"></i>
             <span class="notification-badge" id="notificationBadge2">0</span>
           </div>
@@ -63,134 +72,485 @@
               <i class="fas fa-user"></i> Profile <i class="fas fa-chevron-down"></i>
             </button>
             <div class="dropdown-menu">
-              <a href="#" onclick="navigateTo('settings')">Settings</a>
-              <a href="#" onclick="logout()">Logout</a>
+              <a href="#" data-view="settings">Settings</a>
+              <a href="#" data-action="logout">Logout</a>
             </div>
           </div>
         </div>
       </nav>
 
-      <!-- Dashboard Content -->
       <div class="dashboard-container">
-        <!-- Dashboard View -->
         <div id="dashboardView" class="dashboard-view">
           <div class="dashboard-header">
-            <h2>Organization Dashboard</h2>
+            <div>
+              <h2>Organization Dashboard</h2>
+              <p class="dashboard-subtitle">A real-time view of inventory, requests and notifications.</p>
+            </div>
+            <div class="dashboard-actions dashboard-header-actions">
+              <div class="global-search-panel">
+                <input type="text" id="globalSearchInput" class="table-search" placeholder="Search donors, hospitals, blood groups, request IDs...">
+              </div>
+            </div>
           </div>
 
-          <!-- Stats Cards -->
-          <div class="dashboard-grid">
+          <div id="globalSearchResults" class="global-search-results hidden"></div>
+
+          <div class="dashboard-grid dashboard-highlight-grid">
+            <div class="card quick-actions-card">
+              <div class="card-header">
+                <h3>Quick Actions</h3>
+              </div>
+              <div class="card-body quick-actions-panel">
+                <button type="button" class="btn btn-primary btn-sm" data-action="quick-add-blood"><i class="fas fa-plus"></i> Add Blood</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-action="quick-issue-blood"><i class="fas fa-hand-holding-medical"></i> Issue Blood</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-action="quick-view-requests"><i class="fas fa-hospital-user"></i> View Hospital Requests</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-action="quick-view-donors"><i class="fas fa-users"></i> View Donors</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-action="quick-notify-donors"><i class="fas fa-bell"></i> Notify Donors</button>
+              </div>
+            </div>
+            <div class="card summary-card">
+              <div class="card-header">
+                <h3>Today's Summary</h3>
+              </div>
+              <div class="card-body summary-metrics-grid">
+                <div class="summary-metric">
+                  <h4 id="todayDonations">0</h4>
+                  <p>Donations Today</p>
+                </div>
+                <div class="summary-metric">
+                  <h4 id="todayIssued">0</h4>
+                  <p>Blood Issued Today</p>
+                </div>
+                <div class="summary-metric">
+                  <h4 id="newDonors">0</h4>
+                  <p>New Donors</p>
+                </div>
+                <div class="summary-metric">
+                  <h4 id="activeRequests">0</h4>
+                  <p>Active Requests</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-grid dashboard-cards-grid">
             <div class="card stat-card">
               <h3 id="totalBloodUnits">0</h3>
               <p>Total Blood Units</p>
             </div>
             <div class="card stat-card">
-              <h3 id="totalDonors">0</h3>
-              <p>Registered Donors</p>
+              <h3 id="availableBloodUnits">0</h3>
+              <p>Available Blood Units</p>
             </div>
             <div class="card stat-card">
-              <h3 id="pendingRequests">0</h3>
-              <p>Pending Requests</p>
+              <h3 id="todaysDonations">0</h3>
+              <p>Today's Donations</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="totalDonors">0</h3>
+              <p>Total Donors</p>
             </div>
             <div class="card stat-card">
               <h3 id="connectedHospitals">0</h3>
               <p>Connected Hospitals</p>
             </div>
+            <div class="card stat-card">
+              <h3 id="pendingHospitalRequests">0</h3>
+              <p>Pending Hospital Requests</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="completedRequests">0</h3>
+              <p>Completed Requests</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="lowStockGroups">0</h3>
+              <p>Low Stock Blood Groups</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="bloodIssuedToday">0</h3>
+              <p>Blood Issued Today</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="totalNotifications">0</h3>
+              <p>Total Notifications</p>
+            </div>
           </div>
 
-          <!-- Blood Inventory Overview -->
-          <div class="card">
-            <div class="card-header">
-              <h3>Blood Inventory Overview</h3>
-              <button class="btn btn-primary btn-sm" onclick="navigateTo('inventory')">Manage</button>
+          <div class="dashboard-grid dashboard-summary-grid">
+            <div class="card">
+              <div class="card-header">
+                <h3>Inventory Snapshot</h3>
+                <button type="button" class="btn btn-primary btn-sm" data-view="inventory">Manage Inventory</button>
+              </div>
+              <div class="card-body">
+                <div id="inventoryOverview" class="inventory-grid"></div>
+                <div id="inventoryProgressBars" class="inventory-progress-grid"></div>
+              </div>
             </div>
-            <div class="card-body">
-              <div id="inventoryOverview" class="inventory-grid"></div>
+            <div class="card">
+              <div class="card-header">
+                <h3>Low Stock Alerts</h3>
+              </div>
+              <div class="card-body" id="lowStockAlerts"></div>
             </div>
           </div>
 
-          <!-- Recent Requests -->
-          <div class="card">
-            <div class="card-header">
-              <h3>Recent Blood Requests</h3>
-              <button class="btn btn-primary btn-sm" onclick="navigateTo('requests')">View All</button>
+          <div class="dashboard-grid dashboard-sidebar-grid">
+            <div class="card pending-requests-card">
+              <div class="card-header">
+                <h3>Pending Hospital Requests</h3>
+              </div>
+              <div class="card-body">
+                <div id="pendingRequestsPreview"></div>
+                <button type="button" class="btn btn-secondary btn-sm" data-view="requests">View All</button>
+              </div>
             </div>
-            <div class="card-body">
-              <div id="recentRequests"></div>
+            <div class="card recent-notifications-card">
+              <div class="card-header">
+                <h3>Recent Notifications</h3>
+              </div>
+              <div class="card-body" id="recentNotificationsPreview"></div>
+            </div>
+            <div class="card recent-activity-card">
+              <div class="card-header">
+                <h3>Recent Activity</h3>
+              </div>
+              <div class="card-body" id="recentActivityPreview"></div>
+            </div>
+          </div>
+
+          <div class="dashboard-grid dashboard-analytics-grid">
+            <div class="card chart-card">
+              <div class="card-header">
+                <h3>Monthly Donations</h3>
+              </div>
+              <div class="card-body">
+                <canvas id="donationsChart" height="180"></canvas>
+              </div>
+            </div>
+            <div class="card chart-card">
+              <div class="card-header">
+                <h3>Monthly Blood Issues</h3>
+              </div>
+              <div class="card-body">
+                <canvas id="issueTrendChart" height="180"></canvas>
+              </div>
+            </div>
+            <div class="card chart-card">
+              <div class="card-header">
+                <h3>Blood Group Distribution</h3>
+              </div>
+              <div class="card-body">
+                <canvas id="groupDistributionChart" height="180"></canvas>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Blood Inventory View -->
         <div id="inventoryView" class="dashboard-view hidden">
           <div class="dashboard-header">
-            <h2>Blood Inventory Management</h2>
-            <button class="btn btn-primary" onclick="openAddBloodModal()">
-              <i class="fas fa-plus"></i> Add Blood
-            </button>
+            <div>
+              <h2>Blood Inventory Management</h2>
+              <p class="dashboard-subtitle">Manage stock levels, expiration and history for every blood group.</p>
+            </div>
+            <div class="dashboard-actions">
+              <button type="button" class="btn btn-primary" data-action="open-add-blood-modal">
+                <i class="fas fa-plus"></i> Add Blood
+              </button>
+              <button type="button" class="btn btn-secondary" data-action="export-inventory-csv">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
+              <button type="button" class="btn btn-secondary" data-action="export-inventory-excel">
+                <i class="fas fa-file-excel"></i> Export Excel
+              </button>
+            </div>
           </div>
-          <div id="bloodInventoryTable"></div>
+          <div class="table-actions">
+            <div class="search-filter-group">
+              <input type="text" id="inventorySearch" class="table-search" placeholder="Search blood group, location...">
+              <select id="inventoryGroupFilter">
+                <option value="">All Blood Groups</option>
+                <option value="A+">A+</option>
+                <option value="A-">A-</option>
+                <option value="B+">B+</option>
+                <option value="B-">B-</option>
+                <option value="AB+">AB+</option>
+                <option value="AB-">AB-</option>
+                <option value="O+">O+</option>
+                <option value="O-">O-</option>
+              </select>
+            </div>
+          </div>
+          <div id="bloodInventoryTable" class="table-container"></div>
         </div>
 
-        <!-- Donors View -->
-        <div id="donorsView" class="dashboard-view hidden">
+        <div id="donationsView" class="dashboard-view hidden">
           <div class="dashboard-header">
-            <h2>Registered Donors</h2>
+            <div>
+              <h2>Donation Management</h2>
+              <p class="dashboard-subtitle">Track incoming donations, approvals and completion.</p>
+            </div>
+            <div class="dashboard-actions">
+              <button type="button" class="btn btn-secondary" data-action="export-donations-csv">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
+              <button type="button" class="btn btn-secondary" data-action="export-donations-excel">
+                <i class="fas fa-file-excel"></i> Export Excel
+              </button>
+            </div>
           </div>
-          <div id="donorsTable"></div>
+          <div class="table-actions">
+            <input type="text" id="donationSearch" class="table-search" placeholder="Search donations by donor, blood group, status...">
+            <select id="donationStatusFilter">
+              <option value="">All Status</option>
+              <option value="Pending">Pending</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+              <option value="Completed">Completed</option>
+            </select>
+          </div>
+          <div id="donationManagementTable" class="table-container"></div>
         </div>
 
-        <!-- Hospitals View -->
-        <div id="hospitalsView" class="dashboard-view hidden">
-          <div class="dashboard-header">
-            <h2>Connected Hospitals</h2>
-          </div>
-          <div id="hospitalsTable"></div>
-        </div>
-
-        <!-- Requests View -->
         <div id="requestsView" class="dashboard-view hidden">
           <div class="dashboard-header">
-            <h2>Blood Requests</h2>
+            <div>
+              <h2>Hospital Requests</h2>
+              <p class="dashboard-subtitle">Approve requests, issue blood and keep hospital partners informed.</p>
+            </div>
+            <div class="dashboard-actions">
+              <button type="button" class="btn btn-secondary" data-action="export-requests-csv">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
+              <button type="button" class="btn btn-secondary" data-action="export-requests-excel">
+                <i class="fas fa-file-excel"></i> Export Excel
+              </button>
+            </div>
           </div>
-          <div id="requestsList"></div>
+          <div class="table-actions">
+            <input type="text" id="requestSearch" class="table-search" placeholder="Search by hospital, blood group, request ID...">
+            <select id="requestStatusFilter">
+              <option value="">All Status</option>
+              <option value="Pending">Pending</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+              <option value="Completed">Completed</option>
+            </select>
+            <select id="requestPriorityFilter">
+              <option value="">All Priority</option>
+              <option value="Normal">Normal</option>
+              <option value="Urgent">Urgent</option>
+              <option value="Emergency">Emergency</option>
+            </select>
+          </div>
+          <div id="requestsList" class="table-container"></div>
         </div>
 
-        <!-- Notifications View -->
+        <div id="issueHistoryView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <div>
+              <h2>Blood Issue History</h2>
+              <p class="dashboard-subtitle">Review all blood issues, purpose and status.</p>
+            </div>
+            <div class="dashboard-actions">
+              <button type="button" class="btn btn-secondary" data-action="export-issues-csv">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
+            </div>
+          </div>
+          <div class="table-actions">
+            <input type="text" id="issueSearch" class="table-search" placeholder="Search issued blood by hospital, group, purpose...">
+            <select id="issueStatusFilter">
+              <option value="">All Status</option>
+              <option value="Issued">Issued</option>
+              <option value="Completed">Completed</option>
+            </select>
+          </div>
+          <div id="issueHistoryTable" class="table-container"></div>
+        </div>
+
+        <div id="donationHistoryView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <div>
+              <h2>Donation History</h2>
+              <p class="dashboard-subtitle">Audit donations and verify donor participation.</p>
+            </div>
+            <div class="dashboard-actions">
+              <button type="button" class="btn btn-secondary" data-action="export-donation-history-csv">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
+            </div>
+          </div>
+          <div class="table-actions">
+            <input type="text" id="donationHistorySearch" class="table-search" placeholder="Search donation history by donor, group, status...">
+            <select id="donationHistoryStatusFilter">
+              <option value="">All Status</option>
+              <option value="Pending">Pending</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+              <option value="Completed">Completed</option>
+            </select>
+          </div>
+          <div id="donationHistoryTable" class="table-container"></div>
+        </div>
+
+        <div id="inventoryHistoryView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <div>
+              <h2>Inventory History</h2>
+              <p class="dashboard-subtitle">Track every stock adjustment by reason and user.</p>
+            </div>
+            <div class="dashboard-actions">
+              <button type="button" class="btn btn-secondary" data-action="export-inventory-history-csv">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
+            </div>
+          </div>
+          <div class="table-actions">
+            <input type="text" id="inventoryHistorySearch" class="table-search" placeholder="Search inventory history by group, reason, user...">
+            <select id="inventoryHistoryGroupFilter">
+              <option value="">All Blood Groups</option>
+              <option value="A+">A+</option>
+              <option value="A-">A-</option>
+              <option value="B+">B+</option>
+              <option value="B-">B-</option>
+              <option value="AB+">AB+</option>
+              <option value="AB-">AB-</option>
+              <option value="O+">O+</option>
+              <option value="O-">O-</option>
+            </select>
+          </div>
+          <div id="inventoryHistoryTable" class="table-container"></div>
+        </div>
+
+        <div id="donorsView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <div>
+              <h2>Registered Donors</h2>
+              <p class="dashboard-subtitle">Donor profiles, eligibility status and history access.</p>
+            </div>
+          </div>
+          <div class="table-actions">
+            <input type="text" id="donorsSearch" class="table-search" placeholder="Search donor by name, blood group, city...">
+            <select id="donorBloodGroupFilter">
+              <option value="">All Blood Groups</option>
+              <option value="A+">A+</option>
+              <option value="A-">A-</option>
+              <option value="B+">B+</option>
+              <option value="B-">B-</option>
+              <option value="AB+">AB+</option>
+              <option value="AB-">AB-</option>
+              <option value="O+">O+</option>
+              <option value="O-">O-</option>
+            </select>
+          </div>
+          <div id="donorsTable" class="table-container"></div>
+        </div>
+
+        <div id="hospitalsView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <div>
+              <h2>Connected Hospitals</h2>
+              <p class="dashboard-subtitle">Hospital partners, request metrics and communication tools.</p>
+            </div>
+          </div>
+          <div class="table-actions">
+            <input type="text" id="hospitalsSearch" class="table-search" placeholder="Search hospital by name, city, email...">
+            <select id="hospitalStatusFilter">
+              <option value="">All Status</option>
+              <option value="Active">Active</option>
+              <option value="Pending">Pending</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+          <div id="hospitalsTable" class="table-container"></div>
+        </div>
+
+        <div id="sendNotificationView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <div>
+              <h2>Send Notification</h2>
+              <p class="dashboard-subtitle">Send targeted alerts to donors and hospitals.</p>
+            </div>
+          </div>
+          <div class="card">
+            <form id="sendNotificationForm">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Recipient Type</label>
+                  <select id="recipientType" required>
+                    <option value="specificDonor">Specific Donor</option>
+                    <option value="allDonors">All Donors</option>
+                    <option value="specificHospital">Specific Hospital</option>
+                    <option value="allHospitals">All Hospitals</option>
+                  </select>
+                </div>
+                <div class="form-group" id="recipientSelectorGroup">
+                  <label>Select Recipient</label>
+                  <select id="recipientSelector" required></select>
+                </div>
+                <div class="form-group">
+                  <label>Title</label>
+                  <input type="text" id="notificationTitle" maxlength="100" placeholder="Enter notification title" required>
+                </div>
+                <div class="form-group form-group-full">
+                  <label>Message</label>
+                  <textarea id="notificationMessage" rows="5" maxlength="500" placeholder="Enter notification message" required></textarea>
+                </div>
+              </div>
+              <div class="card-footer">
+                <button type="button" class="btn btn-secondary" data-view="notifications">Cancel</button>
+                <button type="submit" class="btn btn-primary">Send Notification</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
         <div id="notificationsView" class="dashboard-view hidden">
           <div class="dashboard-header">
-            <h2>Notifications</h2>
+            <div>
+              <h2>Notifications</h2>
+              <p class="dashboard-subtitle">Review unread alerts, delete and mark as read.</p>
+            </div>
+            <div class="dashboard-actions">
+              <button type="button" class="btn btn-secondary" data-action="mark-all-read">Mark All Read</button>
+              <button type="button" class="btn btn-secondary" data-action="clear-notifications">Clear All</button>
+              <button type="button" class="btn btn-primary" data-view="sendNotification">
+                <i class="fas fa-paper-plane"></i> Send Notification
+              </button>
+            </div>
           </div>
           <div class="card">
             <div id="notificationsList"></div>
           </div>
         </div>
 
-        <!-- Settings View -->
         <div id="settingsView" class="dashboard-view hidden">
           <div class="dashboard-header">
             <h2>Settings</h2>
           </div>
           <div class="card">
             <form id="settingsForm">
-              <div class="form-group">
-                <label>Organization Name</label>
-                <input type="text" id="settingsOrgName">
-              </div>
-              <div class="form-group">
-                <label>Phone</label>
-                <input type="tel" id="settingsPhone">
-              </div>
-              <div class="form-group">
-                <label>Address</label>
-                <textarea id="settingsAddress"></textarea>
-              </div>
-              <div class="form-group">
-                <label>City</label>
-                <input type="text" id="settingsCity">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Organization Name</label>
+                  <input type="text" id="settingsOrgName">
+                </div>
+                <div class="form-group">
+                  <label>Phone</label>
+                  <input type="tel" id="settingsPhone">
+                </div>
+                <div class="form-group">
+                  <label>Address</label>
+                  <textarea id="settingsAddress"></textarea>
+                </div>
+                <div class="form-group">
+                  <label>City</label>
+                  <input type="text" id="settingsCity">
+                </div>
               </div>
               <div class="card-footer">
-                <button type="button" class="btn btn-secondary" onclick="navigateTo('dashboard')">Cancel</button>
+                <button type="button" class="btn btn-secondary" data-view="dashboard">Cancel</button>
                 <button type="submit" class="btn btn-primary">Save Changes</button>
               </div>
             </form>
@@ -200,50 +560,125 @@
     </main>
   </div>
 
-  <!-- Add Blood Modal -->
   <div id="addBloodModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
         <h2>Add Blood to Inventory</h2>
-        <button type="button" class="modal-close" onclick="closeAddBloodModal()">&times;</button>
+        <button type="button" class="modal-close" data-action="close-add-blood-modal">&times;</button>
       </div>
       <form id="addBloodForm">
-        <div class="form-group">
-          <label>Blood Group</label>
-          <select id="bloodGroupSelect" required>
-            <option value="">Select blood group</option>
-            <option value="A+">A+</option>
-            <option value="A-">A-</option>
-            <option value="B+">B+</option>
-            <option value="B-">B-</option>
-            <option value="AB+">AB+</option>
-            <option value="AB-">AB-</option>
-            <option value="O+">O+</option>
-            <option value="O-">O-</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Units</label>
-          <input type="number" id="unitsInput" min="1" required>
-        </div>
-        <div class="form-group">
-          <label>Expiry Date</label>
-          <input type="date" id="expiryDateInput" required>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Blood Group</label>
+            <select id="bloodGroupSelect" required>
+              <option value="">Select blood group</option>
+              <option value="A+">A+</option>
+              <option value="A-">A-</option>
+              <option value="B+">B+</option>
+              <option value="B-">B-</option>
+              <option value="AB+">AB+</option>
+              <option value="AB-">AB-</option>
+              <option value="O+">O+</option>
+              <option value="O-">O-</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Units</label>
+            <input type="number" id="unitsInput" min="1" required>
+          </div>
+          <div class="form-group">
+            <label>Collection Date</label>
+            <input type="date" id="collectionDateInput" required>
+          </div>
+          <div class="form-group">
+            <label>Expiry Date</label>
+            <input type="date" id="expiryDateInput" required>
+          </div>
+          <div class="form-group">
+            <label>Donor</label>
+            <select id="donorSelect">
+              <option value="">Choose donor (optional)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Organization</label>
+            <input type="text" id="organizationInput" readonly>
+          </div>
+          <div class="form-group">
+            <label>Storage Location</label>
+            <input type="text" id="storageLocationInput" placeholder="e.g. Fridge A, Shelf 3" required>
+          </div>
+          <div class="form-group form-group-full">
+            <label>Notes</label>
+            <textarea id="notesInput" rows="3" placeholder="Enter any notes or donation details"></textarea>
+          </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="closeAddBloodModal()">Cancel</button>
+          <button type="button" class="btn btn-secondary" data-action="close-add-blood-modal">Cancel</button>
           <button type="submit" class="btn btn-primary">Add Blood</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Loading Spinner -->
+  <div id="inventoryActionModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="inventoryActionTitle">Adjust Inventory</h2>
+        <button type="button" class="modal-close" data-action="close-inventory-action-modal">&times;</button>
+      </div>
+      <form id="inventoryActionForm">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Blood Group</label>
+            <input type="text" id="inventoryActionGroup" readonly>
+          </div>
+          <div class="form-group">
+            <label>Action</label>
+            <select id="inventoryActionType" required>
+              <option value="increase">Increase Stock</option>
+              <option value="decrease">Decrease Stock</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Units</label>
+            <input type="number" id="inventoryActionUnits" min="1" required>
+          </div>
+          <div class="form-group">
+            <label>Expiry Date</label>
+            <input type="date" id="inventoryActionExpiryDate">
+          </div>
+          <div class="form-group form-group-full">
+            <label>Reason / Notes</label>
+            <textarea id="inventoryActionNotes" rows="3" placeholder="Enter reason or notes"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-action="close-inventory-action-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Change</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="requestDetailsModal" class="modal">
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h2>Request Details</h2>
+        <button type="button" class="modal-close" data-action="close-request-details-modal">&times;</button>
+      </div>
+      <div class="modal-body" id="requestDetailsContent"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-action="close-request-details-modal">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div id="loadingSpinner" class="loading-spinner hidden">
     <div class="spinner"></div>
   </div>
 
-  <!-- Scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
   <script type="module" src="../../../assets/js/firebase-config.js"></script>
   <script type="module" src="../../../assets/js/auth.js"></script>
   <script type="module" src="../../../assets/js/inventory.js"></script>

@@ -1,12 +1,25 @@
 import { authManager } from '../../../assets/js/auth.js';
+import { bloodInventoryManager } from '../../../assets/js/inventory.js';
 import { bloodRequestManager } from '../../../assets/js/requests.js';
 
 // Hospital Dashboard Script
 let currentHospital = null;
+let currentView = 'dashboard';
+let notificationsListener = null;
+const viewSelectors = {
+  dashboard: 'dashboardView',
+  'request-blood': 'request-bloodView',
+  'blood-availability': 'blood-availabilityView',
+  'request-history': 'request-historyView',
+  notifications: 'notificationsView',
+  settings: 'settingsView'
+};
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
   await checkAuthAndLoadHospital();
+  setupNavigation();
+  showView('dashboard');
   await loadDashboardData();
 });
 
@@ -21,9 +34,21 @@ async function checkAuthAndLoadHospital() {
   
   currentHospital = user.data;
   document.getElementById('hospitalName').textContent = currentHospital.hospitalName || 'Hospital';
-  
-  // Load notifications
-  loadNotifications();
+
+  if (notificationsListener) {
+    notificationsListener();
+  }
+
+  notificationsListener = bloodRequestManager.listenNotifications(currentHospital.uid, (result) => {
+    if (!result.success) return;
+    const notifications = result.data || [];
+    const unreadCount = notifications.filter((item) => !item.isRead).length;
+    document.getElementById('notificationBadge').textContent = unreadCount;
+    document.getElementById('notificationBadge2').textContent = unreadCount;
+    if (currentView === 'notifications') {
+      displayNotifications(notifications);
+    }
+  });
 }
 
 // Load dashboard data
@@ -155,7 +180,9 @@ function displayNotifications(notifications) {
     notifications.forEach(notif => {
       const date = new Date(notif.createdAt.seconds * 1000);
       const timeAgo = getTimeAgo(date);
+      const formattedDateTime = date.toLocaleString();
       
+      const senderLabel = notif.senderName ? `From: ${notif.senderName}` : 'From: System';
       html += `
         <div class="notification-item ${!notif.isRead ? 'unread' : ''}">
           <div class="notification-icon">
@@ -163,8 +190,9 @@ function displayNotifications(notifications) {
           </div>
           <div class="notification-content">
             <div class="notification-title">${notif.title}</div>
+            <div class="notification-sender">${senderLabel}</div>
             <div class="notification-message">${notif.message}</div>
-            <div class="notification-time">${timeAgo}</div>
+            <div class="notification-time">${timeAgo} · ${formattedDateTime}</div>
           </div>
         </div>
       `;
@@ -186,13 +214,41 @@ function getTimeAgo(date) {
   return date.toLocaleDateString();
 }
 
-// Navigate between views
-function navigateTo(view) {
-  document.querySelectorAll('.dashboard-view').forEach(v => v.classList.add('hidden'));
-  document.getElementById(view + 'View').classList.remove('hidden');
-  
-  document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-  event.target.closest('.nav-item').classList.add('active');
+function setupNavigation() {
+  document.querySelectorAll('[data-view]').forEach((element) => {
+    element.addEventListener('click', (event) => {
+      event.preventDefault();
+      const view = element.dataset.view;
+      if (!view) return;
+      showView(view);
+    });
+  });
+
+  document.querySelectorAll('[data-action="logout"]').forEach((element) => {
+    element.addEventListener('click', (event) => {
+      event.preventDefault();
+      logout();
+    });
+  });
+}
+
+function showView(view) {
+  const viewId = viewSelectors[view];
+  if (!viewId) return;
+
+  document.querySelectorAll('.dashboard-view').forEach((section) => section.classList.add('hidden'));
+  const target = document.getElementById(viewId);
+  if (target) target.classList.remove('hidden');
+
+  document.querySelectorAll('.nav-item').forEach((item) => {
+    item.classList.toggle('active', item.dataset.view === view);
+  });
+
+  currentView = view;
+
+  if (view === 'notifications') {
+    loadNotifications();
+  }
 }
 
 // Request blood form submission
@@ -221,7 +277,7 @@ document.getElementById('requestBloodForm')?.addEventListener('submit', async (e
     if (result.success) {
       alert('Blood request submitted successfully!');
       document.getElementById('requestBloodForm').reset();
-      navigateTo('dashboard');
+      showView('dashboard');
       await loadDashboardData();
     }
   } catch (error) {
