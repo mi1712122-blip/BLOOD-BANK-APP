@@ -22,6 +22,7 @@
       <li><a href="#home">Home</a></li>
       <li><a href="#features">Features</a></li>
       <li><a href="#about">About</a></li>
+      <li><a href="#faq">FAQ</a></li>
       <li><a href="#contact">Contact</a></li>
     </ul>
     <div class="navbar-actions">
@@ -210,8 +211,47 @@
         </div>
         <a href="pages/auth/login.html" class="btn btn-primary btn-lg">Explore Inventory</a>
       </div>
-      <div class="inventory-image-card">
-        <img src="assets/images/blood%20inventory.jpg" alt="Blood inventory">
+      <div class="inventory-search-widget">
+        <div class="search-widget-card">
+          <div class="widget-header">
+            <i class="fas fa-search-location"></i>
+            <h3>Quick Blood Finder</h3>
+          </div>
+          <p class="widget-subtitle">Check availability in real-time across our network.</p>
+          
+          <form id="quick-search-form" class="widget-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="search-blood-group">Blood Group</label>
+                <select id="search-blood-group" required>
+                  <option value="" disabled selected>Select Group</option>
+                  <option value="A+">A+</option>
+                  <option value="A-">A-</option>
+                  <option value="B+">B+</option>
+                  <option value="B-">B-</option>
+                  <option value="AB+">AB+</option>
+                  <option value="AB-">AB-</option>
+                  <option value="O+">O+</option>
+                  <option value="O-">O-</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="search-city">City</label>
+                <input type="text" id="search-city" placeholder="e.g., Health City" required autocomplete="off">
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block search-btn">
+              <i class="fas fa-magnifying-glass"></i> Search Availability
+            </button>
+          </form>
+
+          <div class="search-results-container" id="search-results">
+            <div class="search-placeholder">
+              <i class="fas fa-heart-pulse"></i>
+              <p>Select a blood group and enter your city to search availability.</p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -265,11 +305,65 @@
     </div>
   </section>
 
+  <!-- FAQ Section -->
+  <section class="faq-section" id="faq">
+    <div class="container">
+      <span class="section-subtitle centered">Got Questions?</span>
+      <h2>Frequently Asked Questions</h2>
+      <div class="faq-accordion">
+        <div class="faq-item">
+          <button class="faq-question">
+            <span>Who is eligible to donate blood?</span>
+            <i class="fas fa-plus"></i>
+          </button>
+          <div class="faq-content">
+            <div class="faq-answer">
+              <p>Generally, healthy individuals who are at least 18 years old, weigh at least 50 kg (110 lbs), and pass the physical and health history evaluation are eligible to donate. Some medical conditions or travel history may defer eligibility temporarily or permanently.</p>
+            </div>
+          </div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question">
+            <span>How often can I donate blood?</span>
+            <i class="fas fa-plus"></i>
+          </button>
+          <div class="faq-content">
+            <div class="faq-answer">
+              <p>You can donate whole blood once every 56 days (approximately every 8 weeks). This allows your body enough time to replenish its red blood cell count and ensure your donation is completely safe for your health.</p>
+            </div>
+          </div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question">
+            <span>How do hospitals request emergency blood?</span>
+            <i class="fas fa-plus"></i>
+          </button>
+          <div class="faq-content">
+            <div class="faq-answer">
+              <p>Hospitals can register on our platform. Once approved by our administrator, they can access their dashboard and submit emergency requests specifying the blood group and quantity. Organizations in the network will receive real-time notifications to dispatch blood instantly.</p>
+            </div>
+          </div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question">
+            <span>Is my personal and medical data secure?</span>
+            <i class="fas fa-plus"></i>
+          </button>
+          <div class="faq-content">
+            <div class="faq-answer">
+              <p>Yes. We take privacy extremely seriously. We use Firebase's secure authentication and strict Firestore Security Rules, ensuring that donor contact information and organization inventories are only visible to authorized and verified roles.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Contact Section -->
   <section class="contact" id="contact">
     <div class="container">
       <h2>Get in Touch</h2>
-      <div class="contact-content">
+      <div class="contact-content split-layout">
         <div class="contact-info">
           <div class="contact-item">
             <i class="fas fa-phone"></i>
@@ -292,6 +386,30 @@
               <p>123 Medical Lane, Health City</p>
             </div>
           </div>
+        </div>
+
+        <div class="contact-form-container">
+          <form id="landing-contact-form" class="contact-form">
+            <div class="form-group">
+              <label for="contact-name">Full Name</label>
+              <input type="text" id="contact-name" placeholder="John Doe" required>
+            </div>
+            <div class="form-group">
+              <label for="contact-email">Email Address</label>
+              <input type="email" id="contact-email" placeholder="john@example.com" required>
+            </div>
+            <div class="form-group">
+              <label for="contact-subject">Subject</label>
+              <input type="text" id="contact-subject" placeholder="Inquiry about donation" required>
+            </div>
+            <div class="form-group">
+              <label for="contact-message">Message</label>
+              <textarea id="contact-message" rows="4" placeholder="Your message here..." required></textarea>
+            </div>
+            <button type="submit" class="btn btn-secondary btn-block submit-btn">
+              <i class="fas fa-paper-plane"></i> Send Message
+            </button>
+          </form>
         </div>
       </div>
     </div>
@@ -341,6 +459,6 @@
     </div>
   </footer>
 
-  <script src="assets/js/landing.js"></script>
+  <script type="module" src="assets/js/landing.js"></script>
 </body>
 </html>
