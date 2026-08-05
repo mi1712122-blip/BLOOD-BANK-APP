@@ -3,6 +3,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  onSnapshot,
   query,
   updateDoc,
   where
@@ -12,39 +13,110 @@ import { bloodRequestManager } from '../../../assets/js/requests.js';
 import { db } from '../../../assets/js/firebase-config.js';
 
 let currentAdmin = null;
+let notificationsListener = null;
 let donorsList = [];
 let hospitalsList = [];
 let organizationsList = [];
 let usersList = [];
+let allInventoryItems = [];
+let allInventoryLogs = [];
+let allRequests = [];
+let allDonations = [];
+let adminNotifications = [];
+let adminInventoryPage = 1;
+const adminInventoryPageSize = 8;
+const chartInstances = {};
+
 const viewSelectors = {
   dashboard: 'dashboardView',
   donors: 'donorsView',
   organizations: 'organizationsView',
   hospitals: 'hospitalsView',
+  notifications: 'notificationsView',
   sendNotification: 'sendNotificationView',
+  contactMessages: 'contactMessagesView',
   inventory: 'inventoryView',
   analytics: 'analyticsView',
   settings: 'settingsView'
 };
+
+const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
 document.addEventListener('DOMContentLoaded', async () => {
   await checkAuthAndLoadAdmin();
   setupNavigation();
   setupActionHandlers();
   setupNotificationHandlers();
+  setupInventoryControls();
+  setupAnalyticsControls();
+  setupRealtimeListeners();
   showView('dashboard');
   await loadDashboardData();
 });
 
 async function checkAuthAndLoadAdmin() {
   const user = await authManager.getCurrentUser();
-
   if (!user || user.role !== 'admin') {
     window.location.href = '../../auth/login.html';
     return;
   }
-
   currentAdmin = user.data;
+
+  if (notificationsListener) notificationsListener();
+  notificationsListener = bloodRequestManager.listenNotifications(currentAdmin.uid, (result) => {
+    if (!result.success) return;
+    adminNotifications = result.data || [];
+    const unreadCount = adminNotifications.filter((item) => !item.isRead).length;
+    const bell = document.getElementById('adminNotificationBadge');
+    const bell2 = document.getElementById('adminNotificationBadge2');
+    if (bell) bell.textContent = unreadCount;
+    if (bell2) bell2.textContent = unreadCount;
+    if (document.getElementById('notificationsView') && !document.getElementById('notificationsView').classList.contains('hidden')) {
+      displayAdminNotifications(adminNotifications);
+    }
+  });
+}
+
+function setupRealtimeListeners() {
+  // Listen for inventory items
+  onSnapshot(collection(db, 'bloodInventory'), (snapshot) => {
+    allInventoryItems = [];
+    snapshot.forEach((docSnap) => {
+      allInventoryItems.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    renderAdminInventory();
+    renderAdminAnalytics();
+  });
+
+  // Listen for inventory history logs
+  onSnapshot(collection(db, 'inventoryHistory'), (snapshot) => {
+    allInventoryLogs = [];
+    snapshot.forEach((docSnap) => {
+      allInventoryLogs.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    renderAdminInventoryLogs();
+  });
+
+  // Listen for blood requests
+  onSnapshot(collection(db, 'bloodRequests'), (snapshot) => {
+    allRequests = [];
+    snapshot.forEach((docSnap) => {
+      allRequests.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    const pendingElem = document.getElementById('totalPendingRequests');
+    if (pendingElem) pendingElem.textContent = allRequests.filter(r => r.status === 'Pending').length;
+    renderAdminInventory();
+    renderAdminAnalytics();
+  });
+
+  // Listen for donations
+  onSnapshot(collection(db, 'donations'), (snapshot) => {
+    allDonations = [];
+    snapshot.forEach((docSnap) => {
+      allDonations.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    renderAdminAnalytics();
+  });
 }
 
 async function loadDashboardData() {
@@ -77,10 +149,6 @@ async function loadDashboardData() {
       organizationsList.push({ id: docSnap.id, ...docSnap.data() });
     });
 
-    const requestsQuery = query(collection(db, 'bloodRequests'), where('status', '==', 'Pending'));
-    const requestsSnapshot = await getDocs(requestsQuery);
-    document.getElementById('totalPendingRequests').textContent = requestsSnapshot.size;
-
     document.getElementById('lastUpdated').textContent = new Date().toLocaleString();
 
     await loadDonorsData(donorsSnapshot);
@@ -97,7 +165,6 @@ async function loadDashboardData() {
 
 async function loadDonorsData(snapshot) {
   let html = '<table><thead><tr><th>Name</th><th>Email</th><th>Blood Group</th><th>City</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
-
   snapshot.forEach((docSnap) => {
     const donor = docSnap.data();
     const uid = donor.uid || docSnap.id;
@@ -120,24 +187,14 @@ async function loadDonorsData(snapshot) {
       </tr>
     `;
   });
-
   html += '</tbody></table>';
   document.getElementById('donorsList').innerHTML = html;
 }
 
 function getDonorStatus(donor) {
-  if (typeof donor.status === 'string' && donor.status.trim()) {
-    return normalizeStatus(donor.status);
-  }
-
-  if (typeof donor.isApproved === 'boolean') {
-    return donor.isApproved ? 'Approved' : 'Pending';
-  }
-
-  if (typeof donor.isEligible === 'boolean') {
-    return donor.isEligible ? 'Pending' : 'Rejected';
-  }
-
+  if (typeof donor.status === 'string' && donor.status.trim()) return normalizeStatus(donor.status);
+  if (typeof donor.isApproved === 'boolean') return donor.isApproved ? 'Approved' : 'Pending';
+  if (typeof donor.isEligible === 'boolean') return donor.isEligible ? 'Pending' : 'Rejected';
   return 'Pending';
 }
 
@@ -157,20 +214,13 @@ function getStatusBadgeClass(status) {
 }
 
 function getEntityStatus(entity) {
-  if (typeof entity.status === 'string' && entity.status.trim()) {
-    return normalizeStatus(entity.status);
-  }
-
-  if (typeof entity.isApproved === 'boolean') {
-    return entity.isApproved ? 'Approved' : 'Pending';
-  }
-
+  if (typeof entity.status === 'string' && entity.status.trim()) return normalizeStatus(entity.status);
+  if (typeof entity.isApproved === 'boolean') return entity.isApproved ? 'Approved' : 'Pending';
   return 'Pending';
 }
 
 async function loadOrganizationsData(snapshot) {
   let html = '<table><thead><tr><th>Name</th><th>Email</th><th>City</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
-
   snapshot.forEach((docSnap) => {
     const org = docSnap.data();
     const status = getEntityStatus(org);
@@ -179,9 +229,9 @@ async function loadOrganizationsData(snapshot) {
 
     html += `
       <tr>
-        <td>${org.organizationName}</td>
-        <td>${org.email}</td>
-        <td>${org.city}</td>
+        <td>${org.organizationName || ''}</td>
+        <td>${org.email || ''}</td>
+        <td>${org.city || ''}</td>
         <td><span class="badge ${statusBadgeClass}">${status}</span></td>
         <td>
           ${needsAction ? `<button class="btn btn-sm btn-primary" data-action="approve-org" data-user-id="${org.uid}">Approve</button> <button class="btn btn-sm btn-danger" data-action="reject-org" data-user-id="${org.uid}">Reject</button>` : ''}
@@ -191,14 +241,12 @@ async function loadOrganizationsData(snapshot) {
       </tr>
     `;
   });
-
   html += '</tbody></table>';
   document.getElementById('organizationsList').innerHTML = html;
 }
 
 async function loadHospitalsData(snapshot) {
   let html = '<table><thead><tr><th>Name</th><th>Email</th><th>City</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
-
   snapshot.forEach((docSnap) => {
     const hospital = docSnap.data();
     const status = getEntityStatus(hospital);
@@ -207,9 +255,9 @@ async function loadHospitalsData(snapshot) {
 
     html += `
       <tr>
-        <td>${hospital.hospitalName}</td>
-        <td>${hospital.email}</td>
-        <td>${hospital.city}</td>
+        <td>${hospital.hospitalName || ''}</td>
+        <td>${hospital.email || ''}</td>
+        <td>${hospital.city || ''}</td>
         <td><span class="badge ${statusBadgeClass}">${status}</span></td>
         <td>
           ${needsAction ? `<button class="btn btn-sm btn-primary" data-action="approve-hospital" data-user-id="${hospital.uid}">Approve</button> <button class="btn btn-sm btn-danger" data-action="reject-hospital" data-user-id="${hospital.uid}">Reject</button>` : ''}
@@ -219,25 +267,461 @@ async function loadHospitalsData(snapshot) {
       </tr>
     `;
   });
-
   html += '</tbody></table>';
   document.getElementById('hospitalsList').innerHTML = html;
 }
+
+/* ==========================================================================
+   2. ADMIN BLOOD INVENTORY MODULE
+   ========================================================================== */
+
+function setupInventoryControls() {
+  document.getElementById('adminInventorySearch')?.addEventListener('input', renderAdminInventory);
+  document.getElementById('adminInventoryGroupFilter')?.addEventListener('change', renderAdminInventory);
+  document.getElementById('adminInventoryStatusFilter')?.addEventListener('change', renderAdminInventory);
+  document.getElementById('adminInventorySort')?.addEventListener('change', renderAdminInventory);
+  document.getElementById('exportAdminInventoryBtn')?.addEventListener('click', exportAdminInventoryCSV);
+}
+
+function renderAdminInventory() {
+  const now = new Date();
+
+  const groupStats = bloodGroups.reduce((acc, bg) => {
+    acc[bg] = { total: 0, available: 0, reserved: 0, expired: 0, lastUpdated: null };
+    return acc;
+  }, {});
+
+  allInventoryItems.forEach((item) => {
+    const bg = item.bloodGroup;
+    if (!groupStats[bg]) groupStats[bg] = { total: 0, available: 0, reserved: 0, expired: 0, lastUpdated: null };
+
+    const units = Number(item.units) || 0;
+    groupStats[bg].total += units;
+
+    const expDate = item.expiryDate?.seconds ? new Date(item.expiryDate.seconds * 1000) : (item.expiryDate ? new Date(item.expiryDate) : null);
+    const isExpired = item.status === 'Expired' || (expDate && expDate < now);
+
+    if (isExpired) {
+      groupStats[bg].expired += units;
+    } else if (item.status === 'Reserved') {
+      groupStats[bg].reserved += units;
+    } else {
+      groupStats[bg].available += units;
+    }
+
+    const updated = item.updatedAt?.seconds ? new Date(item.updatedAt.seconds * 1000) : (item.updatedAt ? new Date(item.updatedAt) : null);
+    if (updated && (!groupStats[bg].lastUpdated || updated > groupStats[bg].lastUpdated)) {
+      groupStats[bg].lastUpdated = updated;
+    }
+  });
+
+  allRequests.forEach(req => {
+    if (req.status === 'Approved' && groupStats[req.bloodGroup]) {
+      groupStats[req.bloodGroup].reserved += (Number(req.units) || 0);
+    }
+  });
+
+  // Summary Metrics
+  const totalUnitsSum = Object.values(groupStats).reduce((sum, g) => sum + g.total, 0);
+  const activeGroupsCount = Object.values(groupStats).filter((g) => g.total > 0).length;
+  const lowStockCount = Object.values(groupStats).filter((g) => g.total > 0 && g.total < 10).length;
+  const expiredUnitsSum = Object.values(groupStats).reduce((sum, g) => sum + g.expired, 0);
+
+  if (document.getElementById('adminTotalUnits')) document.getElementById('adminTotalUnits').textContent = totalUnitsSum;
+  if (document.getElementById('adminTotalGroups')) document.getElementById('adminTotalGroups').textContent = activeGroupsCount;
+  if (document.getElementById('adminLowStockTypes')) document.getElementById('adminLowStockTypes').textContent = lowStockCount;
+  if (document.getElementById('adminExpiredUnits')) document.getElementById('adminExpiredUnits').textContent = expiredUnitsSum;
+
+  // Filter & Search Logic
+  const searchTerm = (document.getElementById('adminInventorySearch')?.value || '').trim().toLowerCase();
+  const groupFilter = document.getElementById('adminInventoryGroupFilter')?.value || '';
+  const statusFilter = document.getElementById('adminInventoryStatusFilter')?.value || '';
+  const sortOption = document.getElementById('adminInventorySort')?.value || 'desc';
+
+  let rows = bloodGroups.map((bg) => {
+    const data = groupStats[bg];
+    let status = 'In Stock';
+    let statusClass = 'badge-stock-available';
+    if (data.total === 0) {
+      status = 'Out of Stock';
+      statusClass = 'badge-stock-out';
+    } else if (data.total < 10) {
+      status = 'Low Stock';
+      statusClass = 'badge-stock-low';
+    }
+    return { bloodGroup: bg, ...data, status, statusClass };
+  });
+
+  // Apply filters
+  if (searchTerm) {
+    rows = rows.filter((r) => r.bloodGroup.toLowerCase().includes(searchTerm));
+  }
+  if (groupFilter) {
+    rows = rows.filter((r) => r.bloodGroup === groupFilter);
+  }
+  if (statusFilter) {
+    if (statusFilter === 'Available') rows = rows.filter((r) => r.status === 'In Stock');
+    else if (statusFilter === 'Low Stock') rows = rows.filter((r) => r.status === 'Low Stock');
+    else if (statusFilter === 'Out of Stock') rows = rows.filter((r) => r.status === 'Out of Stock');
+  }
+
+  // Sort
+  rows.sort((a, b) => sortOption === 'asc' ? a.total - b.total : b.total - a.total);
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / adminInventoryPageSize));
+  adminInventoryPage = Math.min(adminInventoryPage, totalPages);
+  const startIndex = (adminInventoryPage - 1) * adminInventoryPageSize;
+  const paginatedRows = rows.slice(startIndex, startIndex + adminInventoryPageSize);
+
+  const tableContainer = document.getElementById('adminInventoryTable');
+  if (tableContainer) {
+    if (!rows.length) {
+      tableContainer.innerHTML = '<p class="empty-state">No inventory records matching filters.</p>';
+    } else {
+      tableContainer.innerHTML = `
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Blood Group</th>
+              <th>Total Units</th>
+              <th>Available Units</th>
+              <th>Reserved Units</th>
+              <th>Expired Units</th>
+              <th>Last Updated</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${paginatedRows.map((r) => `
+              <tr>
+                <td><strong>${r.bloodGroup}</strong></td>
+                <td>${r.total}</td>
+                <td>${r.available}</td>
+                <td>${r.reserved}</td>
+                <td>${r.expired}</td>
+                <td>${r.lastUpdated ? r.lastUpdated.toLocaleDateString() : 'N/A'}</td>
+                <td><span class="badge ${r.statusClass}">${r.status}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div class="table-pagination" style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
+          <span>Page ${adminInventoryPage} of ${totalPages}</span>
+          <div>
+            <button type="button" class="btn btn-secondary btn-sm" data-admin-inventory-page="prev" ${adminInventoryPage <= 1 ? 'disabled' : ''}>Previous</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-admin-inventory-page="next" ${adminInventoryPage >= totalPages ? 'disabled' : ''}>Next</button>
+          </div>
+        </div>
+      `;
+
+      tableContainer.querySelectorAll('[data-admin-inventory-page]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const direction = button.dataset.adminInventoryPage;
+          if (direction === 'prev') adminInventoryPage = Math.max(1, adminInventoryPage - 1);
+          if (direction === 'next') adminInventoryPage = Math.min(totalPages, adminInventoryPage + 1);
+          renderAdminInventory();
+        });
+      });
+    }
+  }
+
+  // Render Low Stock Alerts
+  const lowStockContainer = document.getElementById('adminLowStockAlerts');
+  if (lowStockContainer) {
+    const lowGroups = rows.filter((r) => r.total < 10);
+    if (!lowGroups.length) {
+      lowStockContainer.innerHTML = '<p class="empty-state">All blood groups are in healthy stock levels (>= 10 units).</p>';
+    } else {
+      lowStockContainer.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px;">
+          ${lowGroups.map((g) => `
+            <div class="card" style="border-left: 4px solid var(--warning-color); padding: 15px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h4>Blood Group ${g.bloodGroup}</h4>
+                <span class="badge ${g.statusClass}">${g.status}</span>
+              </div>
+              <p style="margin: 8px 0 0 0; color: #555;">Current Stock: <strong>${g.total} units</strong></p>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+  }
+
+  // Render Charts
+  renderAdminInventoryCharts(groupStats);
+}
+
+function renderAdminInventoryCharts(groupStats) {
+  const labels = bloodGroups;
+  const totalData = labels.map((bg) => groupStats[bg].total);
+  const availableData = labels.map((bg) => groupStats[bg].available);
+  const reservedData = labels.map((bg) => groupStats[bg].reserved);
+
+  renderChart('adminInventoryDistChart', 'Blood Group Distribution', labels, totalData, ['#D32F2F', '#E53935', '#F57C00', '#FB8C00', '#7B1FA2', '#6A1B9A', '#2E7D32', '#388E3C'], 'pie');
+
+  // Available vs Reserved Bar Chart
+  const ctx2 = document.getElementById('adminInventoryReserveChart')?.getContext('2d');
+  if (ctx2) {
+    if (chartInstances['adminInventoryReserveChart']) {
+      chartInstances['adminInventoryReserveChart'].destroy();
+    }
+    chartInstances['adminInventoryReserveChart'] = new Chart(ctx2, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Available', data: availableData, backgroundColor: 'rgba(46, 125, 50, 0.8)' },
+          { label: 'Reserved', data: reservedData, backgroundColor: 'rgba(245, 124, 0, 0.8)' }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
+  }
+}
+
+function renderAdminInventoryLogs() {
+  const container = document.getElementById('adminInventoryLogsTable');
+  if (!container) return;
+
+  if (!allInventoryLogs.length) {
+    container.innerHTML = '<p class="empty-state">No inventory change logs recorded yet.</p>';
+    return;
+  }
+
+  const logs = [...allInventoryLogs].sort((a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt)).slice(0, 20);
+
+  container.innerHTML = `
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Date & Time</th>
+          <th>Blood Group</th>
+          <th>Updated By</th>
+          <th>Previous Qty</th>
+          <th>New Qty</th>
+          <th>Reason / Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${logs.map((log) => {
+          const date = log.createdAt?.seconds ? new Date(log.createdAt.seconds * 1000) : new Date(log.createdAt || Date.now());
+          return `
+            <tr>
+              <td>${date.toLocaleString()}</td>
+              <td><strong>${log.bloodGroup || '-'}</strong></td>
+              <td>${log.updatedByName || log.updatedBy || 'Organization'}</td>
+              <td>${log.previousQuantity ?? '-'}</td>
+              <td>${log.newQuantity ?? '-'}</td>
+              <td>${log.reason || log.action || 'Stock update'}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function exportAdminInventoryCSV() {
+  if (!allInventoryItems.length) {
+    alert('No inventory items to export.');
+    return;
+  }
+  const headers = ['ID', 'Blood Group', 'Units', 'Status', 'Organization ID', 'Expiry Date'];
+  const rows = allInventoryItems.map((item) => [
+    item.id,
+    item.bloodGroup,
+    item.units,
+    item.status,
+    item.organizationId,
+    item.expiryDate?.seconds ? new Date(item.expiryDate.seconds * 1000).toLocaleDateString() : (item.expiryDate || 'N/A')
+  ]);
+  downloadCSV('admin_blood_inventory.csv', [headers, ...rows]);
+}
+
+/* ==========================================================================
+   3. ADMIN ANALYTICS MODULE
+   ========================================================================== */
+
+function setupAnalyticsControls() {
+  document.getElementById('analyticsDateFilter')?.addEventListener('change', renderAdminAnalytics);
+  document.getElementById('analyticsCustomDateFrom')?.addEventListener('change', renderAdminAnalytics);
+  document.getElementById('analyticsCustomDateTo')?.addEventListener('change', renderAdminAnalytics);
+  document.getElementById('exportAnalyticsCsvBtn')?.addEventListener('click', exportAnalyticsCSV);
+  document.getElementById('printAnalyticsPdfBtn')?.addEventListener('click', () => window.print());
+}
+
+function renderAdminAnalytics() {
+  const filter = document.getElementById('analyticsDateFilter')?.value || 'all';
+  const customFrom = document.getElementById('analyticsCustomDateFrom')?.value || '';
+  const customTo = document.getElementById('analyticsCustomDateTo')?.value || '';
+  const now = new Date();
+
+  const filterFn = (itemDate) => {
+    if (!itemDate) return true;
+    const date = itemDate.seconds ? new Date(itemDate.seconds * 1000) : new Date(itemDate);
+    if (isNaN(date.getTime())) return true;
+
+    if (filter === 'all') return true;
+    if (filter === 'today') return isSameDay(date, now);
+    if (filter === '7days') return (now - date) <= (7 * 24 * 60 * 60 * 1000);
+    if (filter === 'month') return (now - date) <= (30 * 24 * 60 * 60 * 1000);
+    if (filter === 'year') return (now - date) <= (365 * 24 * 60 * 60 * 1000);
+    if (filter === 'custom') {
+      const start = customFrom ? new Date(customFrom) : null;
+      const end = customTo ? new Date(customTo) : null;
+      if (start && end) {
+        const endExclusive = new Date(end);
+        endExclusive.setHours(23, 59, 59, 999);
+        return date >= start && date <= endExclusive;
+      }
+      if (start) return date >= start;
+      if (end) return date <= new Date(end);
+      return true;
+    }
+    return true;
+  };
+
+  const filteredDonations = allDonations.filter((d) => filterFn(d.createdAt));
+  const filteredRequests = allRequests.filter((r) => filterFn(r.createdAt));
+
+  // Summary Metrics
+  if (document.getElementById('analyticsTotalDonors')) document.getElementById('analyticsTotalDonors').textContent = donorsList.length;
+  if (document.getElementById('analyticsTotalHospitals')) document.getElementById('analyticsTotalHospitals').textContent = hospitalsList.length;
+  if (document.getElementById('analyticsTotalOrgs')) document.getElementById('analyticsTotalOrgs').textContent = organizationsList.length;
+
+  const totalUnits = allInventoryItems.reduce((sum, i) => sum + (Number(i.units) || 0), 0);
+  if (document.getElementById('analyticsTotalUnits')) document.getElementById('analyticsTotalUnits').textContent = totalUnits;
+  if (document.getElementById('analyticsTotalRequests')) document.getElementById('analyticsTotalRequests').textContent = filteredRequests.length;
+
+  const completed = filteredRequests.filter((r) => r.status === 'Completed').length;
+  const pending = filteredRequests.filter((r) => r.status === 'Pending').length;
+  const rejected = filteredRequests.filter((r) => r.status === 'Rejected').length;
+
+  if (document.getElementById('analyticsCompletedRequests')) document.getElementById('analyticsCompletedRequests').textContent = completed;
+  if (document.getElementById('analyticsPendingRequests')) document.getElementById('analyticsPendingRequests').textContent = pending;
+  if (document.getElementById('analyticsRejectedRequests')) document.getElementById('analyticsRejectedRequests').textContent = rejected;
+
+  // Statistics Calculations
+  const requestGroupCounts = {};
+  filteredRequests.forEach((r) => {
+    if (r.bloodGroup) requestGroupCounts[r.bloodGroup] = (requestGroupCounts[r.bloodGroup] || 0) + 1;
+  });
+
+  const sortedReqGroups = Object.entries(requestGroupCounts).sort((a, b) => b[1] - a[1]);
+  const mostReq = sortedReqGroups.length ? sortedReqGroups[0][0] : '-';
+  const leastReq = sortedReqGroups.length ? sortedReqGroups[sortedReqGroups.length - 1][0] : '-';
+
+  const donationGroupCounts = {};
+  filteredDonations.forEach((d) => {
+    if (d.bloodGroup) donationGroupCounts[d.bloodGroup] = (donationGroupCounts[d.bloodGroup] || 0) + 1;
+  });
+  const sortedDonGroups = Object.entries(donationGroupCounts).sort((a, b) => b[1] - a[1]);
+  const topDonating = sortedDonGroups.length ? sortedDonGroups[0][0] : '-';
+
+  const utilizationRate = filteredRequests.length ? Math.round((completed / filteredRequests.length) * 100) : 0;
+
+  if (document.getElementById('mostRequestedGroup')) document.getElementById('mostRequestedGroup').textContent = mostReq;
+  if (document.getElementById('leastRequestedGroup')) document.getElementById('leastRequestedGroup').textContent = leastReq;
+  if (document.getElementById('topDonatingGroup')) document.getElementById('topDonatingGroup').textContent = topDonating;
+  if (document.getElementById('bloodUtilizationRate')) document.getElementById('bloodUtilizationRate').textContent = `${utilizationRate}%`;
+
+  // Render Charts
+  renderAnalyticsCharts(filteredDonations, filteredRequests);
+
+  // Render Timeline
+  renderAnalyticsTimeline();
+}
+
+function renderAnalyticsCharts(filteredDonations, filteredRequests) {
+  const donationData = aggregateMonthlyCounts(filteredDonations, 'createdAt');
+  const requestData = aggregateMonthlyCounts(filteredRequests, 'createdAt');
+
+  renderChart('monthlyDonationsChart', 'Monthly Donations', donationData.labels, donationData.values, 'rgba(193, 18, 31, 0.8)', 'line');
+  renderChart('monthlyRequestsChart', 'Monthly Requests', requestData.labels, requestData.values, 'rgba(245, 124, 0, 0.8)', 'bar');
+
+  // Distribution chart
+  const groupCounts = bloodGroups.map((bg) => allInventoryItems.filter((i) => i.bloodGroup === bg).reduce((sum, i) => sum + (Number(i.units) || 0), 0));
+  renderChart('analyticsDistChart', 'Blood Group Distribution', bloodGroups, groupCounts, ['#D32F2F', '#E53935', '#F57C00', '#FB8C00', '#7B1FA2', '#6A1B9A', '#2E7D32', '#388E3C'], 'doughnut');
+
+  // Donation Trends
+  renderChart('donationTrendsChart', 'Donation Trends', donationData.labels, donationData.values, 'rgba(46, 125, 50, 0.8)', 'line');
+
+  // Hospital Requests Trend
+  renderChart('hospitalTrendsChart', 'Hospital Requests Trend', requestData.labels, requestData.values, 'rgba(0, 150, 136, 0.8)', 'line');
+
+  // Org performance chart
+  const orgNames = organizationsList.slice(0, 6).map((o) => o.organizationName || 'Org');
+  const orgUnits = organizationsList.slice(0, 6).map((o) => allInventoryItems.filter((i) => i.organizationId === (o.uid || o.id)).reduce((sum, i) => sum + (Number(i.units) || 0), 0));
+  renderChart('orgPerformanceChart', 'Organization Units Managed', orgNames.length ? orgNames : ['No Data'], orgUnits.length ? orgUnits : [0], 'rgba(123, 31, 162, 0.8)', 'bar');
+}
+
+function renderAnalyticsTimeline() {
+  const container = document.getElementById('analyticsTimeline');
+  if (!container) return;
+
+  const events = [];
+  allRequests.slice(-5).reverse().forEach((r) => {
+    events.push({ title: `Hospital Request: ${r.hospitalName || 'Hospital'} (${r.bloodGroup}, ${r.units} units)`, time: r.createdAt, type: 'request' });
+  });
+  allDonations.slice(-5).reverse().forEach((d) => {
+    events.push({ title: `Donor Donation: ${d.donorName || 'Donor'} (${d.bloodGroup})`, time: d.createdAt, type: 'donation' });
+  });
+  donorsList.slice(-3).reverse().forEach((d) => {
+    events.push({ title: `New Donor Registered: ${d.fullName || 'Donor'}`, time: d.createdAt || d.registeredAt, type: 'user' });
+  });
+
+  events.sort((a, b) => getTimestamp(b.time) - getTimestamp(a.time));
+  const timelineItems = events.slice(0, 8);
+
+  if (!timelineItems.length) {
+    container.innerHTML = '<p class="empty-state">No recent activity events recorded.</p>';
+    return;
+  }
+
+  container.innerHTML = timelineItems.map((ev) => `
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-content">
+        <strong>${ev.title}</strong>
+        <div class="timeline-time">${formatDate(ev.time, true)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function exportAnalyticsCSV() {
+  const headers = ['Metric', 'Value'];
+  const rows = [
+    ['Total Donors', donorsList.length],
+    ['Total Hospitals', hospitalsList.length],
+    ['Total Organizations', organizationsList.length],
+    ['Total Blood Units', allInventoryItems.reduce((sum, i) => sum + (Number(i.units) || 0), 0)],
+    ['Total Requests', allRequests.length],
+    ['Completed Requests', allRequests.filter(r => r.status === 'Completed').length],
+    ['Pending Requests', allRequests.filter(r => r.status === 'Pending').length],
+    ['Rejected Requests', allRequests.filter(r => r.status === 'Rejected').length]
+  ];
+  downloadCSV('admin_analytics_summary.csv', [headers, ...rows]);
+}
+
+/* ==========================================================================
+   NAVIGATION & VIEW SWITCHING
+   ========================================================================== */
 
 function setupNavigation() {
   document.querySelectorAll('[data-view]').forEach((element) => {
     element.addEventListener('click', (event) => {
       event.preventDefault();
       const view = element.dataset.view;
-      if (!view) return;
-      showView(view);
+      if (view) showView(view);
     });
   });
 
   document.querySelectorAll('[data-action="logout"]').forEach((element) => {
-    element.addEventListener('click', (event) => {
+    element.addEventListener('click', async (event) => {
       event.preventDefault();
-      logout();
+      await logout();
     });
   });
 }
@@ -246,192 +730,24 @@ function showView(view) {
   const viewId = viewSelectors[view];
   if (!viewId) return;
 
-  document.querySelectorAll('.dashboard-view').forEach((panel) => panel.classList.add('hidden'));
-  const targetView = document.getElementById(viewId);
-  if (targetView) {
-    targetView.classList.remove('hidden');
-  }
+  document.querySelectorAll('.dashboard-view').forEach((section) => section.classList.add('hidden'));
+  const target = document.getElementById(viewId);
+  if (target) target.classList.remove('hidden');
 
   document.querySelectorAll('.nav-item').forEach((item) => {
     item.classList.toggle('active', item.dataset.view === view);
   });
 
-  if (view === 'sendNotification') {
-    populateRecipientSelector(document.getElementById('recipientType')?.value || 'specificDonor');
-  }
-}
-
-async function deleteDonor(uid) {
-  if (!confirm('Are you sure you want to delete this donor?')) return;
-
-  try {
-    await deleteDoc(doc(db, 'donors', uid));
-    await deleteDoc(doc(db, 'users', uid));
-    alert('Donor deleted successfully');
-    await loadDashboardData();
-  } catch (error) {
-    console.error('Error deleting donor:', error);
-    alert('Failed to delete donor');
-  }
-}
-
-async function deleteOrg(uid) {
-  if (!confirm('Are you sure you want to delete this organization?')) return;
-
-  try {
-    await deleteDoc(doc(db, 'organizations', uid));
-    await deleteDoc(doc(db, 'users', uid));
-    alert('Organization deleted successfully');
-    await loadDashboardData();
-  } catch (error) {
-    console.error('Error deleting organization:', error);
-    alert('Failed to delete organization');
-  }
-}
-
-async function deleteHospital(uid) {
-  if (!confirm('Are you sure you want to delete this hospital?')) return;
-
-  try {
-    await deleteDoc(doc(db, 'hospitals', uid));
-    await deleteDoc(doc(db, 'users', uid));
-    alert('Hospital deleted successfully');
-    await loadDashboardData();
-  } catch (error) {
-    console.error('Error deleting hospital:', error);
-    alert('Failed to delete hospital');
-  }
-}
-
-async function approveDonor(uid) {
-  try {
-    await updateDoc(doc(db, 'donors', uid), {
-      isApproved: true,
-      status: 'Approved'
-    });
-    await updateDoc(doc(db, 'users', uid), {
-      isApproved: true
-    });
-    await sendAdminNotification(uid, 'Donor Approved', 'Your donor profile has been approved by the admin.');
-    alert('Donor approved successfully');
-    await loadDashboardData();
-  } catch (error) {
-    console.error('Error approving donor:', error);
-    alert('Failed to approve donor');
-  }
-}
-
-async function rejectDonor(uid) {
-  const reason = prompt('Enter a reason for rejecting this donor:');
-  if (reason === null) return;
-
-  try {
-    await updateDoc(doc(db, 'donors', uid), {
-      isApproved: false,
-      status: 'Rejected'
-    });
-    await updateDoc(doc(db, 'users', uid), {
-      isApproved: false
-    });
-    await sendAdminNotification(uid, 'Donor Rejected', `Your donor profile has been rejected. Reason: ${reason}`);
-    alert('Donor rejected successfully');
-    await loadDashboardData();
-  } catch (error) {
-    console.error('Error rejecting donor:', error);
-    alert('Failed to reject donor');
-  }
-}
-
-async function approveOrg(uid) {
-  try {
-    await updateDoc(doc(db, 'organizations', uid), {
-      isApproved: true,
-      status: 'Approved'
-    });
-    await sendAdminNotification(uid, 'Organization Approved', 'Your organization has been approved by the admin.');
-    alert('Organization approved successfully');
-    await loadDashboardData();
-  } catch (error) {
-    console.error('Error approving organization:', error);
-    alert('Failed to approve organization');
-  }
-}
-
-async function rejectOrg(uid) {
-  const reason = prompt('Enter a reason for rejecting this organization:');
-  if (reason === null) return;
-
-  try {
-    await updateDoc(doc(db, 'organizations', uid), {
-      isApproved: false,
-      status: 'Rejected'
-    });
-    await sendAdminNotification(uid, 'Organization Rejected', `Your organization has been rejected. Reason: ${reason}`);
-    alert('Organization rejected successfully');
-    await loadDashboardData();
-  } catch (error) {
-    console.error('Error rejecting organization:', error);
-    alert('Failed to reject organization');
-  }
-}
-
-async function approveHospital(uid) {
-  try {
-    await updateDoc(doc(db, 'hospitals', uid), {
-      isApproved: true,
-      status: 'Approved'
-    });
-    await sendAdminNotification(uid, 'Hospital Approved', 'Your hospital has been approved by the admin.');
-    alert('Hospital approved successfully');
-    await loadDashboardData();
-  } catch (error) {
-    console.error('Error approving hospital:', error);
-    alert('Failed to approve hospital');
-  }
-}
-
-async function rejectHospital(uid) {
-  const reason = prompt('Enter a reason for rejecting this hospital:');
-  if (reason === null) return;
-
-  try {
-    await updateDoc(doc(db, 'hospitals', uid), {
-      isApproved: false,
-      status: 'Rejected'
-    });
-    await sendAdminNotification(uid, 'Hospital Rejected', `Your hospital has been rejected. Reason: ${reason}`);
-    alert('Hospital rejected successfully');
-    await loadDashboardData();
-  } catch (error) {
-    console.error('Error rejecting hospital:', error);
-    alert('Failed to reject hospital');
-  }
-}
-
-async function sendAdminNotification(recipientId, title, message) {
-  try {
-    await bloodRequestManager.sendNotification({
-      recipientId,
-      type: 'admin_status',
-      title,
-      message,
-      senderId: currentAdmin?.uid || null,
-      senderRole: 'admin',
-      senderName: currentAdmin?.fullName || currentAdmin?.email || 'Admin'
-    });
-  } catch (error) {
-    console.error('Error sending admin notification:', error);
+  if (view === 'inventory') renderAdminInventory();
+  if (view === 'analytics') renderAdminAnalytics();
+  if (view === 'sendNotification') populateRecipientSelector(document.getElementById('recipientType')?.value || 'specificDonor');
+  if (view === 'notifications') {
+    markAdminNotificationsRead();
   }
 }
 
 function setupActionHandlers() {
-  const donationsContainer = document.getElementById('donorsList');
-  const orgContainer = document.getElementById('organizationsList');
-  const hospitalContainer = document.getElementById('hospitalsList');
-
-  [donationsContainer, orgContainer, hospitalContainer].forEach((container) => {
-    if (!container) return;
-
+  document.querySelectorAll('.dashboard-container').forEach((container) => {
     container.addEventListener('click', async (event) => {
       const button = event.target.closest('button[data-action]');
       if (!button) return;
@@ -441,34 +757,118 @@ function setupActionHandlers() {
       const uid = button.dataset.userId;
       if (!uid) return;
 
-      if (action === 'delete-donor') {
-        await deleteDonor(uid);
-      } else if (action === 'view-donor') {
-        viewDonor(uid);
-      } else if (action === 'approve-donor') {
-        await approveDonor(uid);
-      } else if (action === 'reject-donor') {
-        await rejectDonor(uid);
-      } else if (action === 'approve-org') {
-        await approveOrg(uid);
-      } else if (action === 'reject-org') {
-        await rejectOrg(uid);
-      } else if (action === 'delete-org') {
-        await deleteOrg(uid);
-      } else if (action === 'view-org') {
-        viewOrg(uid);
-      } else if (action === 'approve-hospital') {
-        await approveHospital(uid);
-      } else if (action === 'reject-hospital') {
-        await rejectHospital(uid);
-      } else if (action === 'delete-hospital') {
-        await deleteHospital(uid);
-      } else if (action === 'view-hospital') {
-        viewHospital(uid);
-      }
+      if (action === 'delete-donor') await deleteDonor(uid);
+      else if (action === 'view-donor') viewDonor(uid);
+      else if (action === 'approve-donor') await approveDonor(uid);
+      else if (action === 'reject-donor') await rejectDonor(uid);
+      else if (action === 'approve-org') await approveOrg(uid);
+      else if (action === 'reject-org') await rejectOrg(uid);
+      else if (action === 'delete-org') await deleteOrg(uid);
+      else if (action === 'view-org') viewOrg(uid);
+      else if (action === 'approve-hospital') await approveHospital(uid);
+      else if (action === 'reject-hospital') await rejectHospital(uid);
+      else if (action === 'delete-hospital') await deleteHospital(uid);
+      else if (action === 'view-hospital') viewHospital(uid);
     });
   });
 }
+
+async function approveDonor(uid) {
+  try {
+    await updateDoc(doc(db, 'donors', uid), { isApproved: true, status: 'Approved' });
+    alert('Donor approved successfully.');
+    await loadDashboardData();
+  } catch (err) {
+    alert('Failed to approve donor: ' + err.message);
+  }
+}
+
+async function rejectDonor(uid) {
+  try {
+    await updateDoc(doc(db, 'donors', uid), { isApproved: false, status: 'Rejected' });
+    alert('Donor rejected.');
+    await loadDashboardData();
+  } catch (err) {
+    alert('Failed to reject donor: ' + err.message);
+  }
+}
+
+async function deleteDonor(uid) {
+  if (!confirm('Are you sure you want to delete this donor?')) return;
+  try {
+    await deleteDoc(doc(db, 'donors', uid));
+    alert('Donor deleted.');
+    await loadDashboardData();
+  } catch (err) {
+    alert('Failed to delete donor: ' + err.message);
+  }
+}
+
+async function approveOrg(uid) {
+  try {
+    await updateDoc(doc(db, 'organizations', uid), { isApproved: true, status: 'Approved' });
+    alert('Organization approved.');
+    await loadDashboardData();
+  } catch (err) {
+    alert('Failed to approve organization: ' + err.message);
+  }
+}
+
+async function rejectOrg(uid) {
+  try {
+    await updateDoc(doc(db, 'organizations', uid), { isApproved: false, status: 'Rejected' });
+    alert('Organization rejected.');
+    await loadDashboardData();
+  } catch (err) {
+    alert('Failed to reject organization: ' + err.message);
+  }
+}
+
+async function deleteOrg(uid) {
+  if (!confirm('Are you sure you want to delete this organization?')) return;
+  try {
+    await deleteDoc(doc(db, 'organizations', uid));
+    alert('Organization deleted.');
+    await loadDashboardData();
+  } catch (err) {
+    alert('Failed to delete organization: ' + err.message);
+  }
+}
+
+async function approveHospital(uid) {
+  try {
+    await updateDoc(doc(db, 'hospitals', uid), { isApproved: true, status: 'Approved' });
+    alert('Hospital approved.');
+    await loadDashboardData();
+  } catch (err) {
+    alert('Failed to approve hospital: ' + err.message);
+  }
+}
+
+async function rejectHospital(uid) {
+  try {
+    await updateDoc(doc(db, 'hospitals', uid), { isApproved: false, status: 'Rejected' });
+    alert('Hospital rejected.');
+    await loadDashboardData();
+  } catch (err) {
+    alert('Failed to reject hospital: ' + err.message);
+  }
+}
+
+async function deleteHospital(uid) {
+  if (!confirm('Are you sure you want to delete this hospital?')) return;
+  try {
+    await deleteDoc(doc(db, 'hospitals', uid));
+    alert('Hospital deleted.');
+    await loadDashboardData();
+  } catch (err) {
+    alert('Failed to delete hospital: ' + err.message);
+  }
+}
+
+function viewDonor(uid) { alert('Donor ID: ' + uid); }
+function viewOrg(uid) { alert('Organization ID: ' + uid); }
+function viewHospital(uid) { alert('Hospital ID: ' + uid); }
 
 function setupNotificationHandlers() {
   const recipientType = document.getElementById('recipientType');
@@ -489,29 +889,18 @@ function populateRecipientSelector(type) {
   const selector = document.getElementById('recipientSelector');
   if (!selectorGroup || !selector) return;
 
-  const options = [];
   let list = [];
   let placeholder = 'Select recipient...';
 
-  if (type === 'specificDonor') {
-    list = donorsList;
-    placeholder = 'Select donor...';
-  } else if (type === 'specificHospital') {
-    list = hospitalsList;
-    placeholder = 'Select hospital...';
-  } else if (type === 'specificOrganization') {
-    list = organizationsList;
-    placeholder = 'Select organization...';
-  }
+  if (type === 'specificDonor') { list = donorsList; placeholder = 'Select donor...'; }
+  else if (type === 'specificHospital') { list = hospitalsList; placeholder = 'Select hospital...'; }
+  else if (type === 'specificOrganization') { list = organizationsList; placeholder = 'Select organization...'; }
 
   if (type.startsWith('specific')) {
     selectorGroup.classList.remove('hidden');
     selector.required = true;
     selector.innerHTML = `<option value="">${placeholder}</option>` +
-      list.map((item) => {
-        const label = item.fullName || item.hospitalName || item.organizationName || item.email || item.uid || item.id;
-        return `<option value="${item.uid || item.id}">${label}</option>`;
-      }).join('');
+      list.map((item) => `<option value="${item.uid || item.id}">${item.fullName || item.hospitalName || item.organizationName || item.email || item.id}</option>`).join('');
   } else {
     selectorGroup.classList.add('hidden');
     selector.required = false;
@@ -531,11 +920,7 @@ async function handleNotificationSubmit() {
   }
 
   let recipientIds = [];
-  if (type === 'specificDonor') {
-    recipientIds = [recipientSelector?.value].filter(Boolean);
-  } else if (type === 'specificHospital') {
-    recipientIds = [recipientSelector?.value].filter(Boolean);
-  } else if (type === 'specificOrganization') {
+  if (type === 'specificDonor' || type === 'specificHospital' || type === 'specificOrganization') {
     recipientIds = [recipientSelector?.value].filter(Boolean);
   } else if (type === 'allDonors') {
     recipientIds = donorsList.map((item) => item.uid || item.id);
@@ -565,8 +950,6 @@ async function handleNotificationSubmit() {
     await Promise.all(sendPromises);
     alert('Notification sent successfully.');
     document.getElementById('notificationForm')?.reset();
-    document.getElementById('recipientType').value = 'specificDonor';
-    populateRecipientSelector('specificDonor');
     showView('dashboard');
   } catch (error) {
     console.error('Error sending notification:', error);
@@ -574,28 +957,98 @@ async function handleNotificationSubmit() {
   }
 }
 
-function viewDonor(uid) {
-  alert('View donor ' + uid);
-}
-
-function viewOrg(uid) {
-  alert('View organization ' + uid);
-}
-
-function viewHospital(uid) {
-  alert('View hospital ' + uid);
-}
-
-document.getElementById('settingsForm')?.addEventListener('submit', (e) => {
-  e.preventDefault();
-  alert('Settings saved successfully!');
-});
-
 async function logout() {
   if (!confirm('Are you sure you want to logout?')) return;
-
   const result = await authManager.logout();
   if (result.success) {
     window.location.href = '../../auth/login.html';
   }
+}
+
+/* ==========================================================================
+   HELPERS & CHART UTILITIES
+   ========================================================================== */
+
+function getTimestamp(value) {
+  if (!value) return 0;
+  if (value.seconds) return value.seconds * 1000;
+  if (value.toMillis) return value.toMillis();
+  return new Date(value).getTime();
+}
+
+function formatDate(value, withTime = false) {
+  if (!value) return '-';
+  const date = value.seconds ? new Date(value.seconds * 1000) : new Date(value);
+  if (isNaN(date.getTime())) return '-';
+  return withTime ? date.toLocaleString() : date.toLocaleDateString();
+}
+
+function isSameDay(d1, d2) {
+  if (!d1 || !d2) return false;
+  const date1 = d1.seconds ? new Date(d1.seconds * 1000) : new Date(d1);
+  const date2 = new Date(d2);
+  return date1.getFullYear() === date2.getFullYear() &&
+    date1.getMonth() === date2.getMonth() &&
+    date1.getDate() === date2.getDate();
+}
+
+function aggregateMonthlyCounts(list, dateField) {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const counts = Array(12).fill(0);
+
+  list.forEach((item) => {
+    const val = item[dateField];
+    if (!val) return;
+    const date = val.seconds ? new Date(val.seconds * 1000) : new Date(val);
+    if (!isNaN(date.getTime())) {
+      counts[date.getMonth()] += 1;
+    }
+  });
+
+  return { labels: months, values: counts };
+}
+
+function renderChart(elementId, label, labels, data, colors, type = 'line') {
+  const canvas = document.getElementById(elementId);
+  if (!canvas) return;
+
+  if (chartInstances[elementId]) {
+    chartInstances[elementId].destroy();
+  }
+
+  const ctx = canvas.getContext('2d');
+  chartInstances[elementId] = new Chart(ctx, {
+    type,
+    data: {
+      labels,
+      datasets: [
+        {
+          label,
+          data,
+          backgroundColor: colors || 'rgba(193, 18, 31, 0.7)',
+          borderColor: Array.isArray(colors) ? colors[0] : (colors || '#C1121F'),
+          borderWidth: 2,
+          fill: type === 'line' ? false : true
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: type === 'pie' || type === 'doughnut' }
+      }
+    }
+  });
+}
+
+function downloadCSV(filename, rows) {
+  const csvContent = 'data:text/csv;charset=utf-8,' + rows.map((e) => e.join(',')).join('\n');
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement('a');
+  link.setAttribute('href', encodedUri);
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }

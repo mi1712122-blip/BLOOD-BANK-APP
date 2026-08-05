@@ -44,32 +44,6 @@
     </div>
   </section>
 
-  <section class="trust-strip" aria-label="Trust highlights">
-    <div class="container trust-strip-inner">
-      <div class="trust-item">
-        <i class="fas fa-shield-alt"></i>
-        <div>
-          <strong>Secure</strong>
-          <span>Protected connections</span>
-        </div>
-      </div>
-      <div class="trust-item">
-        <i class="fas fa-bolt"></i>
-        <div>
-          <strong>Fast</strong>
-          <span>Instant coordination</span>
-        </div>
-      </div>
-      <div class="trust-item">
-        <i class="fas fa-heartbeat"></i>
-        <div>
-          <strong>Reliable</strong>
-          <span>Life-saving support</span>
-        </div>
-      </div>
-    </div>
-  </section>
-
   <section class="stats-section" aria-label="Platform stats">
     <div class="container stats-grid">
       <div class="stat-card">
@@ -83,6 +57,10 @@
       <div class="stat-card">
         <strong>100%</strong>
         <span>Real-Time Updates</span>
+      </div>
+      <div class="stat-card impact-stat">
+        <strong>3 Lives</strong>
+        <span>Can be helped by one donation</span>
       </div>
     </div>
   </section>
@@ -109,6 +87,7 @@
   <!-- Features Section -->
   <section class="features" id="features">
     <div class="container">
+      <span class="section-kicker">Why BloodBank</span>
       <h2>Why Choose Us?</h2>
       <div class="features-grid">
         <div class="feature-card">
@@ -160,6 +139,7 @@
   <!-- How It Works Section -->
   <section class="how-it-works">
     <div class="container">
+      <span class="section-kicker section-kicker-light">Simple Process</span>
       <h2>How It Works</h2>
       <div class="steps-container">
         <div class="step">
@@ -271,6 +251,7 @@
   <!-- User Roles Section -->
   <section class="user-roles" id="about">
     <div class="container">
+      <span class="section-kicker">Built for Every Role</span>
       <h2>For Everyone</h2>
       <div class="roles-grid">
         <div class="role-card donor-role">
@@ -301,6 +282,31 @@
           <h3>Admins</h3>
           <p>Monitor system, manage users, and generate comprehensive reports.</p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Testimonials Section -->
+  <section class="testimonials" aria-labelledby="testimonials-title">
+    <div class="container">
+      <span class="section-kicker">Community Voices</span>
+      <h2 id="testimonials-title">Trusted When It Matters</h2>
+      <div class="testimonials-grid">
+        <figure class="testimonial-card">
+          <i class="fas fa-quote-left" aria-hidden="true"></i>
+          <blockquote>"The platform made it simple to find the blood group we needed without wasting critical time."</blockquote>
+          <figcaption>Hospital Coordinator</figcaption>
+        </figure>
+        <figure class="testimonial-card">
+          <i class="fas fa-quote-left" aria-hidden="true"></i>
+          <blockquote>"I can respond to donation requests quickly and know exactly where my help is needed."</blockquote>
+          <figcaption>Registered Donor</figcaption>
+        </figure>
+        <figure class="testimonial-card">
+          <i class="fas fa-quote-left" aria-hidden="true"></i>
+          <blockquote>"Real-time inventory gives our team a clearer way to coordinate with hospitals and donors."</blockquote>
+          <figcaption>Organization Manager</figcaption>
+        </figure>
       </div>
     </div>
   </section>
@@ -362,6 +368,7 @@
   <!-- Contact Section -->
   <section class="contact" id="contact">
     <div class="container">
+      <span class="section-kicker section-kicker-light">Contact Us</span>
       <h2>Get in Touch</h2>
       <div class="contact-content split-layout">
         <div class="contact-info">
@@ -369,7 +376,7 @@
             <i class="fas fa-phone"></i>
             <div>
               <h4>Phone</h4>
-              <p>+1 (555) 123-4567</p>
+              <p>+92 302344567</p>
             </div>
           </div>
           <div class="contact-item">
@@ -392,19 +399,19 @@
           <form id="landing-contact-form" class="contact-form">
             <div class="form-group">
               <label for="contact-name">Full Name</label>
-              <input type="text" id="contact-name" placeholder="John Doe" required>
+              <input type="text" id="contact-name" placeholder="Saad Khan" maxlength="100" required>
             </div>
             <div class="form-group">
               <label for="contact-email">Email Address</label>
-              <input type="email" id="contact-email" placeholder="john@example.com" required>
+              <input type="email" id="contact-email" placeholder="ibrahim@example.com" maxlength="254" required>
             </div>
             <div class="form-group">
               <label for="contact-subject">Subject</label>
-              <input type="text" id="contact-subject" placeholder="Inquiry about donation" required>
+              <input type="text" id="contact-subject" placeholder="Inquiry about donation" maxlength="150" required>
             </div>
             <div class="form-group">
               <label for="contact-message">Message</label>
-              <textarea id="contact-message" rows="4" placeholder="Your message here..." required></textarea>
+              <textarea id="contact-message" rows="4" placeholder="Type Your message here..." maxlength="2000" required></textarea>
             </div>
             <button type="submit" class="btn btn-secondary btn-block submit-btn">
               <i class="fas fa-paper-plane"></i> Send Message

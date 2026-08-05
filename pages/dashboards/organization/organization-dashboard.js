@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   limit,
@@ -33,6 +34,7 @@ let issuesList = [];
 let inventoryHistoryList = [];
 let inventoryItems = [];
 let currentInventorySummary = {};
+const tablePaginationState = {};
 
 const viewSelectors = {
   dashboard: 'dashboardView',
@@ -137,8 +139,9 @@ function setupRealtimeDataListeners() {
   });
 
   if (requestsListener) requestsListener();
+  const organizationLookupIds = [...new Set([currentOrganization.uid, currentOrganization.id].filter(Boolean))];
   requestsListener = onSnapshot(
-    query(collection(db, 'bloodRequests'), where('organizationId', '==', currentOrganization.uid)),
+    query(collection(db, 'bloodRequests'), where('organizationId', 'in', organizationLookupIds.length ? organizationLookupIds : ['__missing__'])),
     (snapshot) => {
       requestsList = [];
       snapshot.forEach((docSnap) => requestsList.push({ id: docSnap.id, ...docSnap.data() }));
@@ -276,20 +279,42 @@ function setupQuickActions() {
 function renderDashboardCards() {
   const summary = currentInventorySummary || {};
   const availableUnits = Object.values(summary).reduce((sum, units) => sum + units, 0);
+  const now = new Date();
+  
+  const totalUnits = inventoryItems.reduce((sum, item) => sum + (Number(item.units) || 0), 0);
+  const expiredUnits = inventoryItems.reduce((sum, item) => {
+    const isExpired = item.status === 'Expired' || (item.expiryDate && new Date(item.expiryDate.seconds ? item.expiryDate.seconds * 1000 : item.expiryDate) < now);
+    return isExpired ? sum + (Number(item.units) || 0) : sum;
+  }, 0);
+
+  const pendingCount = requestsList.filter((req) => req.status === 'Pending').length;
+  const approvedCount = requestsList.filter((req) => req.status === 'Approved').length;
+  const rejectedCount = requestsList.filter((req) => req.status === 'Rejected').length;
+  const completedCount = requestsList.filter((req) => req.status === 'Completed').length;
   const todayDonations = donationsList.filter((donation) => isSameDay(donation.createdAt, new Date())).length;
   const todayIssued = issuesList.filter((issue) => isSameDay(issue.issueDate, new Date())).length;
   const newDonorsCount = donorsList.filter((donor) => isSameDay(donor.createdAt || donor.registeredAt, new Date())).length;
-  const activeRequestsCount = requestsList.filter((req) => req.status === 'Pending' || req.status === 'Approved').length;
+  const activeRequestsCount = pendingCount + approvedCount;
 
-  document.getElementById('availableBloodUnits').textContent = availableUnits;
-  document.getElementById('totalBloodUnits').textContent = availableUnits;
-  document.getElementById('lowStockGroups').textContent = Object.values(summary).filter((value) => value > 0 && value < 6).length;
-  document.getElementById('bloodIssuedToday').textContent = todayIssued;
-  document.getElementById('todaysDonations').textContent = todayDonations;
-  document.getElementById('todayDonations').textContent = todayDonations;
-  document.getElementById('todayIssued').textContent = todayIssued;
-  document.getElementById('newDonors').textContent = newDonorsCount;
-  document.getElementById('activeRequests').textContent = activeRequestsCount;
+  if (document.getElementById('availableBloodUnits')) document.getElementById('availableBloodUnits').textContent = availableUnits;
+  if (document.getElementById('totalBloodUnits')) document.getElementById('totalBloodUnits').textContent = totalUnits || availableUnits;
+  if (document.getElementById('expiredBloodUnits')) document.getElementById('expiredBloodUnits').textContent = expiredUnits;
+  if (document.getElementById('totalDonationsReceived')) document.getElementById('totalDonationsReceived').textContent = donationsList.length;
+  if (document.getElementById('pendingHospitalRequests')) document.getElementById('pendingHospitalRequests').textContent = pendingCount;
+  if (document.getElementById('approvedRequests')) document.getElementById('approvedRequests').textContent = approvedCount;
+  if (document.getElementById('rejectedRequests')) document.getElementById('rejectedRequests').textContent = rejectedCount;
+  if (document.getElementById('completedRequests')) document.getElementById('completedRequests').textContent = completedCount;
+  if (document.getElementById('totalDonors')) document.getElementById('totalDonors').textContent = donorsList.length;
+  if (document.getElementById('connectedHospitals')) document.getElementById('connectedHospitals').textContent = hospitalsList.length;
+
+  if (document.getElementById('lowStockGroups')) document.getElementById('lowStockGroups').textContent = Object.values(summary).filter((value) => value > 0 && value < 6).length;
+  if (document.getElementById('bloodIssuedToday')) document.getElementById('bloodIssuedToday').textContent = todayIssued;
+  if (document.getElementById('todaysDonations')) document.getElementById('todaysDonations').textContent = todayDonations;
+  if (document.getElementById('todayDonations')) document.getElementById('todayDonations').textContent = todayDonations;
+  if (document.getElementById('todayIssued')) document.getElementById('todayIssued').textContent = todayIssued;
+  if (document.getElementById('newDonors')) document.getElementById('newDonors').textContent = newDonorsCount;
+  if (document.getElementById('activeRequests')) document.getElementById('activeRequests').textContent = activeRequestsCount;
+
   renderLowStockAlerts(summary);
   renderInventoryProgress(summary);
   renderPendingRequestsPreview();
@@ -418,16 +443,6 @@ function getTimestamp(value) {
   return new Date(value).getTime();
 }
 
-function renderCharts() {
-  const donationData = aggregateMonthlyCounts(donationsList, 'createdAt');
-  const issueData = aggregateMonthlyCounts(issuesList, 'issueDate');
-  const distributionData = bloodGroups.map((group) => ({ group, units: currentInventorySummary[group] || 0 }));
-
-  renderChart('donationsChart', 'Monthly Donations', donationData.labels, donationData.values, 'rgba(193, 18, 31, 0.8)', 'bar');
-  renderChart('issueTrendChart', 'Monthly Blood Issues', issueData.labels, issueData.values, 'rgba(46, 125, 50, 0.8)', 'line');
-  renderChart('groupDistributionChart', 'Blood Group Distribution', distributionData.map((item) => item.group), distributionData.map((item) => item.units), undefined, 'pie');
-}
-
 function renderLowStockAlerts(inventorySummary) {
   const container = document.getElementById('lowStockAlerts');
   if (!container) return;
@@ -464,66 +479,6 @@ function renderLowStockAlerts(inventorySummary) {
   });
 }
 
-function setupNavigation() {
-  document.querySelectorAll('[data-view]').forEach((element) => {
-    element.addEventListener('click', (event) => {
-      event.preventDefault();
-      const view = element.dataset.view;
-      if (view) showView(view);
-    });
-  });
-
-  document.querySelectorAll('[data-action="logout"]').forEach((element) => {
-    element.addEventListener('click', async (event) => {
-      event.preventDefault();
-      await logout();
-    });
-  });
-
-  document.querySelectorAll('[data-action="open-add-blood-modal"]').forEach((element) => {
-    element.addEventListener('click', (event) => {
-      event.preventDefault();
-      openAddBloodModal();
-    });
-  });
-
-  document.querySelectorAll('[data-action="close-add-blood-modal"]').forEach((element) => {
-    element.addEventListener('click', (event) => {
-      event.preventDefault();
-      closeAddBloodModal();
-    });
-  });
-
-  document.querySelectorAll('[data-action="close-inventory-action-modal"]').forEach((element) => {
-    element.addEventListener('click', (event) => {
-      event.preventDefault();
-      closeInventoryActionModal();
-    });
-  });
-
-  document.querySelectorAll('[data-action="close-request-details-modal"]').forEach((element) => {
-    element.addEventListener('click', (event) => {
-      event.preventDefault();
-      closeRequestDetailsModal();
-    });
-  });
-
-  const profileButton = document.querySelector('.dropdown > button');
-  const dropdownMenu = document.querySelector('.dropdown-menu');
-  if (profileButton && dropdownMenu) {
-    profileButton.addEventListener('click', (event) => {
-      event.preventDefault();
-      dropdownMenu.classList.toggle('show');
-    });
-
-    document.addEventListener('click', (event) => {
-      if (!profileButton.contains(event.target) && !dropdownMenu.contains(event.target)) {
-        dropdownMenu.classList.remove('show');
-      }
-    });
-  }
-}
-
 async function loadHospitals() {
   const snapshot = await getDocs(collection(db, 'hospitals'));
   hospitalsList = [];
@@ -539,7 +494,7 @@ async function loadDonors() {
 }
 
 async function loadRequests() {
-  const result = await bloodRequestManager.getOrganizationRequests(currentOrganization.uid);
+  const result = await bloodRequestManager.getOrganizationRequests(currentOrganization.uid, currentOrganization.id);
   requestsList = result.success ? result.data : [];
   document.getElementById('pendingHospitalRequests').textContent = requestsList.filter((req) => req.status === 'Pending').length;
   document.getElementById('completedRequests').textContent = requestsList.filter((req) => req.status === 'Completed').length;
@@ -671,41 +626,68 @@ function renderCurrentView() {
   if (currentView === 'hospitals') renderHospitalsTable();
 }
 
+function getPaginatedData(items, key, pageSize = 8) {
+  const page = tablePaginationState[key] || 1;
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  if (page > totalPages) tablePaginationState[key] = totalPages;
+  const normalizedPage = Math.min(tablePaginationState[key] || 1, totalPages);
+  const start = (normalizedPage - 1) * pageSize;
+  return {
+    page: normalizedPage,
+    totalPages,
+    items: items.slice(start, start + pageSize)
+  };
+}
+
+function renderPaginationControls(key, page, totalPages) {
+  if (totalPages <= 1) return '';
+  return `
+    <div class="pagination-controls">
+      <button type="button" class="btn btn-secondary btn-sm" data-page-target="${key}" data-page-action="prev" ${page <= 1 ? 'disabled' : ''}>Previous</button>
+      <span>Page ${page} of ${totalPages}</span>
+      <button type="button" class="btn btn-secondary btn-sm" data-page-target="${key}" data-page-action="next" ${page >= totalPages ? 'disabled' : ''}>Next</button>
+    </div>
+  `;
+}
+
 function renderInventoryTable() {
   const tableContainer = document.getElementById('bloodInventoryTable');
   const search = document.getElementById('inventorySearch')?.value.toLowerCase() || '';
   const groupFilter = document.getElementById('inventoryGroupFilter')?.value || '';
   const rows = bloodGroups
     .filter((group) => !groupFilter || group === groupFilter)
-    .filter((group) => group.toLowerCase().includes(search) || String(currentInventorySummary[group] || '').includes(search))
-    .map((group) => {
-      const available = currentInventorySummary[group] || 0;
-      const groupItems = inventoryItems.filter((item) => item.bloodGroup === group && item.status === 'Available');
-      const expiringSoon = groupItems.filter((item) => {
-        const expiry = item.expiryDate?.seconds ? item.expiryDate.seconds * 1000 : item.expiryDate?.toMillis?.();
-        return expiry && expiry < Date.now() + 14 * 24 * 60 * 60 * 1000;
-      }).length;
-      const lastUpdated = groupItems.reduce((latest, item) => {
-        const timestamp = item.updatedAt?.seconds ? item.updatedAt.seconds * 1000 : item.updatedAt?.toMillis?.() || 0;
-        return Math.max(latest, timestamp);
-      }, 0);
-      return `
-        <tr>
-          <td>${group}</td>
-          <td>${available}</td>
-          <td>${available}</td>
-          <td>${expiringSoon}</td>
-          <td>${lastUpdated ? new Date(lastUpdated).toLocaleDateString() : '-'}</td>
-          <td class="table-actions-cell">
-            <button class="btn btn-secondary btn-sm" data-action="view-inventory" data-group="${group}">View</button>
-            <button class="btn btn-secondary btn-sm" data-action="edit-inventory" data-group="${group}">Edit</button>
-            <button class="btn btn-primary btn-sm" data-action="adjust-inventory" data-group="${group}" data-adjust="increase">Increase</button>
-            <button class="btn btn-secondary btn-sm" data-action="adjust-inventory" data-group="${group}" data-adjust="decrease">Decrease</button>
-            <button class="btn btn-secondary btn-sm" data-action="inventory-history" data-group="${group}">History</button>
-          </td>
-        </tr>
-      `;
-    });
+    .filter((group) => group.toLowerCase().includes(search) || String(currentInventorySummary[group] || '').includes(search));
+
+  const paginated = getPaginatedData(rows, 'inventoryTable', 6);
+  const bodyRows = paginated.items.map((group) => {
+    const available = currentInventorySummary[group] || 0;
+    const groupItems = inventoryItems.filter((item) => item.bloodGroup === group && item.status === 'Available');
+    const expiringSoon = groupItems.filter((item) => {
+      const expiry = item.expiryDate?.seconds ? item.expiryDate.seconds * 1000 : item.expiryDate?.toMillis?.();
+      return expiry && expiry < Date.now() + 14 * 24 * 60 * 60 * 1000;
+    }).length;
+    const lastUpdated = groupItems.reduce((latest, item) => {
+      const timestamp = item.updatedAt?.seconds ? item.updatedAt.seconds * 1000 : item.updatedAt?.toMillis?.() || 0;
+      return Math.max(latest, timestamp);
+    }, 0);
+    return `
+      <tr>
+        <td>${group}</td>
+        <td>${available}</td>
+        <td>${available}</td>
+        <td>${expiringSoon}</td>
+        <td>${lastUpdated ? new Date(lastUpdated).toLocaleDateString() : '-'}</td>
+        <td class="table-actions-cell">
+          <button class="btn btn-secondary btn-sm" data-action="view-inventory" data-group="${group}">View</button>
+          <button class="btn btn-secondary btn-sm" data-action="edit-inventory" data-group="${group}">Edit</button>
+          <button class="btn btn-primary btn-sm" data-action="adjust-inventory" data-group="${group}" data-adjust="increase">Increase</button>
+          <button class="btn btn-secondary btn-sm" data-action="adjust-inventory" data-group="${group}" data-adjust="decrease">Decrease</button>
+          <button class="btn btn-danger btn-sm" data-action="remove-inventory" data-group="${group}">Remove</button>
+          <button class="btn btn-secondary btn-sm" data-action="inventory-history" data-group="${group}">History</button>
+        </td>
+      </tr>
+    `;
+  });
 
   tableContainer.innerHTML = `
     <div class="card table-card">
@@ -721,14 +703,42 @@ function renderInventoryTable() {
               <th>Actions</th>
             </tr>
           </thead>
-          <tbody>${rows.join('')}</tbody>
+          <tbody>${bodyRows.length ? bodyRows.join('') : '<tr><td colspan="6" class="text-center">No inventory found</td></tr>'}</tbody>
         </table>
       </div>
+      ${renderPaginationControls('inventoryTable', paginated.page, paginated.totalPages)}
     </div>
   `;
 
   tableContainer.querySelectorAll('[data-action="adjust-inventory"]').forEach((button) => {
     button.addEventListener('click', () => openInventoryActionModal(button.dataset.group, button.dataset.adjust));
+  });
+  tableContainer.querySelectorAll('[data-action="view-inventory"]').forEach((button) => {
+    button.addEventListener('click', () => openInventoryGroupDetails(button.dataset.group));
+  });
+  tableContainer.querySelectorAll('[data-action="edit-inventory"]').forEach((button) => {
+    button.addEventListener('click', () => openInventoryActionModal(button.dataset.group, 'increase'));
+  });
+  tableContainer.querySelectorAll('[data-action="remove-inventory"]').forEach((button) => {
+    button.addEventListener('click', () => removeInventoryItem(button.dataset.group));
+  });
+  tableContainer.querySelectorAll('[data-action="inventory-history"]').forEach((button) => {
+    button.addEventListener('click', () => {
+      document.getElementById('inventoryHistoryGroupFilter').value = button.dataset.group;
+      showView('inventoryHistory');
+      renderInventoryHistoryTable();
+    });
+  });
+  tableContainer.querySelectorAll('[data-page-target]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const key = button.dataset.pageTarget;
+      const action = button.dataset.pageAction;
+      const currentPage = tablePaginationState[key] || 1;
+      const totalPages = Math.max(1, Math.ceil(rows.length / 6));
+      const nextPage = action === 'next' ? currentPage + 1 : currentPage - 1;
+      tablePaginationState[key] = Math.min(Math.max(1, nextPage), totalPages);
+      renderInventoryTable();
+    });
   });
 }
 
@@ -736,27 +746,27 @@ function renderDonationsTable() {
   const tableContainer = document.getElementById('donationManagementTable');
   const search = document.getElementById('donationSearch')?.value.toLowerCase() || '';
   const statusFilter = document.getElementById('donationStatusFilter')?.value || '';
-  const rows = donationsList
-    .filter((item) => {
-      const term = `${item.donorName || ''} ${item.bloodGroup || ''} ${item.status || ''}`.toLowerCase();
-      return term.includes(search) && (!statusFilter || item.status === statusFilter);
-    })
-    .map((donation) => `
-      <tr>
-        <td>${donation.donorName || 'Unknown'}</td>
-        <td>${donation.bloodGroup || '-'}</td>
-        <td>${donation.units || 0}</td>
-        <td>${formatDate(donation.createdAt, true)}</td>
-        <td>${donation.status || 'Pending'}</td>
-        <td>${donation.organizationName || '-'}</td>
-        <td class="table-actions-cell">
-          <button class="btn btn-secondary btn-sm" data-action="view-donation" data-id="${donation.id}">View</button>
-          ${donation.status === 'Pending' ? `<button class="btn btn-primary btn-sm" data-action="approve-donation" data-id="${donation.id}">Approve</button>` : ''}
-          ${donation.status === 'Pending' ? `<button class="btn btn-secondary btn-sm" data-action="reject-donation" data-id="${donation.id}">Reject</button>` : ''}
-          ${donation.status === 'Approved' ? `<button class="btn btn-success btn-sm" data-action="complete-donation" data-id="${donation.id}">Complete</button>` : ''}
-        </td>
-      </tr>
-    `);
+  const filtered = donationsList.filter((item) => {
+    const term = `${item.donorName || ''} ${item.bloodGroup || ''} ${item.status || ''}`.toLowerCase();
+    return term.includes(search) && (!statusFilter || item.status === statusFilter);
+  });
+  const paginated = getPaginatedData(filtered, 'donationsTable', 8);
+  const rows = paginated.items.map((donation) => `
+    <tr>
+      <td>${donation.donorName || 'Unknown'}</td>
+      <td>${donation.bloodGroup || '-'}</td>
+      <td>${donation.units || 0}</td>
+      <td>${formatDate(donation.createdAt, true)}</td>
+      <td>${donation.status || 'Pending'}</td>
+      <td>${donation.organizationName || '-'}</td>
+      <td class="table-actions-cell">
+        <button class="btn btn-secondary btn-sm" data-action="view-donation" data-id="${donation.id}">View</button>
+        ${donation.status === 'Pending' ? `<button class="btn btn-primary btn-sm" data-action="approve-donation" data-id="${donation.id}">Approve</button>` : ''}
+        ${donation.status === 'Pending' ? `<button class="btn btn-secondary btn-sm" data-action="reject-donation" data-id="${donation.id}">Reject</button>` : ''}
+        ${donation.status === 'Approved' ? `<button class="btn btn-success btn-sm" data-action="complete-donation" data-id="${donation.id}">Complete</button>` : ''}
+      </td>
+    </tr>
+  `);
 
   tableContainer.innerHTML = `
     <div class="card table-card">
@@ -776,6 +786,7 @@ function renderDonationsTable() {
           <tbody>${rows.length ? rows.join('') : '<tr><td colspan="7" class="text-center">No donations available</td></tr>'}</tbody>
         </table>
       </div>
+      ${renderPaginationControls('donationsTable', paginated.page, paginated.totalPages)}
     </div>
   `;
 
@@ -790,6 +801,17 @@ function renderDonationsTable() {
   });
   tableContainer.querySelectorAll('[data-action="complete-donation"]').forEach((button) => {
     button.addEventListener('click', () => updateDonationStatus(button.dataset.id, 'Completed'));
+  });
+  tableContainer.querySelectorAll('[data-page-target]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const key = button.dataset.pageTarget;
+      const action = button.dataset.pageAction;
+      const currentPage = tablePaginationState[key] || 1;
+      const totalPages = Math.max(1, Math.ceil(filtered.length / 8));
+      const nextPage = action === 'next' ? currentPage + 1 : currentPage - 1;
+      tablePaginationState[key] = Math.min(Math.max(1, nextPage), totalPages);
+      renderDonationsTable();
+    });
   });
 }
 
@@ -832,29 +854,32 @@ function renderRequestsTable() {
   const statusFilter = document.getElementById('requestStatusFilter')?.value || '';
   const priorityFilter = document.getElementById('requestPriorityFilter')?.value || '';
 
-  const rows = requestsList
+  const filtered = requestsList
     .filter((req) => {
       const term = `${req.hospitalName || ''} ${req.bloodGroup || ''} ${req.id || ''} ${req.status || ''}`.toLowerCase();
       return term.includes(search);
     })
     .filter((req) => !statusFilter || req.status === statusFilter)
-    .filter((req) => !priorityFilter || req.urgencyLevel === priorityFilter)
-    .map((req) => `
-      <tr>
-        <td>${req.hospitalName || '-'}</td>
-        <td>${req.bloodGroup || '-'}</td>
-        <td>${req.units || 0}</td>
-        <td>${req.urgencyLevel || '-'}</td>
-        <td>${formatDate(req.createdAt)}</td>
-        <td><span class="badge badge-${(req.status || '').toLowerCase()}">${req.status || ''}</span></td>
-        <td class="table-actions-cell">
-          ${req.status === 'Pending' ? `<button class="btn btn-primary btn-sm" data-action="approve-request" data-request-id="${req.id}">Approve</button>` : ''}
-          ${req.status === 'Pending' ? `<button class="btn btn-secondary btn-sm" data-action="reject-request" data-request-id="${req.id}">Reject</button>` : ''}
-          ${req.status === 'Approved' ? `<button class="btn btn-success btn-sm" data-action="issue-blood" data-request-id="${req.id}">Issue Blood</button>` : ''}
-          <button class="btn btn-secondary btn-sm" data-action="view-request" data-request-id="${req.id}">View</button>
-        </td>
-      </tr>
-    `);
+    .filter((req) => !priorityFilter || req.urgencyLevel === priorityFilter);
+
+  const paginated = getPaginatedData(filtered, 'requestsTable', 8);
+  const rows = paginated.items.map((req) => `
+    <tr>
+      <td>${req.hospitalName || '-'}</td>
+      <td>${req.bloodGroup || '-'}</td>
+      <td>${req.units || 0}</td>
+      <td>${req.urgencyLevel || '-'}</td>
+      <td>${formatDate(req.createdAt)}</td>
+      <td><span class="badge badge-${(req.status || '').toLowerCase().replace(/\s+/g, '-')}">${req.status || ''}</span></td>
+      <td class="table-actions-cell">
+        ${req.status === 'Pending' ? `<button class="btn btn-primary btn-sm" data-action="approve-request" data-request-id="${req.id}">Approve</button>` : ''}
+        ${req.status === 'Pending' ? `<button class="btn btn-secondary btn-sm" data-action="reject-request" data-request-id="${req.id}">Reject</button>` : ''}
+        ${(req.status === 'Approved' || req.status === 'Processing') ? `<button class="btn btn-success btn-sm" data-action="issue-blood" data-request-id="${req.id}">Issue Blood</button>` : ''}
+        ${req.status === 'Completed' ? `<button class="btn btn-secondary btn-sm" data-action="mark-request-completed" data-request-id="${req.id}">Completed</button>` : ''}
+        <button class="btn btn-secondary btn-sm" data-action="view-request" data-request-id="${req.id}">View</button>
+      </td>
+    </tr>
+  `);
 
   tableContainer.innerHTML = `
     <div class="card table-card">
@@ -874,6 +899,7 @@ function renderRequestsTable() {
           <tbody>${rows.length ? rows.join('') : '<tr><td colspan="7" class="text-center">No requests match the filters</td></tr>'}</tbody>
         </table>
       </div>
+      ${renderPaginationControls('requestsTable', paginated.page, paginated.totalPages)}
     </div>
   `;
 
@@ -886,8 +912,22 @@ function renderRequestsTable() {
   tableContainer.querySelectorAll('[data-action="issue-blood"]').forEach((button) => {
     button.addEventListener('click', () => issueBlood(button.dataset.requestId));
   });
+  tableContainer.querySelectorAll('[data-action="mark-request-completed"]').forEach((button) => {
+    button.addEventListener('click', () => openRequestDetails(button.dataset.requestId));
+  });
   tableContainer.querySelectorAll('[data-action="view-request"]').forEach((button) => {
     button.addEventListener('click', () => openRequestDetails(button.dataset.requestId));
+  });
+  tableContainer.querySelectorAll('[data-page-target]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const key = button.dataset.pageTarget;
+      const action = button.dataset.pageAction;
+      const currentPage = tablePaginationState[key] || 1;
+      const totalPages = Math.max(1, Math.ceil(filtered.length / 8));
+      const nextPage = action === 'next' ? currentPage + 1 : currentPage - 1;
+      tablePaginationState[key] = Math.min(Math.max(1, nextPage), totalPages);
+      renderRequestsTable();
+    });
   });
 }
 
@@ -898,17 +938,16 @@ async function issueBlood(requestId) {
     return;
   }
 
+  if (request.status === 'Completed') {
+    alert('This request has already been completed.');
+    return;
+  }
+
   const success = await deductInventory(request.bloodGroup, request.units);
   if (!success) {
     alert('Insufficient inventory to issue blood.');
     return;
   }
-
-  await updateDoc(doc(db, 'bloodRequests', requestId), {
-    status: 'Completed',
-    issuedAt: new Date(),
-    updatedAt: new Date()
-  });
 
   await addDoc(collection(db, 'bloodIssues'), {
     hospitalId: request.hospitalId,
@@ -924,15 +963,19 @@ async function issueBlood(requestId) {
     createdAt: new Date()
   });
 
-  await bloodRequestManager.sendNotification({
-    recipientId: request.hospitalId,
-    type: 'blood_issued',
-    title: 'Blood Issued',
-    message: `${request.units} units of ${request.bloodGroup} have been issued to your hospital.`,
-    senderId: currentOrganization.uid,
-    senderRole: 'organization',
-    senderName: currentOrganization.organizationName
+  const completeResult = await bloodRequestManager.completeRequest(requestId, {
+    organizationId: currentOrganization.uid,
+    organizationName: currentOrganization.organizationName,
+    issuedBy: currentOrganization.uid,
+    bloodGroup: request.bloodGroup,
+    units: request.units
   });
+
+  if (!completeResult.success) {
+    console.error('Failed to complete blood request:', completeResult.error);
+    alert('Request was issued but final status update failed.');
+    return;
+  }
 
   alert('Blood issued successfully.');
   await refreshAllData();
@@ -992,6 +1035,74 @@ function openRequestDetailsModal() {
 
 function closeRequestDetailsModal() {
   document.getElementById('requestDetailsModal')?.classList.remove('show');
+}
+
+function openInventoryGroupDetails(group) {
+  const groupItems = inventoryItems.filter((item) => item.bloodGroup === group);
+  const content = document.getElementById('requestDetailsContent');
+  if (!content) return;
+
+  const rows = groupItems.length ? groupItems.map((item) => `
+    <tr>
+      <td>${item.units || 0}</td>
+      <td>${item.storageLocation || '-'}</td>
+      <td>${item.status || 'Available'}</td>
+      <td>${item.expiryDate ? formatDate(item.expiryDate, true) : '-'}</td>
+      <td>${item.notes || '-'}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="5" class="text-center">No inventory records for this blood group.</td></tr>';
+
+  content.innerHTML = `
+    <div class="details-grid">
+      <div><strong>Blood Group:</strong> ${group}</div>
+      <div><strong>Total Available:</strong> ${currentInventorySummary?.[group] || 0}</div>
+    </div>
+    <div class="table-responsive" style="margin-top: 18px;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Units</th>
+            <th>Location</th>
+            <th>Status</th>
+            <th>Expiry</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+  openRequestDetailsModal();
+}
+
+async function removeInventoryItem(group) {
+  const groupItems = inventoryItems.filter((item) => item.bloodGroup === group);
+  if (!groupItems.length) {
+    alert('No inventory items available for this blood group.');
+    return;
+  }
+
+  const confirmed = confirm(`Remove all records for ${group} from inventory? This cannot be undone.`);
+  if (!confirmed) return;
+
+  try {
+    await Promise.all(groupItems.map((item) => deleteDoc(doc(db, 'bloodInventory', item.id))));
+    await addDoc(collection(db, 'inventoryHistory'), {
+      organizationId: currentOrganization.uid,
+      bloodGroup: group,
+      previousUnits: currentInventorySummary?.[group] || 0,
+      currentUnits: 0,
+      difference: -(currentInventorySummary?.[group] || 0),
+      reason: 'Manual removal',
+      userId: currentOrganization.uid,
+      createdAt: new Date()
+    });
+    await refreshAllData();
+    alert(`${group} inventory removed successfully.`);
+  } catch (error) {
+    console.error('Error removing inventory:', error);
+    alert('Failed to remove inventory.');
+  }
 }
 
 function openAddBloodModal(group = '') {
@@ -1176,31 +1287,52 @@ async function handleSendNotificationSubmit() {
 }
 
 function displayNotifications(notifications) {
-  let html = '';
-  if (notifications.length === 0) {
-    html = '<div class="empty-state"><p>No notifications</p></div>';
-  } else {
-    notifications.forEach((notif) => {
-      const date = notif.createdAt?.seconds ? new Date(notif.createdAt.seconds * 1000) : new Date(notif.createdAt);
-      const timeAgo = getTimeAgo(date);
-      const formattedDateTime = date.toLocaleString();
-      const senderLabel = notif.senderName ? `From: ${notif.senderName}` : 'From: System';
-      html += `
-        <div class="notification-item ${!notif.isRead ? 'unread' : ''}" data-notification-id="${notif.id}">
-          <div class="notification-icon">
-            <i class="fas fa-bell"></i>
-          </div>
-          <div class="notification-content">
-            <div class="notification-title">${notif.title}</div>
-            <div class="notification-sender">${senderLabel}</div>
-            <div class="notification-message">${notif.message}</div>
-            <div class="notification-time">${timeAgo} · ${formattedDateTime}</div>
-          </div>
-        </div>
-      `;
-    });
+  const container = document.getElementById('notificationsList');
+  if (!container) return;
+
+  if (!notifications || notifications.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p>No notifications available.</p></div>';
+    return;
   }
-  document.getElementById('notificationsList').innerHTML = html;
+
+  let html = '';
+  notifications.forEach((notif) => {
+    const date = notif.createdAt?.seconds ? new Date(notif.createdAt.seconds * 1000) : new Date(notif.createdAt);
+    const timeAgo = getTimeAgo(date);
+    const formattedDateTime = date.toLocaleString();
+    const senderLabel = notif.senderName ? `From: ${notif.senderName}` : 'From: System';
+    html += `
+      <div class="notification-item ${!notif.isRead ? 'unread' : ''}" data-notification-id="${notif.id}">
+        <div class="notification-icon">
+          <i class="fas fa-bell"></i>
+        </div>
+        <div class="notification-content">
+          <div class="notification-title">${notif.title}</div>
+          <div class="notification-sender">${senderLabel}</div>
+          <div class="notification-message">${notif.message}</div>
+          <div class="notification-time">${timeAgo} · ${formattedDateTime}</div>
+        </div>
+        <button type="button" class="btn btn-danger btn-sm delete-notification-btn" data-notification-id="${notif.id}" aria-label="Delete notification">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+
+  container.querySelectorAll('.delete-notification-btn').forEach((button) => {
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const notificationId = button.dataset.notificationId;
+      if (!notificationId) return;
+      try {
+        await deleteDoc(doc(db, 'notifications', notificationId));
+        await loadNotifications();
+      } catch (error) {
+        console.error('Error deleting notification:', error);
+      }
+    });
+  });
 }
 
 function getTimeAgo(date) {
@@ -1210,6 +1342,22 @@ function getTimeAgo(date) {
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
   return date.toLocaleDateString();
+}
+
+async function markOrganizationNotificationsRead() {
+  try {
+    await bloodRequestManager.markAllNotificationsRead(currentOrganization.uid);
+    const result = await bloodRequestManager.getNotifications(currentOrganization.uid);
+    if (result.success) {
+      const notifications = result.data || [];
+      const unreadCount = notifications.filter((item) => !item.isRead).length;
+      document.getElementById('notificationBadge').textContent = unreadCount;
+      document.getElementById('notificationBadge2').textContent = unreadCount;
+      displayNotifications(notifications);
+    }
+  } catch (error) {
+    console.error('Error marking organization notifications read:', error);
+  }
 }
 
 function showView(view) {
@@ -1225,7 +1373,7 @@ function showView(view) {
   });
 
   currentView = view;
-  if (view === 'notifications') loadNotifications();
+  if (view === 'notifications') markOrganizationNotificationsRead();
   if (view === 'sendNotification') populateRecipientSelector(document.getElementById('recipientType')?.value || 'specificDonor');
   renderCurrentView();
 }
@@ -1249,6 +1397,8 @@ function setupSearchAndFilters() {
   document.getElementById('hospitalsSearch')?.addEventListener('input', renderHospitalsTable);
   document.getElementById('hospitalStatusFilter')?.addEventListener('change', renderHospitalsTable);
   document.getElementById('notificationsList')?.addEventListener('click', async (event) => {
+    const deleteButton = event.target.closest('.delete-notification-btn');
+    if (deleteButton) return;
     const item = event.target.closest('.notification-item');
     if (!item) return;
     const id = item.dataset.notificationId;
@@ -1371,32 +1521,32 @@ function renderDonorsTable() {
   const search = document.getElementById('donorsSearch')?.value.toLowerCase() || '';
   const groupFilter = document.getElementById('donorBloodGroupFilter')?.value || '';
 
-  const rows = donorsList
-    .filter((donor) => {
-      const term = `${donor.fullName || ''} ${donor.bloodGroup || ''} ${donor.city || ''} ${donor.email || ''}`.toLowerCase();
-      return term.includes(search) && (!groupFilter || donor.bloodGroup === groupFilter);
-    })
-    .map((donor) => {
-      const eligibility = donor.isEligible ? 'Eligible' : 'Not Eligible';
-      const status = donor.isActive === false ? 'Inactive' : 'Active';
-      return `
-        <tr>
-          <td>${donor.fullName || 'Unknown'}</td>
-          <td>${donor.bloodGroup || '-'}</td>
-          <td>${donor.age || '-'}</td>
-          <td>${donor.gender || '-'}</td>
-          <td>${donor.city || '-'}</td>
-          <td>${donor.phone || '-'}</td>
-          <td>${formatDate(donor.lastDonationDate)}</td>
-          <td>${eligibility}</td>
-          <td>${status}</td>
-          <td class="table-actions-cell">
-            <button class="btn btn-secondary btn-sm" data-action="view-donor" data-id="${donor.id}">View</button>
-            <button class="btn btn-secondary btn-sm" data-action="notify-donor" data-id="${donor.id}">Notify</button>
-          </td>
-        </tr>
-      `;
-    });
+  const filtered = donorsList.filter((donor) => {
+    const term = `${donor.fullName || ''} ${donor.bloodGroup || ''} ${donor.city || ''} ${donor.email || ''}`.toLowerCase();
+    return term.includes(search) && (!groupFilter || donor.bloodGroup === groupFilter);
+  });
+  const paginated = getPaginatedData(filtered, 'donorsTable', 8);
+  const rows = paginated.items.map((donor) => {
+    const eligibility = donor.isEligible ? 'Eligible' : 'Not Eligible';
+    const status = donor.isActive === false ? 'Inactive' : 'Active';
+    return `
+      <tr>
+        <td>${donor.fullName || 'Unknown'}</td>
+        <td>${donor.bloodGroup || '-'}</td>
+        <td>${donor.age || '-'}</td>
+        <td>${donor.gender || '-'}</td>
+        <td>${donor.city || '-'}</td>
+        <td>${donor.phone || '-'}</td>
+        <td>${formatDate(donor.lastDonationDate)}</td>
+        <td>${eligibility}</td>
+        <td>${status}</td>
+        <td class="table-actions-cell">
+          <button class="btn btn-secondary btn-sm" data-action="view-donor" data-id="${donor.id}">View</button>
+          <button class="btn btn-secondary btn-sm" data-action="notify-donor" data-id="${donor.id}">Notify</button>
+        </td>
+      </tr>
+    `;
+  });
 
   tableContainer.innerHTML = `
     <div class="card table-card">
@@ -1419,6 +1569,7 @@ function renderDonorsTable() {
           <tbody>${rows.length ? rows.join('') : '<tr><td colspan="10" class="text-center">No donors found</td></tr>'}</tbody>
         </table>
       </div>
+      ${renderPaginationControls('donorsTable', paginated.page, paginated.totalPages)}
     </div>
   `;
 
@@ -1427,6 +1578,17 @@ function renderDonorsTable() {
   });
   tableContainer.querySelectorAll('[data-action="notify-donor"]').forEach((button) => {
     button.addEventListener('click', () => alert('Use the Send Notification page to notify this donor.'));
+  });
+  tableContainer.querySelectorAll('[data-page-target]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const key = button.dataset.pageTarget;
+      const action = button.dataset.pageAction;
+      const currentPage = tablePaginationState[key] || 1;
+      const totalPages = Math.max(1, Math.ceil(filtered.length / 8));
+      const nextPage = action === 'next' ? currentPage + 1 : currentPage - 1;
+      tablePaginationState[key] = Math.min(Math.max(1, nextPage), totalPages);
+      renderDonorsTable();
+    });
   });
 }
 
@@ -1441,30 +1603,30 @@ function renderHospitalsTable() {
   const search = document.getElementById('hospitalsSearch')?.value.toLowerCase() || '';
   const statusFilter = document.getElementById('hospitalStatusFilter')?.value || '';
 
-  const rows = hospitalsList
-    .filter((hospital) => {
-      const term = `${hospital.hospitalName || ''} ${hospital.city || ''} ${hospital.email || ''}`.toLowerCase();
-      return term.includes(search) && (!statusFilter || (hospital.status || 'Active') === statusFilter);
-    })
-    .map((hospital) => {
-      const totalRequests = requestsList.filter((req) => req.hospitalId === hospital.uid).length;
-      const completedRequests = requestsList.filter((req) => req.hospitalId === hospital.uid && req.status === 'Completed').length;
-      return `
-        <tr>
-          <td>${hospital.hospitalName || 'Unknown'}</td>
-          <td>${hospital.email || '-'}</td>
-          <td>${hospital.phone || '-'}</td>
-          <td>${hospital.city || '-'}</td>
-          <td>${hospital.status || 'Active'}</td>
-          <td>${totalRequests}</td>
-          <td>${completedRequests}</td>
-          <td class="table-actions-cell">
-            <button class="btn btn-secondary btn-sm" data-action="view-hospital" data-id="${hospital.uid}">View</button>
-            <button class="btn btn-secondary btn-sm" data-action="notify-hospital" data-id="${hospital.uid}">Notify</button>
-          </td>
-        </tr>
-      `;
-    });
+  const filtered = hospitalsList.filter((hospital) => {
+    const term = `${hospital.hospitalName || ''} ${hospital.city || ''} ${hospital.email || ''}`.toLowerCase();
+    return term.includes(search) && (!statusFilter || (hospital.status || 'Active') === statusFilter);
+  });
+  const paginated = getPaginatedData(filtered, 'hospitalsTable', 8);
+  const rows = paginated.items.map((hospital) => {
+    const totalRequests = requestsList.filter((req) => req.hospitalId === hospital.uid).length;
+    const completedRequests = requestsList.filter((req) => req.hospitalId === hospital.uid && req.status === 'Completed').length;
+    return `
+      <tr>
+        <td>${hospital.hospitalName || 'Unknown'}</td>
+        <td>${hospital.email || '-'}</td>
+        <td>${hospital.phone || '-'}</td>
+        <td>${hospital.city || '-'}</td>
+        <td>${hospital.status || 'Active'}</td>
+        <td>${totalRequests}</td>
+        <td>${completedRequests}</td>
+        <td class="table-actions-cell">
+          <button class="btn btn-secondary btn-sm" data-action="view-hospital" data-id="${hospital.uid}">View</button>
+          <button class="btn btn-secondary btn-sm" data-action="notify-hospital" data-id="${hospital.uid}">Notify</button>
+        </td>
+      </tr>
+    `;
+  });
 
   tableContainer.innerHTML = `
     <div class="card table-card">
@@ -1485,6 +1647,7 @@ function renderHospitalsTable() {
           <tbody>${rows.length ? rows.join('') : '<tr><td colspan="8" class="text-center">No hospitals found</td></tr>'}</tbody>
         </table>
       </div>
+      ${renderPaginationControls('hospitalsTable', paginated.page, paginated.totalPages)}
     </div>
   `;
 
@@ -1493,6 +1656,17 @@ function renderHospitalsTable() {
   });
   tableContainer.querySelectorAll('[data-action="notify-hospital"]').forEach((button) => {
     button.addEventListener('click', () => alert('Use the Send Notification page to message this hospital.'));
+  });
+  tableContainer.querySelectorAll('[data-page-target]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const key = button.dataset.pageTarget;
+      const action = button.dataset.pageAction;
+      const currentPage = tablePaginationState[key] || 1;
+      const totalPages = Math.max(1, Math.ceil(filtered.length / 8));
+      const nextPage = action === 'next' ? currentPage + 1 : currentPage - 1;
+      tablePaginationState[key] = Math.min(Math.max(1, nextPage), totalPages);
+      renderHospitalsTable();
+    });
   });
 }
 
@@ -1506,22 +1680,22 @@ function renderIssueHistoryTable() {
   const tableContainer = document.getElementById('issueHistoryTable');
   const search = document.getElementById('issueSearch')?.value.toLowerCase() || '';
   const statusFilter = document.getElementById('issueStatusFilter')?.value || '';
-  const rows = issuesList
-    .filter((item) => {
-      const term = `${item.hospitalName || ''} ${item.bloodGroup || ''} ${item.purpose || ''}`.toLowerCase();
-      return term.includes(search) && (!statusFilter || item.status === statusFilter);
-    })
-    .map((issue) => `
-      <tr>
-        <td>${issue.hospitalName || ''}</td>
-        <td>${issue.bloodGroup || ''}</td>
-        <td>${issue.units || 0}</td>
-        <td>${issue.issuedBy || ''}</td>
-        <td>${formatDate(issue.issueDate, true)}</td>
-        <td>${issue.purpose || ''}</td>
-        <td>${issue.status || ''}</td>
-      </tr>
-    `);
+  const filtered = issuesList.filter((item) => {
+    const term = `${item.hospitalName || ''} ${item.bloodGroup || ''} ${item.purpose || ''}`.toLowerCase();
+    return term.includes(search) && (!statusFilter || item.status === statusFilter);
+  });
+  const paginated = getPaginatedData(filtered, 'issueHistoryTable', 8);
+  const rows = paginated.items.map((issue) => `
+    <tr>
+      <td>${issue.hospitalName || ''}</td>
+      <td>${issue.bloodGroup || ''}</td>
+      <td>${issue.units || 0}</td>
+      <td>${issue.issuedBy || ''}</td>
+      <td>${formatDate(issue.issueDate, true)}</td>
+      <td>${issue.purpose || ''}</td>
+      <td>${issue.status || ''}</td>
+    </tr>
+  `);
   tableContainer.innerHTML = `
     <div class="card table-card">
       <div class="table-responsive">
@@ -1540,29 +1714,41 @@ function renderIssueHistoryTable() {
           <tbody>${rows.length ? rows.join('') : '<tr><td colspan="7" class="text-center">No issue history found</td></tr>'}</tbody>
         </table>
       </div>
+      ${renderPaginationControls('issueHistoryTable', paginated.page, paginated.totalPages)}
     </div>
   `;
+  tableContainer.querySelectorAll('[data-page-target]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const key = button.dataset.pageTarget;
+      const action = button.dataset.pageAction;
+      const currentPage = tablePaginationState[key] || 1;
+      const totalPages = Math.max(1, Math.ceil(filtered.length / 8));
+      const nextPage = action === 'next' ? currentPage + 1 : currentPage - 1;
+      tablePaginationState[key] = Math.min(Math.max(1, nextPage), totalPages);
+      renderIssueHistoryTable();
+    });
+  });
 }
 
 function renderDonationHistoryTable() {
   const tableContainer = document.getElementById('donationHistoryTable');
   const search = document.getElementById('donationHistorySearch')?.value.toLowerCase() || '';
   const statusFilter = document.getElementById('donationHistoryStatusFilter')?.value || '';
-  const rows = donationsList
-    .filter((item) => {
-      const term = `${item.donorName || ''} ${item.bloodGroup || ''} ${item.organizationName || ''}`.toLowerCase();
-      return term.includes(search) && (!statusFilter || item.status === statusFilter);
-    })
-    .map((donation) => `
-      <tr>
-        <td>${donation.donorName || ''}</td>
-        <td>${donation.bloodGroup || ''}</td>
-        <td>${donation.units || 0}</td>
-        <td>${formatDate(donation.createdAt, true)}</td>
-        <td>${donation.organizationName || ''}</td>
-        <td>${donation.status || ''}</td>
-      </tr>
-    `);
+  const filtered = donationsList.filter((item) => {
+    const term = `${item.donorName || ''} ${item.bloodGroup || ''} ${item.organizationName || ''}`.toLowerCase();
+    return term.includes(search) && (!statusFilter || item.status === statusFilter);
+  });
+  const paginated = getPaginatedData(filtered, 'donationHistoryTable', 8);
+  const rows = paginated.items.map((donation) => `
+    <tr>
+      <td>${donation.donorName || ''}</td>
+      <td>${donation.bloodGroup || ''}</td>
+      <td>${donation.units || 0}</td>
+      <td>${formatDate(donation.createdAt, true)}</td>
+      <td>${donation.organizationName || ''}</td>
+      <td>${donation.status || ''}</td>
+    </tr>
+  `);
   tableContainer.innerHTML = `
     <div class="card table-card">
       <div class="table-responsive">
@@ -1580,30 +1766,42 @@ function renderDonationHistoryTable() {
           <tbody>${rows.length ? rows.join('') : '<tr><td colspan="6" class="text-center">No donation history</td></tr>'}</tbody>
         </table>
       </div>
+      ${renderPaginationControls('donationHistoryTable', paginated.page, paginated.totalPages)}
     </div>
   `;
+  tableContainer.querySelectorAll('[data-page-target]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const key = button.dataset.pageTarget;
+      const action = button.dataset.pageAction;
+      const currentPage = tablePaginationState[key] || 1;
+      const totalPages = Math.max(1, Math.ceil(filtered.length / 8));
+      const nextPage = action === 'next' ? currentPage + 1 : currentPage - 1;
+      tablePaginationState[key] = Math.min(Math.max(1, nextPage), totalPages);
+      renderDonationHistoryTable();
+    });
+  });
 }
 
 function renderInventoryHistoryTable() {
   const tableContainer = document.getElementById('inventoryHistoryTable');
   const search = document.getElementById('inventoryHistorySearch')?.value.toLowerCase() || '';
   const groupFilter = document.getElementById('inventoryHistoryGroupFilter')?.value || '';
-  const rows = inventoryHistoryList
-    .filter((item) => {
-      const term = `${item.bloodGroup || ''} ${item.reason || ''} ${item.userId || ''}`.toLowerCase();
-      return term.includes(search) && (!groupFilter || item.bloodGroup === groupFilter);
-    })
-    .map((record) => `
-      <tr>
-        <td>${record.bloodGroup || ''}</td>
-        <td>${record.previousUnits || 0}</td>
-        <td>${record.currentUnits || 0}</td>
-        <td>${record.difference || 0}</td>
-        <td>${record.reason || ''}</td>
-        <td>${record.userId || ''}</td>
-        <td>${formatDate(record.createdAt, true)}</td>
-      </tr>
-    `);
+  const filtered = inventoryHistoryList.filter((item) => {
+    const term = `${item.bloodGroup || ''} ${item.reason || ''} ${item.userId || ''}`.toLowerCase();
+    return term.includes(search) && (!groupFilter || item.bloodGroup === groupFilter);
+  });
+  const paginated = getPaginatedData(filtered, 'inventoryHistoryTable', 8);
+  const rows = paginated.items.map((record) => `
+    <tr>
+      <td>${record.bloodGroup || ''}</td>
+      <td>${record.previousUnits || 0}</td>
+      <td>${record.currentUnits || 0}</td>
+      <td>${record.difference || 0}</td>
+      <td>${record.reason || ''}</td>
+      <td>${record.userId || ''}</td>
+      <td>${formatDate(record.createdAt, true)}</td>
+    </tr>
+  `);
   tableContainer.innerHTML = `
     <div class="card table-card">
       <div class="table-responsive">
@@ -1622,8 +1820,20 @@ function renderInventoryHistoryTable() {
           <tbody>${rows.length ? rows.join('') : '<tr><td colspan="7" class="text-center">No inventory history found</td></tr>'}</tbody>
         </table>
       </div>
+      ${renderPaginationControls('inventoryHistoryTable', paginated.page, paginated.totalPages)}
     </div>
   `;
+  tableContainer.querySelectorAll('[data-page-target]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const key = button.dataset.pageTarget;
+      const action = button.dataset.pageAction;
+      const currentPage = tablePaginationState[key] || 1;
+      const totalPages = Math.max(1, Math.ceil(filtered.length / 8));
+      const nextPage = action === 'next' ? currentPage + 1 : currentPage - 1;
+      tablePaginationState[key] = Math.min(Math.max(1, nextPage), totalPages);
+      renderInventoryHistoryTable();
+    });
+  });
 }
 
 function renderCharts() {
@@ -1979,15 +2189,20 @@ document.getElementById('inventoryActionForm')?.addEventListener('submit', async
 
   try {
     if (type === 'increase') {
-      await bloodInventoryManager.addBlood(currentOrganization.uid, {
+      const result = await bloodInventoryManager.addBlood(currentOrganization?.uid || currentOrganization?.id, {
         bloodGroup: group,
         units,
         collectionDate: new Date().toISOString().split('T')[0],
-        expiryDate,
+        expiryDate: expiryDate || '',
         donorId: null,
         storageLocation: '',
-        notes
+        notes,
+        organizationName: currentOrganization?.organizationName || ''
       });
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to add inventory record.');
+      }
     } else {
       const success = await deductInventory(group, units);
       if (!success) {
@@ -2010,7 +2225,7 @@ document.getElementById('inventoryActionForm')?.addEventListener('submit', async
     alert('Inventory updated successfully.');
   } catch (error) {
     console.error('Error adjusting inventory:', error);
-    alert('Failed to adjust inventory.');
+    alert(error?.message || 'Failed to adjust inventory.');
   }
 });
 

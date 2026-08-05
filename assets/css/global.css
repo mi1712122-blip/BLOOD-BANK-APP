@@ -28,7 +28,7 @@
   --border-color: #e7d8cc;
   --shadow: 0 8px 22px rgba(17, 24, 39, 0.08);
   --shadow-lg: 0 14px 34px rgba(17, 24, 39, 0.14);
-  --transition: all 0.3s ease;
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   
   /* Fonts */
   --font-primary: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;

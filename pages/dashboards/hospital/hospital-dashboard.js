@@ -1,11 +1,23 @@
+import {
+  collection,
+  onSnapshot,
+  query,
+  where
+} from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
 import { authManager } from '../../../assets/js/auth.js';
 import { bloodInventoryManager } from '../../../assets/js/inventory.js';
 import { bloodRequestManager } from '../../../assets/js/requests.js';
+import { db } from '../../../assets/js/firebase-config.js';
 
-// Hospital Dashboard Script
 let currentHospital = null;
 let currentView = 'dashboard';
 let notificationsListener = null;
+let inventoryListener = null;
+let organizationsListener = null;
+
+let allOrganizations = [];
+let allInventoryItems = [];
+
 const viewSelectors = {
   dashboard: 'dashboardView',
   'request-blood': 'request-bloodView',
@@ -15,18 +27,20 @@ const viewSelectors = {
   settings: 'settingsView'
 };
 
-// Initialize
+const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+const rareBloodGroups = ['AB-', 'O-', 'B-', 'A-'];
+
 document.addEventListener('DOMContentLoaded', async () => {
   await checkAuthAndLoadHospital();
   setupNavigation();
+  setupAvailabilityControls();
+  setupRealtimeListeners();
   showView('dashboard');
   await loadDashboardData();
 });
 
-// Check authentication
 async function checkAuthAndLoadHospital() {
   const user = await authManager.getCurrentUser();
-  
   if (!user || user.role !== 'hospital') {
     window.location.href = '../../auth/login.html';
     return;
@@ -35,9 +49,7 @@ async function checkAuthAndLoadHospital() {
   currentHospital = user.data;
   document.getElementById('hospitalName').textContent = currentHospital.hospitalName || 'Hospital';
 
-  if (notificationsListener) {
-    notificationsListener();
-  }
+  if (notificationsListener) notificationsListener();
 
   notificationsListener = bloodRequestManager.listenNotifications(currentHospital.uid, (result) => {
     if (!result.success) return;
@@ -51,18 +63,61 @@ async function checkAuthAndLoadHospital() {
   });
 }
 
-// Load dashboard data
+function setupRealtimeListeners() {
+  // Listen for organizations
+  organizationsListener = onSnapshot(collection(db, 'organizations'), (snapshot) => {
+    allOrganizations = [];
+    snapshot.forEach((docSnap) => {
+      allOrganizations.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    populateCityFilter();
+    populateOrganizationSelector();
+    renderBloodAvailability();
+  });
+
+  // Listen for blood inventory items
+  inventoryListener = onSnapshot(collection(db, 'bloodInventory'), (snapshot) => {
+    allInventoryItems = [];
+    snapshot.forEach((docSnap) => {
+      allInventoryItems.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    renderBloodAvailability();
+  });
+}
+
+function populateCityFilter() {
+  const select = document.getElementById('hospAvailCityFilter');
+  if (!select) return;
+  const cities = [...new Set(allOrganizations.map((o) => o.city).filter(Boolean))].sort();
+  select.innerHTML = '<option value="">All Cities</option>' +
+    cities.map((city) => `<option value="${city}">${city}</option>`).join('');
+}
+
+function populateOrganizationSelector(selectedOrganizationId = '') {
+  const select = document.getElementById('requestOrganization');
+  if (!select) return;
+
+  const organizations = allOrganizations.filter((org) => org.isApproved !== false);
+  if (!organizations.length) {
+    select.innerHTML = '<option value="">No organization available</option>';
+    return;
+  }
+
+  const chosenValue = selectedOrganizationId || organizations[0]?.uid || organizations[0]?.id || '';
+  select.innerHTML = '<option value="">Select organization</option>' +
+    organizations.map((org) => `<option value="${org.uid || org.id}">${org.organizationName || org.hospitalName || 'Organization'}</option>`).join('');
+  select.value = chosenValue;
+}
+
 async function loadDashboardData() {
   try {
-    // Load requests
     const requestsResult = await bloodRequestManager.getHospitalRequests(currentHospital.uid);
-    
     if (requestsResult.success) {
       displayRecentRequests(requestsResult.data.slice(0, 5));
       displayRequestHistory(requestsResult.data);
       
       const active = requestsResult.data.filter(r => r.status !== 'Completed').length;
-      const approved = requestsResult.data.filter(r => r.status === 'Approved').length;
+      const approved = requestsResult.data.filter(r => r.status === 'Approved' || r.status === 'Processing').length;
       const pending = requestsResult.data.filter(r => r.status === 'Pending').length;
       const rejected = requestsResult.data.filter(r => r.status === 'Rejected').length;
       
@@ -72,21 +127,162 @@ async function loadDashboardData() {
       document.getElementById('rejectedRequests').textContent = rejected;
     }
     
-    // Load settings
     loadSettings();
   } catch (error) {
     console.error('Error loading dashboard data:', error);
   }
 }
 
-// Display recent requests
+/* ==========================================================================
+   BLOOD AVAILABILITY MODULE
+   ========================================================================== */
+
+function setupAvailabilityControls() {
+  document.getElementById('hospAvailSearch')?.addEventListener('input', renderBloodAvailability);
+  document.getElementById('hospAvailGroupFilter')?.addEventListener('change', renderBloodAvailability);
+  document.getElementById('hospAvailCityFilter')?.addEventListener('change', renderBloodAvailability);
+  document.getElementById('hospAvailSort')?.addEventListener('change', renderBloodAvailability);
+  document.getElementById('hospAvailRefreshBtn')?.addEventListener('click', () => renderBloodAvailability());
+  document.getElementById('viewPreviousRequestsBtn')?.addEventListener('click', () => showView('request-history'));
+}
+
+function getAvailabilityStatus(units) {
+  if (units <= 0) return { text: 'Out of Stock', className: 'badge-stock-out' };
+  if (units < 10) return { text: 'Low Stock', className: 'badge-stock-low' };
+  return { text: 'Available', className: 'badge-stock-available' };
+}
+
+function renderBloodAvailability() {
+  const orgMap = {};
+  allOrganizations.forEach((org) => {
+    orgMap[org.uid || org.id] = org;
+  });
+
+  const stockMap = {};
+  allInventoryItems.forEach((item) => {
+    if (item.status !== 'Available') return;
+
+    const orgId = item.organizationId;
+    const bloodGroup = item.bloodGroup;
+    const key = `${orgId}_${bloodGroup}`;
+
+    if (!stockMap[key]) {
+      const org = orgMap[orgId] || { organizationName: 'Blood Bank Org', city: 'N/A' };
+      stockMap[key] = {
+        bloodGroup,
+        organizationId: orgId,
+        organizationName: org.organizationName || 'Organization',
+        city: org.city || 'N/A',
+        phone: org.phone || 'N/A',
+        units: 0,
+        lastUpdated: null
+      };
+    }
+
+    stockMap[key].units += Number(item.units) || 0;
+    const itemDate = item.updatedAt?.seconds ? new Date(item.updatedAt.seconds * 1000) : (item.updatedAt ? new Date(item.updatedAt) : null);
+    if (itemDate && (!stockMap[key].lastUpdated || itemDate > stockMap[key].lastUpdated)) {
+      stockMap[key].lastUpdated = itemDate;
+    }
+  });
+
+  const records = Object.values(stockMap);
+  const totalAvailableUnits = records.reduce((sum, item) => sum + item.units, 0);
+  const rareGroupsAvailable = bloodGroups.filter((group) => {
+    const totalForGroup = records.filter((item) => item.bloodGroup === group).reduce((sum, item) => sum + item.units, 0);
+    return rareBloodGroups.includes(group) && totalForGroup > 0;
+  }).length;
+  const lowStockGroupsCount = bloodGroups.filter((group) => {
+    const totalForGroup = records.filter((item) => item.bloodGroup === group).reduce((sum, item) => sum + item.units, 0);
+    return totalForGroup > 0 && totalForGroup < 10;
+  }).length;
+
+  if (document.getElementById('availTotalUnits')) document.getElementById('availTotalUnits').textContent = totalAvailableUnits;
+  if (document.getElementById('availRareGroups')) document.getElementById('availRareGroups').textContent = rareGroupsAvailable;
+  if (document.getElementById('availLowStockGroups')) document.getElementById('availLowStockGroups').textContent = lowStockGroupsCount;
+
+  const searchTerm = (document.getElementById('hospAvailSearch')?.value || '').trim().toLowerCase();
+  const groupFilter = document.getElementById('hospAvailGroupFilter')?.value || '';
+  const cityFilter = document.getElementById('hospAvailCityFilter')?.value || '';
+  const sortOption = document.getElementById('hospAvailSort')?.value || 'desc';
+
+  let filtered = records.filter((record) => {
+    if (searchTerm) {
+      const text = `${record.bloodGroup} ${record.organizationName} ${record.city}`.toLowerCase();
+      if (!text.includes(searchTerm)) return false;
+    }
+    if (groupFilter && record.bloodGroup !== groupFilter) return false;
+    if (cityFilter && record.city !== cityFilter) return false;
+    return true;
+  });
+
+  filtered.sort((a, b) => (sortOption === 'asc' ? a.units - b.units : b.units - a.units));
+
+  const container = document.getElementById('availabilityResults');
+  if (!container) return;
+
+  if (!filtered.length) {
+    container.innerHTML = '<p class="empty-state">No blood availability records match your search query.</p>';
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Blood Group</th>
+            <th>Available Units</th>
+            <th>Last Updated</th>
+            <th>Availability Status</th>
+            <th>Organization</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filtered.map((record) => {
+            const status = getAvailabilityStatus(record.units);
+            return `
+              <tr>
+                <td><strong>${record.bloodGroup}</strong></td>
+                <td>${record.units} Units</td>
+                <td>${record.lastUpdated ? record.lastUpdated.toLocaleDateString() : 'Recently'}</td>
+                <td><span class="badge ${status.className}">${status.text}</span></td>
+                <td>${record.organizationName} (${record.city})</td>
+                <td>
+                  <button type="button" class="btn btn-primary btn-sm btn-quick-request" data-group="${record.bloodGroup}" data-organization-id="${record.organizationId}">Request Blood</button>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  container.querySelectorAll('.btn-quick-request').forEach((button) => {
+    button.addEventListener('click', () => {
+      const bloodGroup = button.dataset.group;
+      const organizationId = button.dataset.organizationId || '';
+      showView('request-blood');
+      const requestSelect = document.getElementById('requestBloodGroup');
+      const orgSelect = document.getElementById('requestOrganization');
+      if (requestSelect && bloodGroup) requestSelect.value = bloodGroup;
+      if (orgSelect && organizationId) orgSelect.value = organizationId;
+    });
+  });
+}
+
+/* ==========================================================================
+   REQUESTS & NOTIFICATIONS DISPLAY
+   ========================================================================== */
+
 function displayRecentRequests(requests) {
   let html = '';
-  
   if (requests.length === 0) {
     html = '<p class="text-center">No requests yet</p>';
   } else {
-    requests.forEach(req => {
+    requests.forEach((req) => {
       const statusClass = req.status.toLowerCase();
       html += `
         <div class="request-card ${statusClass}">
@@ -97,7 +293,7 @@ function displayRecentRequests(requests) {
           <div class="request-details">
             <div class="request-detail">
               <span class="request-detail-label">Date</span>
-              <span class="request-detail-value">${new Date(req.createdAt.seconds * 1000).toLocaleDateString()}</span>
+              <span class="request-detail-value">${req.createdAt?.seconds ? new Date(req.createdAt.seconds * 1000).toLocaleDateString() : 'N/A'}</span>
             </div>
             <div class="request-detail">
               <span class="request-detail-label">Urgency</span>
@@ -108,18 +304,15 @@ function displayRecentRequests(requests) {
       `;
     });
   }
-  
   document.getElementById('recentRequestsList').innerHTML = html;
 }
 
-// Display request history
 function displayRequestHistory(requests) {
   let html = '';
-  
   if (requests.length === 0) {
     html = '<div class="card"><p class="text-center">No requests</p></div>';
   } else {
-    requests.forEach(req => {
+    requests.forEach((req) => {
       const statusClass = req.status.toLowerCase();
       html += `
         <div class="request-card ${statusClass}">
@@ -134,7 +327,7 @@ function displayRequestHistory(requests) {
             </div>
             <div class="request-detail">
               <span class="request-detail-label">Date</span>
-              <span class="request-detail-value">${new Date(req.createdAt.seconds * 1000).toLocaleDateString()}</span>
+              <span class="request-detail-value">${req.createdAt?.seconds ? new Date(req.createdAt.seconds * 1000).toLocaleDateString() : 'N/A'}</span>
             </div>
             <div class="request-detail">
               <span class="request-detail-label">Urgency</span>
@@ -149,20 +342,16 @@ function displayRequestHistory(requests) {
       `;
     });
   }
-  
   document.getElementById('requestHistoryList').innerHTML = html;
 }
 
-// Load notifications
 async function loadNotifications() {
   try {
     const result = await bloodRequestManager.getNotifications(currentHospital.uid);
-    
     if (result.success) {
-      const unreadCount = result.data.filter(n => !n.isRead).length;
+      const unreadCount = result.data.filter((n) => !n.isRead).length;
       document.getElementById('notificationBadge').textContent = unreadCount;
       document.getElementById('notificationBadge2').textContent = unreadCount;
-      
       displayNotifications(result.data);
     }
   } catch (error) {
@@ -170,56 +359,70 @@ async function loadNotifications() {
   }
 }
 
-// Display notifications
 function displayNotifications(notifications) {
-  let html = '';
-  
-  if (notifications.length === 0) {
-    html = '<div class="empty-state"><p>No notifications</p></div>';
-  } else {
-    notifications.forEach(notif => {
-      const date = new Date(notif.createdAt.seconds * 1000);
-      const timeAgo = getTimeAgo(date);
-      const formattedDateTime = date.toLocaleString();
-      
-      const senderLabel = notif.senderName ? `From: ${notif.senderName}` : 'From: System';
-      html += `
-        <div class="notification-item ${!notif.isRead ? 'unread' : ''}">
-          <div class="notification-icon">
-            <i class="fas fa-bell"></i>
-          </div>
-          <div class="notification-content">
-            <div class="notification-title">${notif.title}</div>
-            <div class="notification-sender">${senderLabel}</div>
-            <div class="notification-message">${notif.message}</div>
-            <div class="notification-time">${timeAgo} · ${formattedDateTime}</div>
-          </div>
-        </div>
-      `;
-    });
+  const container = document.getElementById('notificationsList');
+  if (!container) return;
+
+  if (!notifications || notifications.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p>No notifications available.</p></div>';
+    return;
   }
-  
-  document.getElementById('notificationsList').innerHTML = html;
+
+  let html = '';
+  notifications.forEach((notif) => {
+    const date = notif.createdAt?.seconds ? new Date(notif.createdAt.seconds * 1000) : new Date(notif.createdAt || Date.now());
+    const timeAgo = getTimeAgo(date);
+    const formattedDateTime = date.toLocaleString();
+    const senderLabel = notif.senderName ? `From: ${notif.senderName}` : 'From: System';
+    html += `
+      <div class="notification-item ${!notif.isRead ? 'unread' : ''}" data-notification-id="${notif.id}">
+        <div class="notification-icon">
+          <i class="fas fa-bell"></i>
+        </div>
+        <div class="notification-content">
+          <div class="notification-title">${notif.title}</div>
+          <div class="notification-sender">${senderLabel}</div>
+          <div class="notification-message">${notif.message}</div>
+          <div class="notification-time">${timeAgo} · ${formattedDateTime}</div>
+        </div>
+        <button type="button" class="btn btn-danger btn-sm delete-notification-btn" data-notification-id="${notif.id}" aria-label="Delete notification">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+
+  container.querySelectorAll('.delete-notification-btn').forEach((button) => {
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const notificationId = button.dataset.notificationId;
+      if (!notificationId) return;
+      await bloodRequestManager.clearAllNotifications(currentHospital.uid);
+      await bloodRequestManager.getNotifications(currentHospital.uid);
+      await loadNotifications();
+    });
+  });
 }
 
-// Get time ago
 function getTimeAgo(date) {
   const seconds = Math.floor((new Date() - date) / 1000);
-  
   if (seconds < 60) return 'Just now';
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-  
   return date.toLocaleDateString();
 }
 
 function setupNavigation() {
   document.querySelectorAll('[data-view]').forEach((element) => {
-    element.addEventListener('click', (event) => {
+    element.addEventListener('click', async (event) => {
       event.preventDefault();
       const view = element.dataset.view;
       if (!view) return;
+      if (view === 'notifications') {
+        await markHospitalNotificationsRead();
+      }
       showView(view);
     });
   });
@@ -230,6 +433,22 @@ function setupNavigation() {
       logout();
     });
   });
+}
+
+async function markHospitalNotificationsRead() {
+  try {
+    await bloodRequestManager.markAllNotificationsRead(currentHospital.uid);
+    const result = await bloodRequestManager.getNotifications(currentHospital.uid);
+    if (result.success) {
+      const notifications = result.data || [];
+      const unreadCount = notifications.filter((item) => !item.isRead).length;
+      document.getElementById('notificationBadge').textContent = unreadCount;
+      document.getElementById('notificationBadge2').textContent = unreadCount;
+      displayNotifications(notifications);
+    }
+  } catch (error) {
+    console.error('Error marking hospital notifications read:', error);
+  }
 }
 
 function showView(view) {
@@ -245,27 +464,34 @@ function showView(view) {
   });
 
   currentView = view;
-
-  if (view === 'notifications') {
-    loadNotifications();
-  }
+  if (view === 'notifications') markHospitalNotificationsRead();
+  if (view === 'blood-availability') renderBloodAvailability();
 }
 
-// Request blood form submission
 document.getElementById('requestBloodForm')?.addEventListener('submit', async (e) => {
   e.preventDefault();
-  
+
+  const organizationId = document.getElementById('requestOrganization')?.value;
   const bloodGroup = document.getElementById('requestBloodGroup').value;
-  const units = parseInt(document.getElementById('requestUnits').value);
+  const units = parseInt(document.getElementById('requestUnits').value, 10);
   const patientName = document.getElementById('requestPatientName').value;
   const patientAge = document.getElementById('requestPatientAge').value;
   const purpose = document.getElementById('requestPurpose').value;
   const urgencyLevel = document.getElementById('requestUrgency').value;
-  
+
+  if (!organizationId) {
+    alert('Please select the organization you want to request blood from.');
+    return;
+  }
+
+  const organization = allOrganizations.find((item) => (item.uid || item.id) === organizationId);
+
   try {
     const result = await bloodRequestManager.createBloodRequest({
       hospitalId: currentHospital.uid,
       hospitalName: currentHospital.hospitalName,
+      organizationId,
+      organizationName: organization?.organizationName || organization?.hospitalName || 'Organization',
       bloodGroup,
       units,
       patientName,
@@ -273,10 +499,11 @@ document.getElementById('requestBloodForm')?.addEventListener('submit', async (e
       purpose,
       urgencyLevel
     });
-    
+
     if (result.success) {
       alert('Blood request submitted successfully!');
       document.getElementById('requestBloodForm').reset();
+      populateOrganizationSelector();
       showView('dashboard');
       await loadDashboardData();
     }
@@ -286,7 +513,6 @@ document.getElementById('requestBloodForm')?.addEventListener('submit', async (e
   }
 });
 
-// Load settings
 function loadSettings() {
   document.getElementById('settingsHospitalName').value = currentHospital.hospitalName || '';
   document.getElementById('settingsPhone').value = currentHospital.phone || '';
@@ -294,7 +520,6 @@ function loadSettings() {
   document.getElementById('settingsCity').value = currentHospital.city || '';
 }
 
-// Settings form submission
 document.getElementById('settingsForm')?.addEventListener('submit', async (e) => {
   e.preventDefault();
   
@@ -317,48 +542,6 @@ document.getElementById('settingsForm')?.addEventListener('submit', async (e) =>
   }
 });
 
-// Blood availability search
-document.getElementById('searchCity')?.addEventListener('keyup', async () => {
-  const city = document.getElementById('searchCity').value.trim();
-  if (!city) {
-    document.getElementById('availabilityResults').innerHTML = '';
-    return;
-  }
-  
-  try {
-    // Get blood groups and search
-    const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-    let results = '';
-    
-    for (const group of bloodGroups) {
-      const result = await bloodInventoryManager.searchBloodAvailability(group, city);
-      
-      if (result.success && result.data.length > 0) {
-        results += `<div class="card"><h3>${group}</h3>`;
-        result.data.forEach(org => {
-          results += `
-            <div class="availability-item">
-              <p><strong>${org.organizationName}</strong> - ${org.units} Units</p>
-              <p>Phone: ${org.phone}</p>
-              <p>Address: ${org.address}</p>
-            </div>
-          `;
-        });
-        results += '</div>';
-      }
-    }
-    
-    if (!results) {
-      results = '<div class="card"><p class="text-center">No blood available in this city</p></div>';
-    }
-    
-    document.getElementById('availabilityResults').innerHTML = results;
-  } catch (error) {
-    console.error('Error searching blood availability:', error);
-  }
-});
-
-// Logout
 async function logout() {
   if (!confirm('Are you sure you want to logout?')) return;
   

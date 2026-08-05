@@ -28,12 +28,21 @@ class BloodInventoryManager {
 
   async addBlood(organizationId, bloodData) {
     try {
+      const targetOrganizationId = organizationId || bloodData?.organizationId || bloodData?.organization?.uid || bloodData?.organization?.id || null;
+      if (!targetOrganizationId) {
+        return { success: false, error: 'Organization not found.' };
+      }
+
+      const parsedExpiryDate = bloodData.expiryDate ? new Date(bloodData.expiryDate) : null;
+      const parsedCollectionDate = bloodData.collectionDate ? new Date(bloodData.collectionDate) : new Date();
+
       const bloodRecord = {
-        organizationId,
+        organizationId: targetOrganizationId,
+        organizationName: bloodData.organizationName || bloodData.organization?.organizationName || '',
         bloodGroup: bloodData.bloodGroup,
-        units: bloodData.units,
-        expiryDate: bloodData.expiryDate ? new Date(bloodData.expiryDate) : null,
-        collectionDate: bloodData.collectionDate ? new Date(bloodData.collectionDate) : new Date(),
+        units: Number(bloodData.units) || 0,
+        expiryDate: parsedExpiryDate && !Number.isNaN(parsedExpiryDate.getTime()) ? parsedExpiryDate : null,
+        collectionDate: parsedCollectionDate && !Number.isNaN(parsedCollectionDate.getTime()) ? parsedCollectionDate : new Date(),
         donorId: bloodData.donorId || null,
         storageLocation: bloodData.storageLocation || null,
         notes: bloodData.notes || null,

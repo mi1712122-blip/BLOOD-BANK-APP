@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="../../../assets/css/global.css">
   <link rel="stylesheet" href="../../../assets/css/dashboard.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <div class="main-layout with-sidebar">
@@ -115,6 +116,13 @@
           <div class="card">
             <form id="requestBloodForm">
               <div class="form-group">
+                <label>Organization</label>
+                <select id="requestOrganization" required>
+                  <option value="">Select organization</option>
+                </select>
+              </div>
+
+              <div class="form-group">
                 <label>Blood Group</label>
                 <select id="requestBloodGroup" required>
                   <option value="">Select blood group</option>
@@ -169,10 +177,71 @@
         <!-- Blood Availability View -->
         <div id="blood-availabilityView" class="dashboard-view hidden">
           <div class="dashboard-header">
-            <h2>Blood Availability</h2>
-            <input type="text" id="searchCity" placeholder="Search by city..." style="padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+            <div>
+              <h2>Real-Time Blood Availability</h2>
+              <p class="dashboard-subtitle">Monitor available stock across all registered organizations and blood banks.</p>
+            </div>
+            <div class="dashboard-actions">
+              <button type="button" class="btn btn-secondary btn-sm" id="hospAvailRefreshBtn">
+                <i class="fas fa-sync"></i> Refresh Now
+              </button>
+              <button type="button" class="btn btn-primary btn-sm" data-view="request-blood">
+                <i class="fas fa-hand-holding-medical"></i> Request Blood
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" id="viewPreviousRequestsBtn">
+                <i class="fas fa-history"></i> View Previous Requests
+              </button>
+            </div>
           </div>
-          <div id="availabilityResults"></div>
+
+          <!-- Summary Cards -->
+          <div class="dashboard-grid dashboard-cards-grid">
+            <div class="card stat-card">
+              <h3 id="availTotalUnits">0</h3>
+              <p>Total Available Blood Units</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="availRareGroups">0</h3>
+              <p>Rare Blood Units (AB-, O-, B-, A-)</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="availLowStockGroups">0</h3>
+              <p>Low Stock Blood Groups</p>
+            </div>
+          </div>
+
+          <!-- Filter & Search Bar -->
+          <div class="card filter-bar">
+            <input type="text" id="hospAvailSearch" placeholder="Search Blood Group, City, Organization..." style="flex: 1; min-width: 200px;">
+            <select id="hospAvailGroupFilter">
+              <option value="">All Blood Groups</option>
+              <option value="A+">A+</option>
+              <option value="A-">A-</option>
+              <option value="B+">B+</option>
+              <option value="B-">B-</option>
+              <option value="AB+">AB+</option>
+              <option value="AB-">AB-</option>
+              <option value="O+">O+</option>
+              <option value="O-">O-</option>
+            </select>
+            <select id="hospAvailCityFilter">
+              <option value="">All Cities</option>
+            </select>
+            <select id="hospAvailSort">
+              <option value="desc">Sort by Units: High to Low</option>
+              <option value="asc">Sort by Units: Low to High</option>
+            </select>
+          </div>
+
+          <!-- Availability Table Container -->
+          <div class="card">
+            <div class="card-header">
+              <h3>Available Blood Inventory Across Organizations</h3>
+            </div>
+            <div class="card-body">
+              <div id="availabilityResults" class="table-container"></div>
+            </div>
+          </div>
         </div>
 
         <!-- Request History View -->

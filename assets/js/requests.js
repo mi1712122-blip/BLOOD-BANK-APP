@@ -18,13 +18,104 @@ class BloodRequestManager {
     this.requestStatus = {
       PENDING: 'Pending',
       APPROVED: 'Approved',
+      PROCESSING: 'Processing',
       REJECTED: 'Rejected',
+      CANCELLED: 'Cancelled',
       COMPLETED: 'Completed'
     };
   }
 
+  async getAdminRecipientIds() {
+    try {
+      const adminQuery = query(
+        collection(db, 'users'),
+        where('role', '==', 'admin')
+      );
+      const snapshot = await getDocs(adminQuery);
+      const adminIds = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const uid = data.uid || docSnap.id;
+        if (uid) adminIds.push(uid);
+      });
+      return adminIds;
+    } catch (error) {
+      console.error('Error loading admin recipients:', error);
+      return [];
+    }
+  }
+
+  async broadcastRequestNotification({ request, event, title, message, senderId = null, senderRole = null, senderName = null }) {
+    const notifications = [];
+
+    if (event === 'new_request' && request?.organizationId) {
+      notifications.push({
+        recipientId: request.organizationId,
+        recipientRole: 'organization',
+        type: event,
+        title,
+        message,
+        senderId,
+        senderRole,
+        senderName,
+        isRead: false
+      });
+    }
+
+    if (event === 'request_cancelled' && request?.organizationId) {
+      notifications.push({
+        recipientId: request.organizationId,
+        recipientRole: 'organization',
+        type: event,
+        title,
+        message,
+        senderId,
+        senderRole,
+        senderName,
+        isRead: false
+      });
+    }
+
+    if (['request_submitted', 'request_approved', 'request_rejected', 'processing_started', 'blood_delivered'].includes(event) && request?.hospitalId) {
+      notifications.push({
+        recipientId: request.hospitalId,
+        recipientRole: 'hospital',
+        type: event,
+        title,
+        message,
+        senderId,
+        senderRole,
+        senderName,
+        isRead: false
+      });
+    }
+
+    const adminIds = await this.getAdminRecipientIds();
+    adminIds.forEach((adminId) => {
+      notifications.push({
+        recipientId: adminId,
+        recipientRole: 'admin',
+        type: `${event}_admin`,
+        title: `${title} - Admin`,
+        message: `${message} (${request?.hospitalName || 'Hospital'} / ${request?.bloodGroup || 'Blood'})`,
+        senderId,
+        senderRole,
+        senderName,
+        isRead: false
+      });
+    });
+
+    for (const notification of notifications) {
+      await this.sendNotification(notification);
+    }
+    return { success: true };
+  }
+
   async createBloodRequest(requestData) {
     try {
+      const organizationId = requestData.organizationId || requestData.organizationUid || requestData.organization?.uid || requestData.organization?.id || null;
+      const organizationName = requestData.organizationName || requestData.organization?.organizationName || requestData.organization?.hospitalName || null;
+
       const request = {
         hospitalId: requestData.hospitalId,
         hospitalName: requestData.hospitalName,
@@ -34,20 +125,34 @@ class BloodRequestManager {
         patientName: requestData.patientName || null,
         patientAge: requestData.patientAge || null,
         purpose: requestData.purpose || '',
-        organizationId: requestData.organizationId || null,
+        organizationId,
+        organizationName,
         status: this.requestStatus.PENDING,
         createdAt: new Date(),
         updatedAt: new Date()
       };
 
       const docRef = await addDoc(collection(db, 'bloodRequests'), request);
+      const createdRequest = { ...request, id: docRef.id };
 
-      await this.sendNotification({
-        type: 'blood_request',
+      await this.broadcastRequestNotification({
+        request: createdRequest,
+        event: 'new_request',
         title: 'New Blood Request',
-        message: `${requestData.hospitalName} requested ${requestData.units} units of ${requestData.bloodGroup}`,
-        recipientId: requestData.organizationId,
-        requestId: docRef.id
+        message: `${requestData.hospitalName} requested ${requestData.units} units of ${requestData.bloodGroup}.`,
+        senderId: requestData.hospitalId,
+        senderRole: 'hospital',
+        senderName: requestData.hospitalName
+      });
+
+      await this.broadcastRequestNotification({
+        request: createdRequest,
+        event: 'request_submitted',
+        title: 'Request Submitted',
+        message: `Your request for ${requestData.units} units of ${requestData.bloodGroup} has been submitted successfully.`,
+        senderId: requestData.hospitalId,
+        senderRole: 'hospital',
+        senderName: requestData.hospitalName
       });
 
       return { success: true, id: docRef.id };
@@ -75,17 +180,32 @@ class BloodRequestManager {
     }
   }
 
-  async getOrganizationRequests(organizationId) {
+  async getOrganizationRequests(organizationId, fallbackOrganizationId = null) {
     try {
-      const requestQuery = query(
-        collection(db, 'bloodRequests'),
-        where('organizationId', '==', organizationId)
-      );
-      const snapshot = await getDocs(requestQuery);
+      const orgIds = [...new Set([organizationId, fallbackOrganizationId].filter(Boolean))];
+      if (!orgIds.length) {
+        return { success: true, data: [] };
+      }
 
-      const requests = [];
-      snapshot.forEach((docSnap) => {
-        requests.push({ id: docSnap.id, ...docSnap.data() });
+      const snapshots = await Promise.all(
+        orgIds.map((id) => getDocs(query(
+          collection(db, 'bloodRequests'),
+          where('organizationId', '==', id)
+        )))
+      );
+
+      const requestMap = new Map();
+      snapshots.forEach((snapshot) => {
+        snapshot.forEach((docSnap) => {
+          const requestData = { id: docSnap.id, ...docSnap.data() };
+          requestMap.set(docSnap.id, requestData);
+        });
+      });
+
+      const requests = [...requestMap.values()].sort((a, b) => {
+        const aTime = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : new Date(a.createdAt || 0).getTime();
+        const bTime = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : new Date(b.createdAt || 0).getTime();
+        return bTime - aTime;
       });
 
       return { success: true, data: requests };
@@ -97,19 +217,78 @@ class BloodRequestManager {
   async approveRequest(requestId, organizationId) {
     try {
       const requestDoc = await getDoc(doc(db, 'bloodRequests', requestId));
+      if (!requestDoc.exists()) {
+        return { success: false, error: 'Request not found.' };
+      }
+
       const request = requestDoc.data();
+      if (request.status === this.requestStatus.REJECTED || request.status === this.requestStatus.COMPLETED) {
+        return { success: false, error: 'This request can no longer be updated.' };
+      }
 
       await updateDoc(doc(db, 'bloodRequests', requestId), {
-        status: this.requestStatus.APPROVED,
-        organizationId,
-        approvedAt: new Date()
+        status: this.requestStatus.PROCESSING,
+        organizationId: organizationId || request.organizationId || null,
+        approvedAt: new Date(),
+        updatedAt: new Date()
       });
 
-      await this.sendNotification({
-        type: 'request_approved',
-        title: 'Blood Request Approved',
-        message: `Your request for ${request.units} units of ${request.bloodGroup} has been approved`,
-        recipientId: request.hospitalId
+      await this.broadcastRequestNotification({
+        request: { ...request, id: requestId, organizationId: organizationId || request.organizationId || null },
+        event: 'request_approved',
+        title: 'Request Approved',
+        message: `Your request for ${request.units} units of ${request.bloodGroup} has been approved.`,
+        senderId: organizationId || request.organizationId || null,
+        senderRole: 'organization',
+        senderName: request.organizationName || 'Organization'
+      });
+
+      await this.broadcastRequestNotification({
+        request: { ...request, id: requestId, organizationId: organizationId || request.organizationId || null },
+        event: 'processing_started',
+        title: 'Processing Started',
+        message: `Processing has started for your ${request.bloodGroup} request. The organization is preparing the blood delivery.`,
+        senderId: organizationId || request.organizationId || null,
+        senderRole: 'organization',
+        senderName: request.organizationName || 'Organization'
+      });
+
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  async completeRequest(requestId, details = {}) {
+    try {
+      const requestDoc = await getDoc(doc(db, 'bloodRequests', requestId));
+      if (!requestDoc.exists()) {
+        return { success: false, error: 'Request not found.' };
+      }
+
+      const request = requestDoc.data();
+      await updateDoc(doc(db, 'bloodRequests', requestId), {
+        status: this.requestStatus.COMPLETED,
+        issuedAt: new Date(),
+        completedAt: new Date(),
+        updatedAt: new Date(),
+        issueDetails: {
+          organizationId: details.organizationId || request.organizationId || null,
+          organizationName: details.organizationName || request.organizationName || null,
+          unitsIssued: details.units || request.units || 0,
+          bloodGroup: details.bloodGroup || request.bloodGroup || null,
+          issuedBy: details.issuedBy || null
+        }
+      });
+
+      await this.broadcastRequestNotification({
+        request: { ...request, id: requestId },
+        event: 'blood_delivered',
+        title: 'Blood Delivered',
+        message: `${details.units || request.units || 0} units of ${details.bloodGroup || request.bloodGroup} have been delivered to your hospital.`,
+        senderId: details.organizationId || request.organizationId || null,
+        senderRole: 'organization',
+        senderName: details.organizationName || request.organizationName || 'Organization'
       });
 
       return { success: true };
@@ -129,11 +308,45 @@ class BloodRequestManager {
         rejectedAt: new Date()
       });
 
-      await this.sendNotification({
-        type: 'request_rejected',
-        title: 'Blood Request Rejected',
+      await this.broadcastRequestNotification({
+        request: { ...request, id: requestId },
+        event: 'request_rejected',
+        title: 'Request Rejected',
         message: `Your request for ${request.units} units of ${request.bloodGroup} has been rejected. Reason: ${reason}`,
-        recipientId: request.hospitalId
+        senderId: request.organizationId || null,
+        senderRole: 'organization',
+        senderName: request.organizationName || 'Organization'
+      });
+
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  async cancelRequest(requestId, reason = 'Cancelled by hospital') {
+    try {
+      const requestDoc = await getDoc(doc(db, 'bloodRequests', requestId));
+      if (!requestDoc.exists()) {
+        return { success: false, error: 'Request not found.' };
+      }
+
+      const request = requestDoc.data();
+      await updateDoc(doc(db, 'bloodRequests', requestId), {
+        status: this.requestStatus.CANCELLED,
+        cancellationReason: reason,
+        cancelledAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      await this.broadcastRequestNotification({
+        request: { ...request, id: requestId },
+        event: 'request_cancelled',
+        title: 'Request Cancelled',
+        message: `${request.hospitalName || 'Hospital'} cancelled the request for ${request.units} units of ${request.bloodGroup}. Reason: ${reason}`,
+        senderId: request.hospitalId,
+        senderRole: 'hospital',
+        senderName: request.hospitalName || 'Hospital'
       });
 
       return { success: true };
@@ -146,6 +359,7 @@ class BloodRequestManager {
     try {
       const notification = {
         recipientId: notificationData.recipientId,
+        recipientRole: notificationData.recipientRole || notificationData.senderRole || null,
         type: notificationData.type,
         title: notificationData.title,
         message: notificationData.message,

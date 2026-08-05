@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="../../../assets/css/global.css">
   <link rel="stylesheet" href="../../../assets/css/dashboard.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <div class="main-layout with-sidebar">
@@ -143,8 +144,28 @@
               <p>Available Blood Units</p>
             </div>
             <div class="card stat-card">
-              <h3 id="todaysDonations">0</h3>
-              <p>Today's Donations</p>
+              <h3 id="expiredBloodUnits">0</h3>
+              <p>Expired Blood Units</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="totalDonationsReceived">0</h3>
+              <p>Total Donations Received</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="pendingHospitalRequests">0</h3>
+              <p>Pending Hospital Requests</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="approvedRequests">0</h3>
+              <p>Approved Requests</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="rejectedRequests">0</h3>
+              <p>Rejected Requests</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="completedRequests">0</h3>
+              <p>Completed Requests</p>
             </div>
             <div class="card stat-card">
               <h3 id="totalDonors">0</h3>
@@ -153,26 +174,6 @@
             <div class="card stat-card">
               <h3 id="connectedHospitals">0</h3>
               <p>Connected Hospitals</p>
-            </div>
-            <div class="card stat-card">
-              <h3 id="pendingHospitalRequests">0</h3>
-              <p>Pending Hospital Requests</p>
-            </div>
-            <div class="card stat-card">
-              <h3 id="completedRequests">0</h3>
-              <p>Completed Requests</p>
-            </div>
-            <div class="card stat-card">
-              <h3 id="lowStockGroups">0</h3>
-              <p>Low Stock Blood Groups</p>
-            </div>
-            <div class="card stat-card">
-              <h3 id="bloodIssuedToday">0</h3>
-              <p>Blood Issued Today</p>
-            </div>
-            <div class="card stat-card">
-              <h3 id="totalNotifications">0</h3>
-              <p>Total Notifications</p>
             </div>
           </div>
 

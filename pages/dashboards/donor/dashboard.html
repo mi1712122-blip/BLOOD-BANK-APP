@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="../../../assets/css/global.css">
   <link rel="stylesheet" href="../../../assets/css/dashboard.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <div class="main-layout with-sidebar">
@@ -165,11 +166,75 @@
         <!-- Donation History View -->
         <div id="donationHistoryView" class="dashboard-view hidden">
           <div class="dashboard-header">
-            <h2>Donation History</h2>
+            <div>
+              <h2>My Donation History</h2>
+              <p class="dashboard-subtitle">Track your past blood donations, volume contributed, eligibility, and records.</p>
+            </div>
           </div>
+
+          <!-- Summary Cards -->
+          <div class="dashboard-grid dashboard-cards-grid">
+            <div class="card stat-card">
+              <h3 id="donorTotalDonations">0</h3>
+              <p>Total Donations</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="donorTotalVolume">0 Units</h3>
+              <p>Total Blood Donated</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="donorLastDonationDate">-</h3>
+              <p>Last Donation Date</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="donorNextEligibleDate">-</h3>
+              <p>Next Eligible Date</p>
+            </div>
+          </div>
+
+          <!-- Filter & Search Bar -->
+          <div class="card filter-bar">
+            <input type="text" id="donorHistorySearch" placeholder="Search Organization, Hospital, ID..." style="flex: 1; min-width: 200px;">
+            <select id="donorHistoryGroupFilter">
+              <option value="">All Blood Groups</option>
+              <option value="A+">A+</option>
+              <option value="A-">A-</option>
+              <option value="B+">B+</option>
+              <option value="B-">B-</option>
+              <option value="AB+">AB+</option>
+              <option value="AB-">AB-</option>
+              <option value="O+">O+</option>
+              <option value="O-">O-</option>
+            </select>
+            <select id="donorHistoryDateFilter">
+              <option value="all">All Dates</option>
+              <option value="30days">Past 30 Days</option>
+              <option value="6months">Past 6 Months</option>
+              <option value="year">Past Year</option>
+            </select>
+            <select id="donorHistorySort">
+              <option value="desc">Sort: Newest First</option>
+              <option value="asc">Sort: Oldest First</option>
+            </select>
+          </div>
+
+          <!-- Donation History Table -->
           <div class="card">
-            <div id="donationHistoryTable" class="table-container">
-              <p class="text-center">No donation history</p>
+            <div class="card-header">
+              <h3>Donation Records</h3>
+            </div>
+            <div class="card-body">
+              <div id="donationHistoryTable" class="table-container"></div>
+            </div>
+          </div>
+
+          <!-- Visual Timeline View -->
+          <div class="card" style="margin-top: 20px;">
+            <div class="card-header">
+              <h3>Donation Journey Timeline</h3>
+            </div>
+            <div class="card-body">
+              <div id="donorDonationTimeline" class="timeline"></div>
             </div>
           </div>
         </div>

@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="../../../assets/css/global.css">
   <link rel="stylesheet" href="../../../assets/css/dashboard.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <div class="main-layout with-sidebar">
@@ -31,6 +32,9 @@
         </a>
         <a href="#" class="nav-item" data-view="sendNotification">
           <i class="fas fa-envelope"></i> Send Notification
+        </a>
+        <a href="#" class="nav-item" data-view="contactMessages">
+          <i class="fas fa-inbox"></i> Contact Messages
         </a>
         <a href="#" class="nav-item" data-view="inventory">
           <i class="fas fa-cube"></i> Blood Inventory
@@ -164,6 +168,14 @@
           </div>
         </div>
 
+        <!-- Contact Messages View -->
+        <div id="contactMessagesView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <h2>Contact Messages</h2>
+          </div>
+          <div id="contactMessagesList" class="table-container"></div>
+        </div>
+
         <!-- Hospitals Management View -->
         <div id="hospitalsView" class="dashboard-view hidden">
           <div class="dashboard-header">
@@ -175,28 +187,254 @@
         <!-- Blood Inventory View -->
         <div id="inventoryView" class="dashboard-view hidden">
           <div class="dashboard-header">
-            <h2>Blood Inventory Monitoring</h2>
+            <div>
+              <h2>Blood Inventory Management</h2>
+              <p class="dashboard-subtitle">Real-time aggregate stock, reserved units, low stock alerts, and audit logs.</p>
+            </div>
+            <div class="dashboard-actions">
+              <button type="button" class="btn btn-secondary" id="exportAdminInventoryBtn">
+                <i class="fas fa-file-csv"></i> Export Inventory CSV
+              </button>
+            </div>
           </div>
-          <div id="inventoryOverview"></div>
+
+          <!-- Summary Cards -->
+          <div class="dashboard-grid dashboard-cards-grid">
+            <div class="card stat-card">
+              <h3 id="adminTotalUnits">0</h3>
+              <p>Total Blood Units</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="adminTotalGroups">0</h3>
+              <p>Total Blood Groups in Stock</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="adminLowStockTypes">0</h3>
+              <p>Low Stock Blood Types</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="adminExpiredUnits">0</h3>
+              <p>Expired Units</p>
+            </div>
+          </div>
+
+          <!-- Filter & Search Bar -->
+          <div class="card filter-bar">
+            <input type="text" id="adminInventorySearch" placeholder="Search Blood Group / Organization..." style="flex: 1; min-width: 200px;">
+            <select id="adminInventoryGroupFilter">
+              <option value="">All Blood Groups</option>
+              <option value="A+">A+</option>
+              <option value="A-">A-</option>
+              <option value="B+">B+</option>
+              <option value="B-">B-</option>
+              <option value="AB+">AB+</option>
+              <option value="AB-">AB-</option>
+              <option value="O+">O+</option>
+              <option value="O-">O-</option>
+            </select>
+            <select id="adminInventoryStatusFilter">
+              <option value="">All Stock Statuses</option>
+              <option value="Available">In Stock / Available</option>
+              <option value="Low Stock">Low Stock (&lt; 10 units)</option>
+              <option value="Out of Stock">Out of Stock (0 units)</option>
+            </select>
+            <select id="adminInventorySort">
+              <option value="desc">Sort by Quantity: High to Low</option>
+              <option value="asc">Sort by Quantity: Low to High</option>
+            </select>
+          </div>
+
+          <!-- Inventory Table -->
+          <div class="card">
+            <div class="card-header">
+              <h3>Blood Inventory Summary</h3>
+            </div>
+            <div class="card-body">
+              <div id="adminInventoryTable" class="table-container"></div>
+            </div>
+          </div>
+
+          <!-- Charts Row -->
+          <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-top: 20px;">
+            <div class="card">
+              <div class="card-header">
+                <h3>Blood Group Distribution</h3>
+              </div>
+              <div class="card-body">
+                <canvas id="adminInventoryDistChart" height="220"></canvas>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3>Available vs Reserved Blood</h3>
+              </div>
+              <div class="card-body">
+                <canvas id="adminInventoryReserveChart" height="220"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Low Stock Alert Section -->
+          <div class="card" style="margin-top: 20px;">
+            <div class="card-header" style="border-bottom: 2px solid var(--warning-color);">
+              <h3 style="color: var(--warning-color);"><i class="fas fa-exclamation-triangle"></i> Low Stock Alerts</h3>
+            </div>
+            <div class="card-body" id="adminLowStockAlerts"></div>
+          </div>
+
+          <!-- Inventory Audit Logs -->
+          <div class="card" style="margin-top: 20px;">
+            <div class="card-header">
+              <h3>Inventory Logs</h3>
+            </div>
+            <div class="card-body">
+              <div id="adminInventoryLogsTable" class="table-container"></div>
+            </div>
+          </div>
         </div>
 
         <!-- Analytics View -->
         <div id="analyticsView" class="dashboard-view hidden">
           <div class="dashboard-header">
-            <h2>System Analytics</h2>
+            <div>
+              <h2>System Analytics</h2>
+              <p class="dashboard-subtitle">Real-time dynamic insights, monthly trends, utilization rates, and reports.</p>
+            </div>
+            <div class="dashboard-actions filter-bar" style="margin: 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+              <select id="analyticsDateFilter">
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="7days">Last 7 Days</option>
+                <option value="month">Last Month</option>
+                <option value="year">Last Year</option>
+                <option value="custom">Custom Date</option>
+              </select>
+              <input type="date" id="analyticsCustomDateFrom" placeholder="From date" class="input-small" />
+              <input type="date" id="analyticsCustomDateTo" placeholder="To date" class="input-small" />
+              <button type="button" class="btn btn-secondary btn-sm" id="exportAnalyticsCsvBtn">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
+              <button type="button" class="btn btn-primary btn-sm" id="printAnalyticsPdfBtn">
+                <i class="fas fa-file-pdf"></i> Export PDF / Print
+              </button>
+            </div>
           </div>
-          <div class="dashboard-grid">
+
+          <!-- Metric Summary Cards -->
+          <div class="dashboard-grid dashboard-cards-grid">
+            <div class="card stat-card">
+              <h3 id="analyticsTotalDonors">0</h3>
+              <p>Total Donors</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="analyticsTotalHospitals">0</h3>
+              <p>Total Hospitals</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="analyticsTotalOrgs">0</h3>
+              <p>Total Organizations</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="analyticsTotalUnits">0</h3>
+              <p>Total Blood Units</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="analyticsTotalRequests">0</h3>
+              <p>Total Requests</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="analyticsCompletedRequests">0</h3>
+              <p>Completed Requests</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="analyticsPendingRequests">0</h3>
+              <p>Pending Requests</p>
+            </div>
+            <div class="card stat-card">
+              <h3 id="analyticsRejectedRequests">0</h3>
+              <p>Rejected Requests</p>
+            </div>
+          </div>
+
+          <!-- Key Statistics Grid -->
+          <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 20px;">
+            <div class="card" style="text-align: center; padding: 20px;">
+              <p style="margin: 0; color: #666; font-size: 13px;">Most Requested Blood Group</p>
+              <h2 id="mostRequestedGroup" style="color: var(--primary-color); margin: 10px 0 0 0;">-</h2>
+            </div>
+            <div class="card" style="text-align: center; padding: 20px;">
+              <p style="margin: 0; color: #666; font-size: 13px;">Least Requested Blood Group</p>
+              <h2 id="leastRequestedGroup" style="color: #666; margin: 10px 0 0 0;">-</h2>
+            </div>
+            <div class="card" style="text-align: center; padding: 20px;">
+              <p style="margin: 0; color: #666; font-size: 13px;">Top Donating Blood Group</p>
+              <h2 id="topDonatingGroup" style="color: var(--success-color); margin: 10px 0 0 0;">-</h2>
+            </div>
+            <div class="card" style="text-align: center; padding: 20px;">
+              <p style="margin: 0; color: #666; font-size: 13px;">Blood Utilization Rate</p>
+              <h2 id="bloodUtilizationRate" style="color: var(--primary-color); margin: 10px 0 0 0;">0%</h2>
+            </div>
+          </div>
+
+          <!-- Analytics Charts Grid -->
+          <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-top: 20px;">
             <div class="card">
-              <h3>User Registration Trends</h3>
-              <div id="registrationChart"></div>
+              <div class="card-header">
+                <h3>Monthly Donations</h3>
+              </div>
+              <div class="card-body">
+                <canvas id="monthlyDonationsChart" height="200"></canvas>
+              </div>
             </div>
             <div class="card">
-              <h3>Blood Request Status</h3>
-              <div id="requestChart"></div>
+              <div class="card-header">
+                <h3>Monthly Blood Requests</h3>
+              </div>
+              <div class="card-body">
+                <canvas id="monthlyRequestsChart" height="200"></canvas>
+              </div>
             </div>
             <div class="card">
-              <h3>Blood Group Distribution</h3>
-              <div id="bloodGroupChart"></div>
+              <div class="card-header">
+                <h3>Blood Group Distribution</h3>
+              </div>
+              <div class="card-body">
+                <canvas id="analyticsDistChart" height="200"></canvas>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3>Donation Trends</h3>
+              </div>
+              <div class="card-body">
+                <canvas id="donationTrendsChart" height="200"></canvas>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3>Hospital Requests Trend</h3>
+              </div>
+              <div class="card-body">
+                <canvas id="hospitalTrendsChart" height="200"></canvas>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3>Organization Performance</h3>
+              </div>
+              <div class="card-body">
+                <canvas id="orgPerformanceChart" height="200"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Activity Timeline -->
+          <div class="card" style="margin-top: 20px;">
+            <div class="card-header">
+              <h3>Recent Activity Timeline</h3>
+            </div>
+            <div class="card-body">
+              <div id="analyticsTimeline" class="timeline"></div>
             </div>
           </div>
         </div>

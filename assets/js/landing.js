@@ -1,5 +1,11 @@
 // Landing Page Script
 import { bloodInventoryManager } from './inventory.js';
+import {
+  addDoc,
+  collection,
+  serverTimestamp
+} from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
+import { auth, db } from './firebase-config.js';
 
 document.addEventListener('DOMContentLoaded', function() {
   // Smooth scrolling for navigation links
@@ -190,7 +196,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const contactContainer = document.querySelector('.contact-form-container');
 
   if (contactForm && contactContainer) {
-    contactForm.addEventListener('submit', function(e) {
+    contactForm.addEventListener('submit', async function(e) {
       e.preventDefault();
       
       const name = document.getElementById('contact-name').value.trim();
@@ -210,20 +216,52 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
 
-      // Submission Success Animation and transition
-      contactContainer.style.transition = 'opacity 0.3s ease';
-      contactContainer.style.opacity = 0;
-      
-      setTimeout(() => {
+      const submitButton = contactForm.querySelector('button[type="submit"]');
+      const originalButtonContent = submitButton.innerHTML;
+
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        alert('Please sign in before sending a message.');
+        return;
+      }
+
+      submitButton.disabled = true;
+      submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+
+      try {
+        await addDoc(collection(db, 'contactMessages'), {
+          name,
+          email,
+          subject,
+          message,
+          senderId: currentUser.uid,
+          status: 'new',
+          source: 'landing-page',
+          createdAt: serverTimestamp()
+        });
+
+        contactContainer.style.transition = 'opacity 0.3s ease';
+        contactContainer.style.opacity = 0;
+
+        setTimeout(() => {
         contactContainer.innerHTML = `
           <div class="contact-success-card animate__animated animate__fadeIn">
             <i class="fas fa-circle-check"></i>
             <h3>Message Sent!</h3>
-            <p>Thank you, <strong>${escapeHTML(name)}</strong>. Your inquiry has been received. Our team will get back to you at <strong>${escapeHTML(email)}</strong> shortly.</p>
+            <p>Thank you, <strong>${escapeHTML(name)}</strong>. Your message has been sent to our admin team. We will get back to you at <strong>${escapeHTML(email)}</strong> shortly.</p>
           </div>
         `;
         contactContainer.style.opacity = 1;
       }, 300);
+      } catch (error) {
+        console.error('Error sending contact message:', error);
+        const errorMessage = error?.code === 'permission-denied'
+          ? 'Message sending is not authorized by Firestore rules. Please contact the administrator.'
+          : `Your message could not be sent: ${error?.message || 'Unknown error'}`;
+        alert(errorMessage);
+        submitButton.disabled = false;
+        submitButton.innerHTML = originalButtonContent;
+      }
     });
   }
 
