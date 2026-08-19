@@ -503,7 +503,24 @@ p {
 }
 
 .chart-card {
-  min-height: 320px;
+  min-height: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-card .card-body {
+  position: relative;
+  flex: 1;
+  min-height: 240px;
+  height: 260px;
+  width: 100%;
+  padding: 12px 16px 16px;
+}
+
+.chart-card canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
 }
 
 .table-card {

@@ -57,8 +57,7 @@ async function checkAuthAndLoadDonor() {
     if (!result.success) return;
     const notifications = result.data || [];
     const unreadCount = notifications.filter((item) => !item.isRead).length;
-    document.getElementById('notificationBadge').textContent = unreadCount;
-    document.getElementById('notificationBadge2').textContent = unreadCount;
+    updateDonorNotificationBadges(unreadCount);
     if (currentView === 'notifications') {
       displayNotifications(notifications);
     }
@@ -451,18 +450,28 @@ async function loadNotifications() {
 
 async function markDonorNotificationsRead() {
   try {
+    if (!currentDonor?.uid) return;
+    updateDonorNotificationBadges(0);
     await bloodRequestManager.markAllNotificationsRead(currentDonor.uid);
-    const result = await bloodRequestManager.getNotifications(currentDonor.uid);
-    if (result.success) {
-      const notifications = result.data || [];
-      const unreadCount = notifications.filter((item) => !item.isRead).length;
-      document.getElementById('notificationBadge').textContent = unreadCount;
-      document.getElementById('notificationBadge2').textContent = unreadCount;
-      displayNotifications(notifications);
-    }
   } catch (error) {
     console.error('Error marking donor notifications read:', error);
   }
+}
+
+function updateDonorNotificationBadges(unreadCount) {
+  const badge1 = document.getElementById('notificationBadge');
+  const badge2 = document.getElementById('notificationBadge2');
+  [badge1, badge2].forEach((b) => {
+    if (!b) return;
+    b.textContent = unreadCount;
+    if (unreadCount > 0) {
+      b.classList.remove('hidden');
+      b.style.display = 'flex';
+    } else {
+      b.classList.add('hidden');
+      b.style.display = 'none';
+    }
+  });
 }
 
 function displayNotifications(notifications) {
@@ -476,7 +485,7 @@ function displayNotifications(notifications) {
 
   let html = '';
   notifications.forEach((notif) => {
-    const createdAt = notif.createdAt ? new Date(notif.createdAt.seconds * 1000) : new Date();
+    const createdAt = notif.createdAt?.seconds ? new Date(notif.createdAt.seconds * 1000) : notif.createdAt ? new Date(notif.createdAt) : new Date();
     const timeAgo = getTimeAgo(createdAt);
     const formattedDateTime = createdAt.toLocaleString();
     const senderLabel = notif.senderName ? `From: ${notif.senderName}` : 'From: System';
@@ -491,8 +500,8 @@ function displayNotifications(notifications) {
           <div class="notification-message">${notif.message || ''}</div>
           <div class="notification-time">${timeAgo} · ${formattedDateTime}</div>
         </div>
-        <button type="button" class="btn btn-danger btn-sm delete-notification-btn" data-notification-id="${notif.id}" aria-label="Delete notification">
-          <i class="fas fa-trash"></i>
+        <button type="button" class="btn btn-danger btn-sm delete-notification-btn" data-notification-id="${notif.id}" aria-label="Delete notification" title="Delete notification">
+          <i class="fas fa-trash-alt"></i>
         </button>
       </div>
     `;
@@ -511,8 +520,7 @@ function displayNotifications(notifications) {
 
 async function deleteNotification(notificationId) {
   try {
-    await deleteDoc(doc(db, 'notifications', notificationId));
-    await loadNotifications();
+    await bloodRequestManager.deleteNotification(notificationId);
   } catch (error) {
     console.error('Error deleting notification:', error);
   }

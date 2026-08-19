@@ -31,7 +31,11 @@
           <i class="fas fa-hospital"></i> Hospitals
         </a>
         <a href="#" class="nav-item" data-view="sendNotification">
-          <i class="fas fa-envelope"></i> Send Notification
+          <i class="fas fa-paper-plane"></i> Send Notification
+        </a>
+        <a href="#" class="nav-item" data-view="notifications">
+          <i class="fas fa-bell"></i> Notifications
+          <span class="notification-badge" id="adminNotificationBadge">0</span>
         </a>
         <a href="#" class="nav-item" data-view="contactMessages">
           <i class="fas fa-inbox"></i> Contact Messages
@@ -60,6 +64,10 @@
           <span>BloodBank - Admin Dashboard</span>
         </div>
         <div class="navbar-actions">
+          <div class="notification-bell" data-view="notifications" title="Open notifications">
+            <i class="fas fa-bell"></i>
+            <span class="notification-badge" id="adminNotificationBadge2">0</span>
+          </div>
           <div class="dropdown">
             <button class="btn btn-secondary btn-sm">
               <i class="fas fa-user"></i> Admin <i class="fas fa-chevron-down"></i>
@@ -255,21 +263,21 @@
           </div>
 
           <!-- Charts Row -->
-          <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-top: 20px;">
-            <div class="card">
+          <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
+            <div class="card chart-card">
               <div class="card-header">
                 <h3>Blood Group Distribution</h3>
               </div>
               <div class="card-body">
-                <canvas id="adminInventoryDistChart" height="220"></canvas>
+                <canvas id="adminInventoryDistChart"></canvas>
               </div>
             </div>
-            <div class="card">
+            <div class="card chart-card">
               <div class="card-header">
                 <h3>Available vs Reserved Blood</h3>
               </div>
               <div class="card-body">
-                <canvas id="adminInventoryReserveChart" height="220"></canvas>
+                <canvas id="adminInventoryReserveChart"></canvas>
               </div>
             </div>
           </div>
@@ -377,53 +385,53 @@
           </div>
 
           <!-- Analytics Charts Grid -->
-          <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-top: 20px;">
-            <div class="card">
+          <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
+            <div class="card chart-card">
               <div class="card-header">
                 <h3>Monthly Donations</h3>
               </div>
               <div class="card-body">
-                <canvas id="monthlyDonationsChart" height="200"></canvas>
+                <canvas id="monthlyDonationsChart"></canvas>
               </div>
             </div>
-            <div class="card">
+            <div class="card chart-card">
               <div class="card-header">
                 <h3>Monthly Blood Requests</h3>
               </div>
               <div class="card-body">
-                <canvas id="monthlyRequestsChart" height="200"></canvas>
+                <canvas id="monthlyRequestsChart"></canvas>
               </div>
             </div>
-            <div class="card">
+            <div class="card chart-card">
               <div class="card-header">
                 <h3>Blood Group Distribution</h3>
               </div>
               <div class="card-body">
-                <canvas id="analyticsDistChart" height="200"></canvas>
+                <canvas id="analyticsDistChart"></canvas>
               </div>
             </div>
-            <div class="card">
+            <div class="card chart-card">
               <div class="card-header">
                 <h3>Donation Trends</h3>
               </div>
               <div class="card-body">
-                <canvas id="donationTrendsChart" height="200"></canvas>
+                <canvas id="donationTrendsChart"></canvas>
               </div>
             </div>
-            <div class="card">
+            <div class="card chart-card">
               <div class="card-header">
                 <h3>Hospital Requests Trend</h3>
               </div>
               <div class="card-body">
-                <canvas id="hospitalTrendsChart" height="200"></canvas>
+                <canvas id="hospitalTrendsChart"></canvas>
               </div>
             </div>
-            <div class="card">
+            <div class="card chart-card">
               <div class="card-header">
                 <h3>Organization Performance</h3>
               </div>
               <div class="card-body">
-                <canvas id="orgPerformanceChart" height="200"></canvas>
+                <canvas id="orgPerformanceChart"></canvas>
               </div>
             </div>
           </div>
@@ -436,6 +444,22 @@
             <div class="card-body">
               <div id="analyticsTimeline" class="timeline"></div>
             </div>
+          </div>
+        </div>
+
+        <!-- Notifications View -->
+        <div id="notificationsView" class="dashboard-view hidden">
+          <div class="dashboard-header">
+            <div>
+              <h2>Notifications</h2>
+              <p class="dashboard-subtitle">Real-time notifications and system alerts.</p>
+            </div>
+            <div class="dashboard-actions">
+              <button type="button" class="btn btn-secondary" data-action="clear-notifications">Clear All</button>
+            </div>
+          </div>
+          <div class="card">
+            <div id="notificationsList"></div>
           </div>
         </div>
 

@@ -55,8 +55,7 @@ async function checkAuthAndLoadHospital() {
     if (!result.success) return;
     const notifications = result.data || [];
     const unreadCount = notifications.filter((item) => !item.isRead).length;
-    document.getElementById('notificationBadge').textContent = unreadCount;
-    document.getElementById('notificationBadge2').textContent = unreadCount;
+    updateHospitalNotificationBadges(unreadCount);
     if (currentView === 'notifications') {
       displayNotifications(notifications);
     }
@@ -380,13 +379,13 @@ function displayNotifications(notifications) {
           <i class="fas fa-bell"></i>
         </div>
         <div class="notification-content">
-          <div class="notification-title">${notif.title}</div>
+          <div class="notification-title">${notif.title || 'Notification'}</div>
           <div class="notification-sender">${senderLabel}</div>
-          <div class="notification-message">${notif.message}</div>
+          <div class="notification-message">${notif.message || ''}</div>
           <div class="notification-time">${timeAgo} · ${formattedDateTime}</div>
         </div>
-        <button type="button" class="btn btn-danger btn-sm delete-notification-btn" data-notification-id="${notif.id}" aria-label="Delete notification">
-          <i class="fas fa-trash"></i>
+        <button type="button" class="btn btn-danger btn-sm delete-notification-btn" data-notification-id="${notif.id}" aria-label="Delete notification" title="Delete notification">
+          <i class="fas fa-trash-alt"></i>
         </button>
       </div>
     `;
@@ -398,10 +397,24 @@ function displayNotifications(notifications) {
       event.stopPropagation();
       const notificationId = button.dataset.notificationId;
       if (!notificationId) return;
-      await bloodRequestManager.clearAllNotifications(currentHospital.uid);
-      await bloodRequestManager.getNotifications(currentHospital.uid);
-      await loadNotifications();
+      await bloodRequestManager.deleteNotification(notificationId);
     });
+  });
+}
+
+function updateHospitalNotificationBadges(unreadCount) {
+  const badge1 = document.getElementById('notificationBadge');
+  const badge2 = document.getElementById('notificationBadge2');
+  [badge1, badge2].forEach((b) => {
+    if (!b) return;
+    b.textContent = unreadCount;
+    if (unreadCount > 0) {
+      b.classList.remove('hidden');
+      b.style.display = 'flex';
+    } else {
+      b.classList.add('hidden');
+      b.style.display = 'none';
+    }
   });
 }
 
@@ -437,15 +450,9 @@ function setupNavigation() {
 
 async function markHospitalNotificationsRead() {
   try {
+    if (!currentHospital?.uid) return;
+    updateHospitalNotificationBadges(0);
     await bloodRequestManager.markAllNotificationsRead(currentHospital.uid);
-    const result = await bloodRequestManager.getNotifications(currentHospital.uid);
-    if (result.success) {
-      const notifications = result.data || [];
-      const unreadCount = notifications.filter((item) => !item.isRead).length;
-      document.getElementById('notificationBadge').textContent = unreadCount;
-      document.getElementById('notificationBadge2').textContent = unreadCount;
-      displayNotifications(notifications);
-    }
   } catch (error) {
     console.error('Error marking hospital notifications read:', error);
   }

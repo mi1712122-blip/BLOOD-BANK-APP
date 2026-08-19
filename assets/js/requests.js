@@ -358,14 +358,17 @@ class BloodRequestManager {
   async sendNotification(notificationData) {
     try {
       const notification = {
-        recipientId: notificationData.recipientId,
-        recipientRole: notificationData.recipientRole || notificationData.senderRole || null,
-        type: notificationData.type,
-        title: notificationData.title,
-        message: notificationData.message,
+        recipientId: notificationData.recipientId || notificationData.targetUserId || null,
+        recipientRole: notificationData.recipientRole || notificationData.targetRole || null,
+        type: notificationData.type || 'general',
+        title: notificationData.title || '',
+        message: notificationData.message || '',
         senderId: notificationData.senderId || null,
         senderRole: notificationData.senderRole || null,
         senderName: notificationData.senderName || null,
+        targetType: notificationData.targetType || 'User',
+        targetRole: notificationData.targetRole || null,
+        targetUserId: notificationData.targetUserId || notificationData.recipientId || null,
         isRead: false,
         createdAt: new Date()
       };
@@ -373,6 +376,111 @@ class BloodRequestManager {
       await addDoc(collection(db, 'notifications'), notification);
       return { success: true };
     } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  async sendNotificationToTargets({
+    title,
+    message,
+    senderId = null,
+    senderRole = null,
+    senderName = null,
+    targetType = 'User',
+    targetRole = null,
+    targetUserId = null,
+    includeSender = true
+  }) {
+    try {
+      let recipientIds = [];
+
+      if (targetType === 'All' || targetType === 'allUsers') {
+        const collectionsToFetch = ['users', 'donors', 'hospitals', 'organizations'];
+        for (const colName of collectionsToFetch) {
+          try {
+            const snapshot = await getDocs(collection(db, colName));
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              const uid = data?.uid || docSnap.id;
+              if (uid) recipientIds.push(uid);
+            });
+          } catch (e) {
+            console.warn(`Error fetching collection ${colName} for broadcast:`, e);
+          }
+        }
+      } else if (targetType === 'Role' || ['allDonors', 'allHospitals', 'allOrganizations'].includes(targetType) || targetRole) {
+        let role = (targetRole || targetType).toLowerCase();
+        let targetRoleName = role.includes('donor') ? 'donor' : role.includes('hospital') ? 'hospital' : role.includes('org') ? 'organization' : role;
+        let colName = role.includes('donor') ? 'donors' : role.includes('hospital') ? 'hospitals' : role.includes('org') ? 'organizations' : null;
+
+        if (colName) {
+          try {
+            const snapshot = await getDocs(collection(db, colName));
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              const uid = data?.uid || docSnap.id;
+              if (uid) recipientIds.push(uid);
+            });
+          } catch (e) {
+            console.warn(`Error fetching ${colName} collection:`, e);
+          }
+        }
+
+        try {
+          const usersSnapshot = await getDocs(query(collection(db, 'users'), where('role', '==', targetRoleName)));
+          usersSnapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            const uid = data?.uid || docSnap.id;
+            if (uid) recipientIds.push(uid);
+          });
+        } catch (e) {
+          console.warn('Query users by role failed:', e);
+        }
+      } else if (targetUserId) {
+        recipientIds.push(targetUserId);
+      }
+
+      if (includeSender && senderId) {
+        recipientIds.push(senderId);
+      }
+
+      const uniqueRecipientIds = [...new Set(recipientIds.filter(Boolean))];
+
+      if (!uniqueRecipientIds.length && targetUserId) {
+        uniqueRecipientIds.push(targetUserId);
+      }
+
+      const normalizedTargetType = (targetType === 'allUsers' || targetType === 'All')
+        ? 'All'
+        : (['allDonors', 'allHospitals', 'allOrganizations', 'Role'].includes(targetType) || targetRole)
+        ? 'Role'
+        : 'User';
+
+      const resolvedTargetRole = targetRole || (targetType.startsWith('all') ? targetType.replace('all', '').toLowerCase() : null);
+
+      const promises = uniqueRecipientIds.map((recipientId) => {
+        const notification = {
+          recipientId,
+          recipientRole: resolvedTargetRole || null,
+          type: normalizedTargetType === 'All' ? 'broadcast_all' : normalizedTargetType === 'Role' ? `broadcast_${resolvedTargetRole}` : 'individual',
+          title,
+          message,
+          senderId,
+          senderRole: senderRole || 'admin',
+          senderName: senderName || 'Admin',
+          targetType: normalizedTargetType,
+          targetRole: resolvedTargetRole || null,
+          targetUserId: targetUserId || recipientId,
+          isRead: false,
+          createdAt: new Date()
+        };
+        return addDoc(collection(db, 'notifications'), notification);
+      });
+
+      await Promise.all(promises);
+      return { success: true, count: uniqueRecipientIds.length };
+    } catch (error) {
+      console.error('Error sending targeted notifications:', error);
       return { success: false, error: error.message };
     }
   }
@@ -390,6 +498,8 @@ class BloodRequestManager {
       snapshot.forEach((docSnap) => {
         notifications.push({ id: docSnap.id, ...docSnap.data() });
       });
+
+      notifications.sort((a, b) => getNotificationTimestamp(b) - getNotificationTimestamp(a));
 
       return { success: true, data: notifications };
     } catch (error) {
@@ -413,11 +523,7 @@ class BloodRequestManager {
             notifications.push({ id: docSnap.id, ...docSnap.data() });
           });
 
-          notifications.sort((a, b) => {
-            const aTime = a.createdAt?.seconds ?? a.createdAt?.toMillis?.() ?? 0;
-            const bTime = b.createdAt?.seconds ?? b.createdAt?.toMillis?.() ?? 0;
-            return bTime - aTime;
-          });
+          notifications.sort((a, b) => getNotificationTimestamp(b) - getNotificationTimestamp(a));
 
           callback({ success: true, data: notifications });
         },
@@ -462,6 +568,15 @@ class BloodRequestManager {
     }
   }
 
+  async deleteNotification(notificationId) {
+    try {
+      await deleteDoc(doc(db, 'notifications', notificationId));
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
   async clearAllNotifications(userId) {
     try {
       const notificationQuery = query(
@@ -494,6 +609,15 @@ class BloodRequestManager {
       return { success: false, error: error.message };
     }
   }
+}
+
+function getNotificationTimestamp(notif) {
+  if (!notif || !notif.createdAt) return 0;
+  if (typeof notif.createdAt.toMillis === 'function') return notif.createdAt.toMillis();
+  if (typeof notif.createdAt.seconds === 'number') return notif.createdAt.seconds * 1000;
+  if (notif.createdAt instanceof Date) return notif.createdAt.getTime();
+  const parsed = new Date(notif.createdAt).getTime();
+  return isNaN(parsed) ? 0 : parsed;
 }
 
 export const bloodRequestManager = new BloodRequestManager();

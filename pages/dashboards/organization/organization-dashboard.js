@@ -91,8 +91,7 @@ async function checkAuthAndLoadOrganization() {
     const notifications = result.data || [];
     allNotifications = notifications.sort((a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt));
     const unreadCount = notifications.filter((item) => !item.isRead).length;
-    document.getElementById('notificationBadge').textContent = unreadCount;
-    document.getElementById('notificationBadge2').textContent = unreadCount;
+    updateOrgNotificationBadges(unreadCount);
     document.getElementById('totalNotifications').textContent = notifications.length;
     renderRecentNotificationsPreview();
     renderRecentActivityPreview();
@@ -438,9 +437,11 @@ function renderRecentActivityPreview() {
 
 function getTimestamp(value) {
   if (!value) return 0;
-  if (value.seconds) return value.seconds * 1000;
-  if (value.toMillis) return value.toMillis();
-  return new Date(value).getTime();
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.seconds === 'number') return value.seconds * 1000;
+  if (value instanceof Date) return value.getTime();
+  const parsed = new Date(value).getTime();
+  return isNaN(parsed) ? 0 : parsed;
 }
 
 function renderLowStockAlerts(inventorySummary) {
@@ -594,21 +595,23 @@ async function notifyLowStock(group) {
   if (!confirm(`Notify donors that ${group} stock is low?`)) return;
 
   try {
-    const recipientIds = donorsList.map((item) => item.uid || item.id);
-    if (!recipientIds.length) {
-      alert('No donors found to notify.');
-      return;
-    }
-    await Promise.all(recipientIds.map((recipientId) => bloodRequestManager.sendNotification({
-      recipientId,
-      type: 'low_inventory',
+    const orgName = currentOrganization?.organizationName || currentOrganization?.fullName || currentOrganization?.name || currentOrganization?.email || 'Organization';
+    const result = await bloodRequestManager.sendNotificationToTargets({
       title: `Low stock alert: ${group}`,
       message: `Only a small supply of ${group} is available. Please consider donating soon.`,
-      senderId: currentOrganization.uid,
+      senderId: currentOrganization?.uid || null,
       senderRole: 'organization',
-      senderName: currentOrganization.organizationName || 'Organization'
-    })));
-    alert('Low stock notification sent.');
+      senderName: orgName,
+      targetType: 'Role',
+      targetRole: 'donor',
+      includeSender: true
+    });
+
+    if (result.success) {
+      alert('Low stock notification sent.');
+    } else {
+      alert('Failed to send notifications: ' + (result.error || 'Unknown error'));
+    }
   } catch (error) {
     console.error('Error notifying donors:', error);
     alert('Failed to send notifications.');
@@ -1244,42 +1247,54 @@ async function handleSendNotificationSubmit() {
     return;
   }
 
-  let recipientIds = [];
-  if (recipientType === 'specificDonor') {
-    const selected = recipientSelector?.value;
-    if (selected) recipientIds.push(selected);
-  } else if (recipientType === 'allDonors') {
-    recipientIds = donorsList.map((item) => item.uid || item.id);
-  } else if (recipientType === 'specificHospital') {
-    const selected = recipientSelector?.value;
-    if (selected) recipientIds.push(selected);
+  let targetType = 'User';
+  let targetRole = null;
+  let targetUserId = null;
+
+  if (recipientType === 'allDonors') {
+    targetType = 'Role';
+    targetRole = 'donor';
   } else if (recipientType === 'allHospitals') {
-    recipientIds = hospitalsList.map((item) => item.uid || item.id);
+    targetType = 'Role';
+    targetRole = 'hospital';
+  } else if (recipientType === 'specificDonor') {
+    targetType = 'User';
+    targetRole = 'donor';
+    targetUserId = recipientSelector?.value || null;
+  } else if (recipientType === 'specificHospital') {
+    targetType = 'User';
+    targetRole = 'hospital';
+    targetUserId = recipientSelector?.value || null;
   }
 
-  if (!recipientIds.length) {
-    alert('Please choose a valid recipient or ensure recipients are available.');
+  if (targetType === 'User' && !targetUserId) {
+    alert('Please select a specific recipient.');
     return;
   }
 
   try {
-    const sendPromises = recipientIds.map((recipientId) =>
-      bloodRequestManager.sendNotification({
-        recipientId,
-        type: 'organization_manual',
-        title,
-        message,
-        senderId: currentOrganization.uid,
-        senderRole: 'organization',
-        senderName: currentOrganization.organizationName || currentOrganization.email || 'Organization'
-      })
-    );
-    await Promise.all(sendPromises);
-    alert('Notification sent successfully.');
-    document.getElementById('sendNotificationForm')?.reset();
-    document.getElementById('recipientType').value = 'specificDonor';
-    populateRecipientSelector('specificDonor');
-    showView('dashboard');
+    const orgName = currentOrganization?.organizationName || currentOrganization?.fullName || currentOrganization?.name || currentOrganization?.email || 'Organization';
+    const result = await bloodRequestManager.sendNotificationToTargets({
+      title,
+      message,
+      senderId: currentOrganization?.uid || null,
+      senderRole: 'organization',
+      senderName: orgName,
+      targetType,
+      targetRole,
+      targetUserId,
+      includeSender: true
+    });
+
+    if (result.success) {
+      alert('Notification sent successfully.');
+      document.getElementById('sendNotificationForm')?.reset();
+      document.getElementById('recipientType').value = 'specificDonor';
+      populateRecipientSelector('specificDonor');
+      showView('dashboard');
+    } else {
+      alert('Failed to send notification: ' + (result.error || 'Unknown error'));
+    }
   } catch (error) {
     console.error('Error sending organization notification:', error);
     alert('Failed to send notification.');
@@ -1297,7 +1312,7 @@ function displayNotifications(notifications) {
 
   let html = '';
   notifications.forEach((notif) => {
-    const date = notif.createdAt?.seconds ? new Date(notif.createdAt.seconds * 1000) : new Date(notif.createdAt);
+    const date = notif.createdAt?.seconds ? new Date(notif.createdAt.seconds * 1000) : notif.createdAt ? new Date(notif.createdAt) : new Date();
     const timeAgo = getTimeAgo(date);
     const formattedDateTime = date.toLocaleString();
     const senderLabel = notif.senderName ? `From: ${notif.senderName}` : 'From: System';
@@ -1307,13 +1322,13 @@ function displayNotifications(notifications) {
           <i class="fas fa-bell"></i>
         </div>
         <div class="notification-content">
-          <div class="notification-title">${notif.title}</div>
+          <div class="notification-title">${notif.title || 'Notification'}</div>
           <div class="notification-sender">${senderLabel}</div>
-          <div class="notification-message">${notif.message}</div>
+          <div class="notification-message">${notif.message || ''}</div>
           <div class="notification-time">${timeAgo} · ${formattedDateTime}</div>
         </div>
-        <button type="button" class="btn btn-danger btn-sm delete-notification-btn" data-notification-id="${notif.id}" aria-label="Delete notification">
-          <i class="fas fa-trash"></i>
+        <button type="button" class="btn btn-danger btn-sm delete-notification-btn" data-notification-id="${notif.id}" aria-label="Delete notification" title="Delete notification">
+          <i class="fas fa-trash-alt"></i>
         </button>
       </div>
     `;
@@ -1326,12 +1341,27 @@ function displayNotifications(notifications) {
       const notificationId = button.dataset.notificationId;
       if (!notificationId) return;
       try {
-        await deleteDoc(doc(db, 'notifications', notificationId));
-        await loadNotifications();
+        await bloodRequestManager.deleteNotification(notificationId);
       } catch (error) {
         console.error('Error deleting notification:', error);
       }
     });
+  });
+}
+
+function updateOrgNotificationBadges(unreadCount) {
+  const badge1 = document.getElementById('notificationBadge');
+  const badge2 = document.getElementById('notificationBadge2');
+  [badge1, badge2].forEach((b) => {
+    if (!b) return;
+    b.textContent = unreadCount;
+    if (unreadCount > 0) {
+      b.classList.remove('hidden');
+      b.style.display = 'flex';
+    } else {
+      b.classList.add('hidden');
+      b.style.display = 'none';
+    }
   });
 }
 
@@ -1346,15 +1376,9 @@ function getTimeAgo(date) {
 
 async function markOrganizationNotificationsRead() {
   try {
+    if (!currentOrganization?.uid) return;
+    updateOrgNotificationBadges(0);
     await bloodRequestManager.markAllNotificationsRead(currentOrganization.uid);
-    const result = await bloodRequestManager.getNotifications(currentOrganization.uid);
-    if (result.success) {
-      const notifications = result.data || [];
-      const unreadCount = notifications.filter((item) => !item.isRead).length;
-      document.getElementById('notificationBadge').textContent = unreadCount;
-      document.getElementById('notificationBadge2').textContent = unreadCount;
-      displayNotifications(notifications);
-    }
   } catch (error) {
     console.error('Error marking organization notifications read:', error);
   }
@@ -2045,34 +2069,143 @@ function aggregateMonthlyCounts(items, dateField) {
   return { labels: months, values };
 }
 
-function renderChart(elementId, label, labels, data, borderColor = 'rgba(193, 18, 31, 0.8)', type = 'bar') {
+const BLOOD_GROUP_PALETTE = {
+  'A+': '#E63946',
+  'A-': '#D62828',
+  'B+': '#0077B6',
+  'B-': '#023E8A',
+  'AB+': '#7209B7',
+  'AB-': '#560BAD',
+  'O+': '#2A9D8F',
+  'O-': '#F4A261'
+};
+
+const DEFAULT_CHART_COLORS = [
+  '#E63946', '#0077B6', '#2A9D8F', '#F4A261',
+  '#7209B7', '#D62828', '#023E8A', '#560BAD'
+];
+
+function getColorsForLabels(labels, customColors) {
+  if (Array.isArray(customColors) && customColors.length >= labels.length) {
+    return customColors.map((c, i) => BLOOD_GROUP_PALETTE[String(labels[i]).trim().toUpperCase()] || c);
+  }
+  return labels.map((label, index) => {
+    const cleanLabel = String(label).trim().toUpperCase();
+    return BLOOD_GROUP_PALETTE[cleanLabel] || DEFAULT_CHART_COLORS[index % DEFAULT_CHART_COLORS.length];
+  });
+}
+
+function renderChart(elementId, label, labels, data, colors, type = 'bar') {
   const canvas = document.getElementById(elementId);
   if (!canvas) return;
+
   if (chartInstances[elementId]) {
-    chartInstances[elementId].data.labels = labels;
-    chartInstances[elementId].data.datasets[0].data = data;
-    chartInstances[elementId].update();
-    return;
+    chartInstances[elementId].destroy();
   }
 
-  const dataset = {
-    label,
-    data,
-    backgroundColor: type === 'pie' ? labels.map((_, index) => `rgba(${50 + index * 20}, ${80 + index * 10}, ${150 - index * 10}, 0.8)`) : borderColor,
-    borderColor: type === 'pie' ? 'transparent' : borderColor,
-    borderWidth: 1,
-    tension: 0.4,
-    fill: type !== 'pie'
-  };
+  const isPie = type === 'pie' || type === 'doughnut';
+  const bgColors = isPie
+    ? getColorsForLabels(labels, colors)
+    : (Array.isArray(colors) ? colors[0] : (colors || 'rgba(193, 18, 31, 0.85)'));
 
-  chartInstances[elementId] = new Chart(canvas, {
+  const borderColors = isPie
+    ? '#ffffff'
+    : (Array.isArray(colors) ? colors[0] : (colors ? String(colors).replace('0.8', '1').replace('0.7', '1') : '#C1121F'));
+
+  const ctx = canvas.getContext('2d');
+  chartInstances[elementId] = new Chart(ctx, {
     type,
-    data: { labels, datasets: [dataset] },
+    data: {
+      labels: labels || [],
+      datasets: [
+        {
+          label: label || '',
+          data: data || [],
+          backgroundColor: bgColors,
+          borderColor: borderColors,
+          borderWidth: isPie ? 2 : 2.5,
+          hoverOffset: isPie ? 12 : 0,
+          tension: type === 'line' ? 0.35 : 0,
+          fill: type === 'line' ? { target: 'origin', above: 'rgba(193, 18, 31, 0.08)' } : (type !== 'pie' && type !== 'doughnut'),
+          borderRadius: type === 'bar' ? 6 : 0,
+          borderSkipped: false,
+          maxBarThickness: 45,
+          pointRadius: type === 'line' ? 5 : 0,
+          pointHoverRadius: type === 'line' ? 8 : 0,
+          pointBackgroundColor: type === 'line' ? '#ffffff' : undefined,
+          pointBorderWidth: type === 'line' ? 2.5 : undefined
+        }
+      ]
+    },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2),
+      animation: {
+        duration: 1000,
+        easing: 'easeOutQuart'
+      },
+      layout: {
+        padding: { top: 8, right: 10, bottom: 8, left: 10 }
+      },
       plugins: {
-        legend: { display: type === 'pie' }
+        legend: {
+          display: isPie,
+          position: 'bottom',
+          labels: {
+            padding: 10,
+            usePointStyle: true,
+            pointStyle: 'circle',
+            font: {
+              size: 11,
+              weight: '600',
+              family: "'Outfit', 'Inter', system-ui, -apple-system, sans-serif"
+            },
+            color: '#2B2D42'
+          }
+        },
+        tooltip: {
+          enabled: true,
+          backgroundColor: '#1E293B',
+          titleColor: '#FFFFFF',
+          bodyColor: '#F8FAFC',
+          titleFont: { size: 14, weight: 'bold', family: "'Outfit', 'Inter', sans-serif" },
+          bodyFont: { size: 13, weight: '500', family: "'Outfit', 'Inter', sans-serif" },
+          padding: 12,
+          boxPadding: 6,
+          cornerRadius: 8,
+          displayColors: true,
+          callbacks: {
+            label: function(context) {
+              const dataset = context.dataset;
+              const currentValue = Number(context.raw || 0);
+              if (isPie) {
+                const total = dataset.data.reduce((acc, curr) => acc + Number(curr || 0), 0);
+                const percentage = total > 0 ? ((currentValue / total) * 100).toFixed(1) : '0';
+                return ` ${context.label}: ${currentValue} units (${percentage}%)`;
+              }
+              return ` ${context.dataset.label || context.label}: ${currentValue} units`;
+            }
+          }
+        }
+      },
+      scales: isPie ? {} : {
+        x: {
+          grid: { display: false },
+          ticks: {
+            font: { size: 12, weight: '500', family: "'Outfit', 'Inter', sans-serif" },
+            color: '#64748B'
+          }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(226, 232, 240, 0.8)' },
+          ticks: {
+            font: { size: 12, weight: '500', family: "'Outfit', 'Inter', sans-serif" },
+            color: '#64748B',
+            precision: 0
+          }
+        }
       }
     }
   });
@@ -2307,3 +2440,4 @@ const addStyles = () => {
   document.head.appendChild(style);
 };
 addStyles();
+
