@@ -192,30 +192,59 @@
             </div>
           </div>
 
-          <!-- Filter & Search Bar -->
-          <div class="card filter-bar">
-            <input type="text" id="donorHistorySearch" placeholder="Search Organization, Hospital, ID..." style="flex: 1; min-width: 200px;">
-            <select id="donorHistoryGroupFilter">
-              <option value="">All Blood Groups</option>
-              <option value="A+">A+</option>
-              <option value="A-">A-</option>
-              <option value="B+">B+</option>
-              <option value="B-">B-</option>
-              <option value="AB+">AB+</option>
-              <option value="AB-">AB-</option>
-              <option value="O+">O+</option>
-              <option value="O-">O-</option>
-            </select>
-            <select id="donorHistoryDateFilter">
-              <option value="all">All Dates</option>
-              <option value="30days">Past 30 Days</option>
-              <option value="6months">Past 6 Months</option>
-              <option value="year">Past Year</option>
-            </select>
-            <select id="donorHistorySort">
-              <option value="desc">Sort: Newest First</option>
-              <option value="asc">Sort: Oldest First</option>
-            </select>
+          <!-- Modern Search & Filter Toolbar -->
+          <div class="filter-toolbar-card">
+            <div class="filter-toolbar-wrapper">
+              <div class="filter-search-input-group">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="donorHistorySearch" class="table-search" placeholder="Search Organization, Hospital, ID...">
+                <button type="button" class="filter-clear-btn" data-clear-target="donorHistorySearch" title="Clear search" style="display:none;"><i class="fas fa-times"></i></button>
+              </div>
+
+              <div class="filter-select-wrapper">
+                <i class="fas fa-tint select-icon"></i>
+                <select id="donorHistoryGroupFilter" class="filter-select">
+                  <option value="">All Blood Groups</option>
+                  <option value="A+">A+</option>
+                  <option value="A-">A-</option>
+                  <option value="B+">B+</option>
+                  <option value="B-">B-</option>
+                  <option value="AB+">AB+</option>
+                  <option value="AB-">AB-</option>
+                  <option value="O+">O+</option>
+                  <option value="O-">O-</option>
+                </select>
+                <i class="fas fa-chevron-down select-arrow"></i>
+              </div>
+
+              <div class="filter-select-wrapper">
+                <i class="fas fa-calendar-alt select-icon"></i>
+                <select id="donorHistoryDateFilter" class="filter-select">
+                  <option value="all">All Dates</option>
+                  <option value="30days">Past 30 Days</option>
+                  <option value="6months">Past 6 Months</option>
+                  <option value="year">Past Year</option>
+                </select>
+                <i class="fas fa-chevron-down select-arrow"></i>
+              </div>
+
+              <div class="filter-select-wrapper">
+                <i class="fas fa-sort-amount-down select-icon"></i>
+                <select id="donorHistorySort" class="filter-select">
+                  <option value="desc">Sort: Newest First</option>
+                  <option value="asc">Sort: Oldest First</option>
+                </select>
+                <i class="fas fa-chevron-down select-arrow"></i>
+              </div>
+
+              <button type="button" class="btn-reset-filters" data-reset-group="donorHistory" title="Reset Filters">
+                <i class="fas fa-undo-alt"></i> Reset
+              </button>
+
+              <div class="filter-results-badge">
+                <i class="fas fa-database"></i> <span id="donorHistoryRecordCount" class="count-value">--</span> records
+              </div>
+            </div>
           </div>
 
           <!-- Donation History Table -->

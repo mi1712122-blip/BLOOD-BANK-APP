@@ -223,6 +223,9 @@ function renderDonationHistory() {
     return sortOption === 'asc' ? aTime - bTime : bTime - aTime;
   });
 
+  const countElem = document.getElementById('donorHistoryRecordCount');
+  if (countElem) countElem.textContent = filtered.length;
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / donationPageSize));
   donationTablePage = Math.min(donationTablePage, totalPages);
   const startIndex = (donationTablePage - 1) * donationPageSize;
@@ -636,3 +639,55 @@ async function logout() {
   const result = await authManager.logout();
   if (result.success) window.location.href = '../../auth/login.html';
 }
+
+// Initialize Search & Filter Toolbar clear buttons and reset actions
+function initToolbarEnhancements() {
+  document.addEventListener('input', (e) => {
+    if (e.target.matches('.table-search, .filter-search-input, .filter-bar input[type="text"]')) {
+      const wrapper = e.target.closest('.filter-search-input-group');
+      if (wrapper) {
+        const clearBtn = wrapper.querySelector('.filter-clear-btn');
+        if (clearBtn) {
+          clearBtn.style.display = e.target.value.trim() ? 'flex' : 'none';
+        }
+      }
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    const clearBtn = e.target.closest('.filter-clear-btn');
+    if (clearBtn) {
+      const wrapper = clearBtn.closest('.filter-search-input-group');
+      const input = wrapper?.querySelector('input');
+      if (input) {
+        input.value = '';
+        clearBtn.style.display = 'none';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.focus();
+      }
+    }
+
+    const resetBtn = e.target.closest('.btn-reset-filters');
+    if (resetBtn) {
+      const container = resetBtn.closest('.filter-toolbar-card, .filter-bar, .table-actions');
+      if (container) {
+        container.querySelectorAll('input[type="text"]').forEach((inp) => {
+          inp.value = '';
+          inp.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        container.querySelectorAll('select').forEach((sel) => {
+          sel.selectedIndex = 0;
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        container.querySelectorAll('input[type="date"]').forEach((dt) => {
+          dt.value = '';
+          dt.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        container.querySelectorAll('.filter-clear-btn').forEach((btn) => {
+          btn.style.display = 'none';
+        });
+      }
+    }
+  });
+}
+initToolbarEnhancements();

@@ -3,7 +3,9 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  GoogleAuthProvider,
+  signInWithPopup
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';
 import {
   doc,
@@ -141,6 +143,49 @@ class AuthManager {
       console.error('Login error code:', error?.code);
       console.error('Login error message:', error?.message);
       return { success: false, error: error.message || error?.code || 'Login failed' };
+    }
+  }
+
+  async signInWithGoogle() {
+    try {
+      const provider = new GoogleAuthProvider();
+      const userCredential = await signInWithPopup(auth, provider);
+      const user = userCredential.user;
+
+      // Check if user already exists in Firestore
+      const userDocRef = await getDoc(doc(db, 'users', user.uid));
+
+      if (userDocRef.exists()) {
+        const data = userDocRef.data();
+        // Block admin Google sign-in
+        if (data.role === 'admin') {
+          await signOut(auth);
+          return { success: false, error: 'Admin accounts cannot use Google Sign-In.' };
+        }
+        const role = data.role;
+        const profileComplete = data.profileComplete !== false;
+        this.setSessionUser(user, role, data);
+        return { success: true, user, role, isNewUser: false, profileComplete };
+      }
+
+      // New Google user — create minimal user doc, mark profile incomplete
+      await setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName || '',
+        photoURL: user.photoURL || '',
+        authProvider: 'google',
+        profileComplete: false,
+        createdAt: new Date()
+      });
+
+      return { success: true, user, isNewUser: true, profileComplete: false };
+    } catch (error) {
+      if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+        return { success: false, cancelled: true, error: 'Sign-in was cancelled.' };
+      }
+      console.error('Google sign-in error:', error);
+      return { success: false, error: error.message || 'Google Sign-In failed.' };
     }
   }
 

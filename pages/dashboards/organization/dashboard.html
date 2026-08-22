@@ -266,20 +266,30 @@
               </button>
             </div>
           </div>
-          <div class="table-actions">
-            <div class="search-filter-group">
-              <input type="text" id="inventorySearch" class="table-search" placeholder="Search blood group, location...">
-              <select id="inventoryGroupFilter">
-                <option value="">All Blood Groups</option>
-                <option value="A+">A+</option>
-                <option value="A-">A-</option>
-                <option value="B+">B+</option>
-                <option value="B-">B-</option>
-                <option value="AB+">AB+</option>
-                <option value="AB-">AB-</option>
-                <option value="O+">O+</option>
-                <option value="O-">O-</option>
-              </select>
+          <div class="filter-toolbar-card">
+            <div class="filter-toolbar-wrapper">
+              <div class="filter-search-input-group">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="inventorySearch" class="table-search" placeholder="Search blood group, location...">
+                <button type="button" class="filter-clear-btn" data-clear-target="inventorySearch" title="Clear search" style="display:none;"><i class="fas fa-times"></i></button>
+              </div>
+              <div class="filter-select-wrapper">
+                <i class="fas fa-tint select-icon"></i>
+                <select id="inventoryGroupFilter" class="filter-select">
+                  <option value="">All Blood Groups</option>
+                  <option value="A+">A+</option>
+                  <option value="A-">A-</option>
+                  <option value="B+">B+</option>
+                  <option value="B-">B-</option>
+                  <option value="AB+">AB+</option>
+                  <option value="AB-">AB-</option>
+                  <option value="O+">O+</option>
+                  <option value="O-">O-</option>
+                </select>
+                <i class="fas fa-chevron-down select-arrow"></i>
+              </div>
+              <button type="button" class="btn-reset-filters" data-reset-group="inventory" title="Reset Filters"><i class="fas fa-undo-alt"></i> Reset</button>
+              <div class="filter-results-badge"><i class="fas fa-database"></i> <span id="inventoryResultsCount" class="count-value">--</span> records</div>
             </div>
           </div>
           <div id="bloodInventoryTable" class="table-container"></div>
@@ -300,15 +310,27 @@
               </button>
             </div>
           </div>
-          <div class="table-actions">
-            <input type="text" id="donationSearch" class="table-search" placeholder="Search donations by donor, blood group, status...">
-            <select id="donationStatusFilter">
-              <option value="">All Status</option>
-              <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
-              <option value="Completed">Completed</option>
-            </select>
+          <div class="filter-toolbar-card">
+            <div class="filter-toolbar-wrapper">
+              <div class="filter-search-input-group">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="donationSearch" class="table-search" placeholder="Search donations by donor, blood group, status...">
+                <button type="button" class="filter-clear-btn" data-clear-target="donationSearch" title="Clear search" style="display:none;"><i class="fas fa-times"></i></button>
+              </div>
+              <div class="filter-select-wrapper">
+                <i class="fas fa-filter select-icon"></i>
+                <select id="donationStatusFilter" class="filter-select">
+                  <option value="">All Status</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Rejected">Rejected</option>
+                  <option value="Completed">Completed</option>
+                </select>
+                <i class="fas fa-chevron-down select-arrow"></i>
+              </div>
+              <button type="button" class="btn-reset-filters" data-reset-group="donation" title="Reset Filters"><i class="fas fa-undo-alt"></i> Reset</button>
+              <div class="filter-results-badge"><i class="fas fa-database"></i> <span id="donationResultsCount" class="count-value">--</span> records</div>
+            </div>
           </div>
           <div id="donationManagementTable" class="table-container"></div>
         </div>
@@ -328,21 +350,37 @@
               </button>
             </div>
           </div>
-          <div class="table-actions">
-            <input type="text" id="requestSearch" class="table-search" placeholder="Search by hospital, blood group, request ID...">
-            <select id="requestStatusFilter">
-              <option value="">All Status</option>
-              <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
-              <option value="Completed">Completed</option>
-            </select>
-            <select id="requestPriorityFilter">
-              <option value="">All Priority</option>
-              <option value="Normal">Normal</option>
-              <option value="Urgent">Urgent</option>
-              <option value="Emergency">Emergency</option>
-            </select>
+          <div class="filter-toolbar-card">
+            <div class="filter-toolbar-wrapper">
+              <div class="filter-search-input-group">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="requestSearch" class="table-search" placeholder="Search by hospital, blood group, request ID...">
+                <button type="button" class="filter-clear-btn" data-clear-target="requestSearch" title="Clear search" style="display:none;"><i class="fas fa-times"></i></button>
+              </div>
+              <div class="filter-select-wrapper">
+                <i class="fas fa-filter select-icon"></i>
+                <select id="requestStatusFilter" class="filter-select">
+                  <option value="">All Status</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Rejected">Rejected</option>
+                  <option value="Completed">Completed</option>
+                </select>
+                <i class="fas fa-chevron-down select-arrow"></i>
+              </div>
+              <div class="filter-select-wrapper">
+                <i class="fas fa-exclamation-circle select-icon"></i>
+                <select id="requestPriorityFilter" class="filter-select">
+                  <option value="">All Priority</option>
+                  <option value="Normal">Normal</option>
+                  <option value="Urgent">Urgent</option>
+                  <option value="Emergency">Emergency</option>
+                </select>
+                <i class="fas fa-chevron-down select-arrow"></i>
+              </div>
+              <button type="button" class="btn-reset-filters" data-reset-group="request" title="Reset Filters"><i class="fas fa-undo-alt"></i> Reset</button>
+              <div class="filter-results-badge"><i class="fas fa-database"></i> <span id="requestResultsCount" class="count-value">--</span> records</div>
+            </div>
           </div>
           <div id="requestsList" class="table-container"></div>
         </div>
@@ -359,13 +397,25 @@
               </button>
             </div>
           </div>
-          <div class="table-actions">
-            <input type="text" id="issueSearch" class="table-search" placeholder="Search issued blood by hospital, group, purpose...">
-            <select id="issueStatusFilter">
-              <option value="">All Status</option>
-              <option value="Issued">Issued</option>
-              <option value="Completed">Completed</option>
-            </select>
+          <div class="filter-toolbar-card">
+            <div class="filter-toolbar-wrapper">
+              <div class="filter-search-input-group">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="issueSearch" class="table-search" placeholder="Search issued blood by hospital, group, purpose...">
+                <button type="button" class="filter-clear-btn" data-clear-target="issueSearch" title="Clear search" style="display:none;"><i class="fas fa-times"></i></button>
+              </div>
+              <div class="filter-select-wrapper">
+                <i class="fas fa-filter select-icon"></i>
+                <select id="issueStatusFilter" class="filter-select">
+                  <option value="">All Status</option>
+                  <option value="Issued">Issued</option>
+                  <option value="Completed">Completed</option>
+                </select>
+                <i class="fas fa-chevron-down select-arrow"></i>
+              </div>
+              <button type="button" class="btn-reset-filters" data-reset-group="issue" title="Reset Filters"><i class="fas fa-undo-alt"></i> Reset</button>
+              <div class="filter-results-badge"><i class="fas fa-database"></i> <span id="issueResultsCount" class="count-value">--</span> records</div>
+            </div>
           </div>
           <div id="issueHistoryTable" class="table-container"></div>
         </div>
@@ -382,15 +432,27 @@
               </button>
             </div>
           </div>
-          <div class="table-actions">
-            <input type="text" id="donationHistorySearch" class="table-search" placeholder="Search donation history by donor, group, status...">
-            <select id="donationHistoryStatusFilter">
-              <option value="">All Status</option>
-              <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
-              <option value="Completed">Completed</option>
-            </select>
+          <div class="filter-toolbar-card">
+            <div class="filter-toolbar-wrapper">
+              <div class="filter-search-input-group">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="donationHistorySearch" class="table-search" placeholder="Search donation history by donor, group, status...">
+                <button type="button" class="filter-clear-btn" data-clear-target="donationHistorySearch" title="Clear search" style="display:none;"><i class="fas fa-times"></i></button>
+              </div>
+              <div class="filter-select-wrapper">
+                <i class="fas fa-filter select-icon"></i>
+                <select id="donationHistoryStatusFilter" class="filter-select">
+                  <option value="">All Status</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Rejected">Rejected</option>
+                  <option value="Completed">Completed</option>
+                </select>
+                <i class="fas fa-chevron-down select-arrow"></i>
+              </div>
+              <button type="button" class="btn-reset-filters" data-reset-group="donationHistory" title="Reset Filters"><i class="fas fa-undo-alt"></i> Reset</button>
+              <div class="filter-results-badge"><i class="fas fa-database"></i> <span id="donationHistoryResultsCount" class="count-value">--</span> records</div>
+            </div>
           </div>
           <div id="donationHistoryTable" class="table-container"></div>
         </div>
@@ -407,19 +469,31 @@
               </button>
             </div>
           </div>
-          <div class="table-actions">
-            <input type="text" id="inventoryHistorySearch" class="table-search" placeholder="Search inventory history by group, reason, user...">
-            <select id="inventoryHistoryGroupFilter">
-              <option value="">All Blood Groups</option>
-              <option value="A+">A+</option>
-              <option value="A-">A-</option>
-              <option value="B+">B+</option>
-              <option value="B-">B-</option>
-              <option value="AB+">AB+</option>
-              <option value="AB-">AB-</option>
-              <option value="O+">O+</option>
-              <option value="O-">O-</option>
-            </select>
+          <div class="filter-toolbar-card">
+            <div class="filter-toolbar-wrapper">
+              <div class="filter-search-input-group">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="inventoryHistorySearch" class="table-search" placeholder="Search inventory history by group, reason, user...">
+                <button type="button" class="filter-clear-btn" data-clear-target="inventoryHistorySearch" title="Clear search" style="display:none;"><i class="fas fa-times"></i></button>
+              </div>
+              <div class="filter-select-wrapper">
+                <i class="fas fa-tint select-icon"></i>
+                <select id="inventoryHistoryGroupFilter" class="filter-select">
+                  <option value="">All Blood Groups</option>
+                  <option value="A+">A+</option>
+                  <option value="A-">A-</option>
+                  <option value="B+">B+</option>
+                  <option value="B-">B-</option>
+                  <option value="AB+">AB+</option>
+                  <option value="AB-">AB-</option>
+                  <option value="O+">O+</option>
+                  <option value="O-">O-</option>
+                </select>
+                <i class="fas fa-chevron-down select-arrow"></i>
+              </div>
+              <button type="button" class="btn-reset-filters" data-reset-group="inventoryHistory" title="Reset Filters"><i class="fas fa-undo-alt"></i> Reset</button>
+              <div class="filter-results-badge"><i class="fas fa-database"></i> <span id="inventoryHistoryResultsCount" class="count-value">--</span> records</div>
+            </div>
           </div>
           <div id="inventoryHistoryTable" class="table-container"></div>
         </div>
@@ -431,19 +505,31 @@
               <p class="dashboard-subtitle">Donor profiles, eligibility status and history access.</p>
             </div>
           </div>
-          <div class="table-actions">
-            <input type="text" id="donorsSearch" class="table-search" placeholder="Search donor by name, blood group, city...">
-            <select id="donorBloodGroupFilter">
-              <option value="">All Blood Groups</option>
-              <option value="A+">A+</option>
-              <option value="A-">A-</option>
-              <option value="B+">B+</option>
-              <option value="B-">B-</option>
-              <option value="AB+">AB+</option>
-              <option value="AB-">AB-</option>
-              <option value="O+">O+</option>
-              <option value="O-">O-</option>
-            </select>
+          <div class="filter-toolbar-card">
+            <div class="filter-toolbar-wrapper">
+              <div class="filter-search-input-group">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="donorsSearch" class="table-search" placeholder="Search donor by name, blood group, city...">
+                <button type="button" class="filter-clear-btn" data-clear-target="donorsSearch" title="Clear search" style="display:none;"><i class="fas fa-times"></i></button>
+              </div>
+              <div class="filter-select-wrapper">
+                <i class="fas fa-tint select-icon"></i>
+                <select id="donorBloodGroupFilter" class="filter-select">
+                  <option value="">All Blood Groups</option>
+                  <option value="A+">A+</option>
+                  <option value="A-">A-</option>
+                  <option value="B+">B+</option>
+                  <option value="B-">B-</option>
+                  <option value="AB+">AB+</option>
+                  <option value="AB-">AB-</option>
+                  <option value="O+">O+</option>
+                  <option value="O-">O-</option>
+                </select>
+                <i class="fas fa-chevron-down select-arrow"></i>
+              </div>
+              <button type="button" class="btn-reset-filters" data-reset-group="donors" title="Reset Filters"><i class="fas fa-undo-alt"></i> Reset</button>
+              <div class="filter-results-badge"><i class="fas fa-database"></i> <span id="donorsResultsCount" class="count-value">--</span> records</div>
+            </div>
           </div>
           <div id="donorsTable" class="table-container"></div>
         </div>
@@ -455,14 +541,26 @@
               <p class="dashboard-subtitle">Hospital partners, request metrics and communication tools.</p>
             </div>
           </div>
-          <div class="table-actions">
-            <input type="text" id="hospitalsSearch" class="table-search" placeholder="Search hospital by name, city, email...">
-            <select id="hospitalStatusFilter">
-              <option value="">All Status</option>
-              <option value="Active">Active</option>
-              <option value="Pending">Pending</option>
-              <option value="Inactive">Inactive</option>
-            </select>
+          <div class="filter-toolbar-card">
+            <div class="filter-toolbar-wrapper">
+              <div class="filter-search-input-group">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="hospitalsSearch" class="table-search" placeholder="Search hospital by name, city, email...">
+                <button type="button" class="filter-clear-btn" data-clear-target="hospitalsSearch" title="Clear search" style="display:none;"><i class="fas fa-times"></i></button>
+              </div>
+              <div class="filter-select-wrapper">
+                <i class="fas fa-filter select-icon"></i>
+                <select id="hospitalStatusFilter" class="filter-select">
+                  <option value="">All Status</option>
+                  <option value="Active">Active</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+                <i class="fas fa-chevron-down select-arrow"></i>
+              </div>
+              <button type="button" class="btn-reset-filters" data-reset-group="hospitals" title="Reset Filters"><i class="fas fa-undo-alt"></i> Reset</button>
+              <div class="filter-results-badge"><i class="fas fa-database"></i> <span id="hospitalsResultsCount" class="count-value">--</span> records</div>
+            </div>
           </div>
           <div id="hospitalsTable" class="table-container"></div>
         </div>

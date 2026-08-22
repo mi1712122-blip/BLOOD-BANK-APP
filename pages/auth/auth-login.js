@@ -143,4 +143,43 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelector('.toggle-password')?.addEventListener('click', (event) => {
     togglePasswordVisibility(event);
   });
+
+  // Google Sign-In
+  document.getElementById('googleSignInBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('googleSignInBtn');
+    btn.disabled = true;
+    btn.textContent = 'Signing in...';
+    showLoading();
+
+    try {
+      const result = await authManager.signInWithGoogle();
+
+      if (!result.success) {
+        hideLoading();
+        btn.disabled = false;
+        btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="20" height="20"> Continue with Google';
+        if (!result.cancelled) {
+          showAlert(result.error || 'Google Sign-In failed.', 'danger');
+        }
+        return;
+      }
+
+      // New user or incomplete profile → complete profile page
+      if (result.isNewUser || !result.profileComplete) {
+        window.location.href = 'complete-profile.html';
+        return;
+      }
+
+      // Existing user with complete profile → dashboard
+      hideLoading();
+      showAlert('Login successful! Redirecting...', 'success');
+      setTimeout(() => redirectToDashboard(result.role), 1000);
+    } catch (err) {
+      hideLoading();
+      btn.disabled = false;
+      btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="20" height="20"> Continue with Google';
+      showAlert('An error occurred. Please try again.', 'danger');
+      console.error('Google sign-in error:', err);
+    }
+  });
 });

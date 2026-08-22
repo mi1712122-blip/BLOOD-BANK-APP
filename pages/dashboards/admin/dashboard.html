@@ -39,6 +39,7 @@
         </a>
         <a href="#" class="nav-item" data-view="contactMessages">
           <i class="fas fa-inbox"></i> Contact Messages
+          <span class="notification-badge hidden" id="contactMessagesBadge">0</span>
         </a>
         <a href="#" class="nav-item" data-view="inventory">
           <i class="fas fa-cube"></i> Blood Inventory
@@ -227,29 +228,59 @@
           </div>
 
           <!-- Filter & Search Bar -->
-          <div class="card filter-bar">
-            <input type="text" id="adminInventorySearch" placeholder="Search Blood Group / Organization..." style="flex: 1; min-width: 200px;">
-            <select id="adminInventoryGroupFilter">
-              <option value="">All Blood Groups</option>
-              <option value="A+">A+</option>
-              <option value="A-">A-</option>
-              <option value="B+">B+</option>
-              <option value="B-">B-</option>
-              <option value="AB+">AB+</option>
-              <option value="AB-">AB-</option>
-              <option value="O+">O+</option>
-              <option value="O-">O-</option>
-            </select>
-            <select id="adminInventoryStatusFilter">
-              <option value="">All Stock Statuses</option>
-              <option value="Available">In Stock / Available</option>
-              <option value="Low Stock">Low Stock (&lt; 10 units)</option>
-              <option value="Out of Stock">Out of Stock (0 units)</option>
-            </select>
-            <select id="adminInventorySort">
-              <option value="desc">Sort by Quantity: High to Low</option>
-              <option value="asc">Sort by Quantity: Low to High</option>
-            </select>
+          <!-- Modern Search & Filter Toolbar -->
+          <div class="filter-toolbar-card">
+            <div class="filter-toolbar-wrapper">
+              <div class="filter-search-input-group">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="adminInventorySearch" class="table-search" placeholder="Search Blood Group or Organization...">
+                <button type="button" class="filter-clear-btn" data-clear-target="adminInventorySearch" title="Clear search" style="display:none;"><i class="fas fa-times"></i></button>
+              </div>
+
+              <div class="filter-select-wrapper">
+                <i class="fas fa-tint select-icon"></i>
+                <select id="adminInventoryGroupFilter" class="filter-select">
+                  <option value="">All Blood Groups</option>
+                  <option value="A+">A+</option>
+                  <option value="A-">A-</option>
+                  <option value="B+">B+</option>
+                  <option value="B-">B-</option>
+                  <option value="AB+">AB+</option>
+                  <option value="AB-">AB-</option>
+                  <option value="O+">O+</option>
+                  <option value="O-">O-</option>
+                </select>
+                <i class="fas fa-chevron-down select-arrow"></i>
+              </div>
+
+              <div class="filter-select-wrapper">
+                <i class="fas fa-filter select-icon"></i>
+                <select id="adminInventoryStatusFilter" class="filter-select">
+                  <option value="">All Stock Statuses</option>
+                  <option value="Available">In Stock / Available</option>
+                  <option value="Low Stock">Low Stock (&lt; 10 units)</option>
+                  <option value="Out of Stock">Out of Stock (0 units)</option>
+                </select>
+                <i class="fas fa-chevron-down select-arrow"></i>
+              </div>
+
+              <div class="filter-select-wrapper">
+                <i class="fas fa-sort-amount-down select-icon"></i>
+                <select id="adminInventorySort" class="filter-select">
+                  <option value="desc">Sort: Quantity High to Low</option>
+                  <option value="asc">Sort: Quantity Low to High</option>
+                </select>
+                <i class="fas fa-chevron-down select-arrow"></i>
+              </div>
+
+              <button type="button" class="btn-reset-filters" data-reset-group="adminInventory" title="Reset Filters">
+                <i class="fas fa-undo-alt"></i> Reset
+              </button>
+
+              <div class="filter-results-badge">
+                <i class="fas fa-database"></i> <span id="adminInventoryRecordCount" class="count-value">--</span> records
+              </div>
+            </div>
           </div>
 
           <!-- Inventory Table -->

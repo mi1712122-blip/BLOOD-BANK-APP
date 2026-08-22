@@ -23,6 +23,7 @@ let allInventoryLogs = [];
 let allRequests = [];
 let allDonations = [];
 let adminNotifications = [];
+let contactMessagesList = [];
 let adminInventoryPage = 1;
 const adminInventoryPageSize = 8;
 const chartInstances = {};
@@ -114,6 +115,23 @@ function setupRealtimeListeners() {
     });
     renderAdminAnalytics();
   });
+
+  // Listen for contact messages
+  onSnapshot(collection(db, 'contactMessages'), (snapshot) => {
+    contactMessagesList = [];
+    snapshot.forEach((docSnap) => {
+      contactMessagesList.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    contactMessagesList.sort((a, b) => {
+      const aTime = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+      const bTime = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+      return bTime - aTime;
+    });
+    updateContactMessagesBadge();
+    if (document.getElementById('contactMessagesView')?.classList.contains('hidden') === false) {
+      renderContactMessagesTable();
+    }
+  });
 }
 
 async function loadDashboardData() {
@@ -154,6 +172,9 @@ async function loadDashboardData() {
 
     if (document.getElementById('sendNotificationView')?.classList.contains('hidden') === false) {
       populateRecipientSelector(document.getElementById('recipientType')?.value || 'specificDonor');
+    }
+    if (document.getElementById('contactMessagesView')?.classList.contains('hidden') === false) {
+      loadContactMessages();
     }
   } catch (error) {
     console.error('Error loading dashboard data:', error);
@@ -362,8 +383,10 @@ function renderAdminInventory() {
     else if (statusFilter === 'Out of Stock') rows = rows.filter((r) => r.status === 'Out of Stock');
   }
 
-  // Sort
   rows.sort((a, b) => sortOption === 'asc' ? a.total - b.total : b.total - a.total);
+
+  const countElem = document.getElementById('adminInventoryRecordCount');
+  if (countElem) countElem.textContent = rows.length;
 
   const totalPages = Math.max(1, Math.ceil(rows.length / adminInventoryPageSize));
   adminInventoryPage = Math.min(adminInventoryPage, totalPages);
@@ -468,25 +491,25 @@ function renderAdminInventoryCharts(groupStats) {
       data: {
         labels,
         datasets: [
-          { label: 'Available', data: availableData, backgroundColor: '#2E7D32', borderRadius: 6, maxBarThickness: 35 },
-          { label: 'Reserved', data: reservedData, backgroundColor: '#F57C00', borderRadius: 6, maxBarThickness: 35 }
+          { label: 'Available', data: availableData, backgroundColor: '#2E7D32', borderRadius: 5, maxBarThickness: 24, barPercentage: 0.6, categoryPercentage: 0.7 }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2),
-        animation: { duration: 1000, easing: 'easeOutQuart' },
-        layout: { padding: { top: 8, right: 10, bottom: 8, left: 10 } },
+        animation: { duration: 800, easing: 'easeOutQuart' },
+        layout: { padding: { top: 6, right: 8, bottom: 4, left: 4 } },
         plugins: {
           legend: {
             display: true,
             position: 'bottom',
             labels: {
-              padding: 10,
+              padding: 6,
+              boxWidth: 10,
               usePointStyle: true,
               pointStyle: 'circle',
-              font: { size: 11, weight: '600', family: "'Outfit', 'Inter', sans-serif" },
+              font: { size: 10.5, weight: '600', family: "'Outfit', 'Inter', sans-serif" },
               color: '#2B2D42'
             }
           },
@@ -495,11 +518,11 @@ function renderAdminInventoryCharts(groupStats) {
             backgroundColor: '#1E293B',
             titleColor: '#FFFFFF',
             bodyColor: '#F8FAFC',
-            titleFont: { size: 14, weight: 'bold' },
-            bodyFont: { size: 13, weight: '500' },
-            padding: 12,
-            boxPadding: 6,
-            cornerRadius: 8,
+            titleFont: { size: 13, weight: 'bold' },
+            bodyFont: { size: 12, weight: '500' },
+            padding: 10,
+            boxPadding: 5,
+            cornerRadius: 6,
             callbacks: {
               label: function(context) {
                 return ` ${context.dataset.label}: ${context.raw} units`;
@@ -508,8 +531,8 @@ function renderAdminInventoryCharts(groupStats) {
           }
         },
         scales: {
-          x: { grid: { display: false }, ticks: { font: { size: 12, weight: '500' }, color: '#64748B' } },
-          y: { beginAtZero: true, grid: { color: 'rgba(226, 232, 240, 0.8)' }, ticks: { font: { size: 12, weight: '500' }, color: '#64748B', precision: 0 } }
+          x: { grid: { display: false }, ticks: { font: { size: 11, weight: '500' }, color: '#64748B' } },
+          y: { beginAtZero: true, grid: { color: 'rgba(226, 232, 240, 0.7)' }, ticks: { font: { size: 11, weight: '500' }, color: '#64748B', precision: 0 } }
         }
       }
     });
@@ -776,9 +799,193 @@ function showView(view) {
 
   if (view === 'inventory') renderAdminInventory();
   if (view === 'analytics') renderAdminAnalytics();
+  if (view === 'contactMessages') {
+    markAllContactMessagesRead();
+    loadContactMessages();
+  }
   if (view === 'sendNotification') populateRecipientSelector(document.getElementById('recipientType')?.value || 'specificDonor');
   if (view === 'notifications') {
     markAdminNotificationsRead();
+  }
+}
+
+/* ==========================================================================
+   CONTACT MESSAGES MODULE
+   ========================================================================== */
+
+async function loadContactMessages() {
+  const container = document.getElementById('contactMessagesList');
+  if (!container) return;
+
+  container.innerHTML = '<div class="card table-card" style="padding: 20px; text-align: center;"><p class="empty-state">Loading contact messages...</p></div>';
+
+  try {
+    const snapshot = await getDocs(collection(db, 'contactMessages'));
+    contactMessagesList = [];
+    snapshot.forEach((docSnap) => {
+      contactMessagesList.push({ id: docSnap.id, ...docSnap.data() });
+    });
+
+    contactMessagesList.sort((a, b) => {
+      const aTime = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+      const bTime = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+      return bTime - aTime;
+    });
+
+    updateContactMessagesBadge();
+    renderContactMessagesTable();
+    markAllContactMessagesRead();
+  } catch (error) {
+    console.error('Error loading contact messages:', error);
+    container.innerHTML = '<div class="card table-card" style="padding: 20px; text-align: center;"><p class="empty-state">Failed to load contact messages.</p></div>';
+  }
+}
+
+function renderContactMessagesTable() {
+  updateContactMessagesBadge();
+  const container = document.getElementById('contactMessagesList');
+  if (!container) return;
+
+  if (!contactMessagesList.length) {
+    container.innerHTML = '<div class="card table-card" style="padding: 20px; text-align: center;"><p class="empty-state">No contact messages received yet.</p></div>';
+    return;
+  }
+
+  const rows = contactMessagesList.map((msg) => {
+    const dateVal = msg.createdAt?.seconds ? new Date(msg.createdAt.seconds * 1000) : (msg.createdAt ? new Date(msg.createdAt) : new Date());
+    const dateStr = !isNaN(dateVal.getTime()) ? dateVal.toLocaleString() : 'N/A';
+    const status = msg.status || 'Unread';
+    const badgeClass = status === 'Read' ? 'badge-success' : 'badge-warning';
+    const messageSnippet = (msg.message || '').length > 60 ? (msg.message || '').substring(0, 60) + '...' : (msg.message || '-');
+
+    return `
+      <tr style="${status !== 'Read' ? 'font-weight: 600;' : ''}">
+        <td>${msg.name || 'Anonymous'}</td>
+        <td><a href="mailto:${msg.email || ''}">${msg.email || '-'}</a></td>
+        <td>${msg.subject || 'No Subject'}</td>
+        <td>${messageSnippet}</td>
+        <td>${dateStr}</td>
+        <td><span class="badge ${badgeClass}">${status}</span></td>
+        <td>
+          <button class="btn btn-sm btn-secondary" data-action="view-contact-msg" data-id="${msg.id}">View</button>
+          ${status !== 'Read' ? `<button class="btn btn-sm btn-primary" data-action="read-contact-msg" data-id="${msg.id}">Mark Read</button>` : ''}
+          <button class="btn btn-sm btn-danger" data-action="delete-contact-msg" data-id="${msg.id}">Delete</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="card table-card">
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Subject</th>
+              <th>Message</th>
+              <th>Date & Time</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  container.querySelectorAll('[data-action="view-contact-msg"]').forEach((btn) => {
+    btn.addEventListener('click', () => viewContactMessage(btn.dataset.id));
+  });
+
+  container.querySelectorAll('[data-action="read-contact-msg"]').forEach((btn) => {
+    btn.addEventListener('click', () => markContactMessageRead(btn.dataset.id));
+  });
+
+  container.querySelectorAll('[data-action="delete-contact-msg"]').forEach((btn) => {
+    btn.addEventListener('click', () => deleteContactMessage(btn.dataset.id));
+  });
+}
+
+async function viewContactMessage(id) {
+  const msg = contactMessagesList.find((m) => m.id === id);
+  if (!msg) return;
+
+  if (String(msg.status || '').toLowerCase().trim() !== 'read') {
+    await markContactMessageRead(id, false);
+  }
+
+  const dateVal = msg.createdAt?.seconds ? new Date(msg.createdAt.seconds * 1000) : (msg.createdAt ? new Date(msg.createdAt) : new Date());
+  const dateStr = !isNaN(dateVal.getTime()) ? dateVal.toLocaleString() : 'N/A';
+
+  alert(`Contact Message Details:\n\nFrom: ${msg.name || 'Anonymous'} (${msg.email || 'No email'})\nSubject: ${msg.subject || 'No subject'}\nDate: ${dateStr}\nSource: ${msg.source || 'Website Contact Form'}\n\nMessage:\n${msg.message || '(Empty message)'}`);
+}
+
+async function markContactMessageRead(id, refresh = true) {
+  try {
+    await updateDoc(doc(db, 'contactMessages', id), {
+      status: 'Read',
+      updatedAt: new Date()
+    });
+    const msg = contactMessagesList.find((m) => m.id === id);
+    if (msg) msg.status = 'Read';
+    updateContactMessagesBadge();
+    if (refresh) renderContactMessagesTable();
+  } catch (error) {
+    console.error('Error marking message as read:', error);
+  }
+}
+
+async function deleteContactMessage(id) {
+  if (!confirm('Are you sure you want to delete this contact message?')) return;
+  try {
+    await deleteDoc(doc(db, 'contactMessages', id));
+    contactMessagesList = contactMessagesList.filter((m) => m.id !== id);
+    updateContactMessagesBadge();
+    renderContactMessagesTable();
+  } catch (error) {
+    console.error('Error deleting contact message:', error);
+    alert('Failed to delete contact message.');
+  }
+}
+
+function updateContactMessagesBadge() {
+  const unreadCount = contactMessagesList.filter((msg) => {
+    const s = String(msg.status || '').toLowerCase().trim();
+    return s !== 'read';
+  }).length;
+  const badge = document.getElementById('contactMessagesBadge');
+  if (!badge) return;
+  badge.textContent = unreadCount;
+  if (unreadCount > 0) {
+    badge.classList.remove('hidden');
+    badge.style.setProperty('display', 'flex', 'important');
+  } else {
+    badge.classList.add('hidden');
+    badge.style.setProperty('display', 'none', 'important');
+  }
+}
+
+async function markAllContactMessagesRead() {
+  const unreadMessages = contactMessagesList.filter((msg) => String(msg.status || '').toLowerCase().trim() !== 'read');
+  if (!unreadMessages.length) return;
+
+  unreadMessages.forEach((msg) => (msg.status = 'Read'));
+  updateContactMessagesBadge();
+
+  try {
+    await Promise.all(
+      unreadMessages.map((msg) =>
+        updateDoc(doc(db, 'contactMessages', msg.id), {
+          status: 'Read',
+          updatedAt: new Date()
+        })
+      )
+    );
+  } catch (error) {
+    console.error('Error marking all contact messages as read:', error);
   }
 }
 
@@ -1128,17 +1335,21 @@ function renderChart(elementId, label, labels, data, colors, type = 'line') {
           data: data || [],
           backgroundColor: bgColors,
           borderColor: borderColors,
-          borderWidth: isPie ? 2 : 2.5,
-          hoverOffset: isPie ? 12 : 0,
+          borderWidth: isPie ? 1.5 : 2,
+          hoverOffset: isPie ? 6 : 0,
+          radius: isPie ? '85%' : undefined,
+          cutout: type === 'doughnut' ? '60%' : undefined,
           tension: type === 'line' ? 0.35 : 0,
           fill: type === 'line' ? { target: 'origin', above: 'rgba(193, 18, 31, 0.08)' } : (type !== 'pie' && type !== 'doughnut'),
-          borderRadius: type === 'bar' ? 6 : 0,
+          borderRadius: type === 'bar' ? 5 : 0,
           borderSkipped: false,
-          maxBarThickness: 45,
-          pointRadius: type === 'line' ? 5 : 0,
-          pointHoverRadius: type === 'line' ? 8 : 0,
+          maxBarThickness: 24,
+          barPercentage: 0.6,
+          categoryPercentage: 0.7,
+          pointRadius: type === 'line' ? 3.5 : 0,
+          pointHoverRadius: type === 'line' ? 6 : 0,
           pointBackgroundColor: type === 'line' ? '#ffffff' : undefined,
-          pointBorderWidth: type === 'line' ? 2.5 : undefined
+          pointBorderWidth: type === 'line' ? 2 : undefined
         }
       ]
     },
@@ -1147,22 +1358,24 @@ function renderChart(elementId, label, labels, data, colors, type = 'line') {
       maintainAspectRatio: false,
       devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2),
       animation: {
-        duration: 1000,
+        duration: 800,
         easing: 'easeOutQuart'
       },
       layout: {
-        padding: { top: 8, right: 10, bottom: 8, left: 10 }
+        padding: isPie ? { top: 4, right: 6, bottom: 4, left: 6 } : { top: 6, right: 8, bottom: 4, left: 4 }
       },
       plugins: {
         legend: {
           display: isPie,
           position: 'bottom',
           labels: {
-            padding: 10,
+            padding: 6,
+            boxWidth: 10,
+            boxHeight: 10,
             usePointStyle: true,
             pointStyle: 'circle',
             font: {
-              size: 11,
+              size: 10.5,
               weight: '600',
               family: "'Outfit', 'Inter', system-ui, -apple-system, sans-serif"
             },
@@ -1174,11 +1387,11 @@ function renderChart(elementId, label, labels, data, colors, type = 'line') {
           backgroundColor: '#1E293B',
           titleColor: '#FFFFFF',
           bodyColor: '#F8FAFC',
-          titleFont: { size: 14, weight: 'bold', family: "'Outfit', 'Inter', sans-serif" },
-          bodyFont: { size: 13, weight: '500', family: "'Outfit', 'Inter', sans-serif" },
-          padding: 12,
-          boxPadding: 6,
-          cornerRadius: 8,
+          titleFont: { size: 13, weight: 'bold', family: "'Outfit', 'Inter', sans-serif" },
+          bodyFont: { size: 12, weight: '500', family: "'Outfit', 'Inter', sans-serif" },
+          padding: 10,
+          boxPadding: 5,
+          cornerRadius: 6,
           displayColors: true,
           callbacks: {
             label: function(context) {
@@ -1198,15 +1411,15 @@ function renderChart(elementId, label, labels, data, colors, type = 'line') {
         x: {
           grid: { display: false },
           ticks: {
-            font: { size: 12, weight: '500', family: "'Outfit', 'Inter', sans-serif" },
+            font: { size: 11, weight: '500', family: "'Outfit', 'Inter', sans-serif" },
             color: '#64748B'
           }
         },
         y: {
           beginAtZero: true,
-          grid: { color: 'rgba(226, 232, 240, 0.8)' },
+          grid: { color: 'rgba(226, 232, 240, 0.7)' },
           ticks: {
-            font: { size: 12, weight: '500', family: "'Outfit', 'Inter', sans-serif" },
+            font: { size: 11, weight: '500', family: "'Outfit', 'Inter', sans-serif" },
             color: '#64748B',
             precision: 0
           }
@@ -1314,3 +1527,55 @@ function getTimeAgo(date) {
   if (months < 12) return `${months}mo ago`;
   return `${Math.floor(months / 12)}y ago`;
 }
+
+// Initialize Search & Filter Toolbar clear buttons and reset actions
+function initToolbarEnhancements() {
+  document.addEventListener('input', (e) => {
+    if (e.target.matches('.table-search, .filter-search-input, .filter-bar input[type="text"]')) {
+      const wrapper = e.target.closest('.filter-search-input-group');
+      if (wrapper) {
+        const clearBtn = wrapper.querySelector('.filter-clear-btn');
+        if (clearBtn) {
+          clearBtn.style.display = e.target.value.trim() ? 'flex' : 'none';
+        }
+      }
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    const clearBtn = e.target.closest('.filter-clear-btn');
+    if (clearBtn) {
+      const wrapper = clearBtn.closest('.filter-search-input-group');
+      const input = wrapper?.querySelector('input');
+      if (input) {
+        input.value = '';
+        clearBtn.style.display = 'none';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.focus();
+      }
+    }
+
+    const resetBtn = e.target.closest('.btn-reset-filters');
+    if (resetBtn) {
+      const container = resetBtn.closest('.filter-toolbar-card, .filter-bar, .table-actions');
+      if (container) {
+        container.querySelectorAll('input[type="text"]').forEach((inp) => {
+          inp.value = '';
+          inp.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        container.querySelectorAll('select').forEach((sel) => {
+          sel.selectedIndex = 0;
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        container.querySelectorAll('input[type="date"]').forEach((dt) => {
+          dt.value = '';
+          dt.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        container.querySelectorAll('.filter-clear-btn').forEach((btn) => {
+          btn.style.display = 'none';
+        });
+      }
+    }
+  });
+}
+initToolbarEnhancements();

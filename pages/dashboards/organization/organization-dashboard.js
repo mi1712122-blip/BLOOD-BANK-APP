@@ -662,6 +662,8 @@ function renderInventoryTable() {
     .filter((group) => group.toLowerCase().includes(search) || String(currentInventorySummary[group] || '').includes(search));
 
   const paginated = getPaginatedData(rows, 'inventoryTable', 6);
+  const countElem = document.getElementById('inventoryResultsCount');
+  if (countElem) countElem.textContent = rows.length;
   const bodyRows = paginated.items.map((group) => {
     const available = currentInventorySummary[group] || 0;
     const groupItems = inventoryItems.filter((item) => item.bloodGroup === group && item.status === 'Available');
@@ -753,6 +755,8 @@ function renderDonationsTable() {
     const term = `${item.donorName || ''} ${item.bloodGroup || ''} ${item.status || ''}`.toLowerCase();
     return term.includes(search) && (!statusFilter || item.status === statusFilter);
   });
+  const countElem = document.getElementById('donationResultsCount');
+  if (countElem) countElem.textContent = filtered.length;
   const paginated = getPaginatedData(filtered, 'donationsTable', 8);
   const rows = paginated.items.map((donation) => `
     <tr>
@@ -864,6 +868,8 @@ function renderRequestsTable() {
     })
     .filter((req) => !statusFilter || req.status === statusFilter)
     .filter((req) => !priorityFilter || req.urgencyLevel === priorityFilter);
+  const countElem = document.getElementById('requestResultsCount');
+  if (countElem) countElem.textContent = filtered.length;
 
   const paginated = getPaginatedData(filtered, 'requestsTable', 8);
   const rows = paginated.items.map((req) => `
@@ -1549,6 +1555,8 @@ function renderDonorsTable() {
     const term = `${donor.fullName || ''} ${donor.bloodGroup || ''} ${donor.city || ''} ${donor.email || ''}`.toLowerCase();
     return term.includes(search) && (!groupFilter || donor.bloodGroup === groupFilter);
   });
+  const countElem = document.getElementById('donorsResultsCount');
+  if (countElem) countElem.textContent = filtered.length;
   const paginated = getPaginatedData(filtered, 'donorsTable', 8);
   const rows = paginated.items.map((donor) => {
     const eligibility = donor.isEligible ? 'Eligible' : 'Not Eligible';
@@ -1631,6 +1639,8 @@ function renderHospitalsTable() {
     const term = `${hospital.hospitalName || ''} ${hospital.city || ''} ${hospital.email || ''}`.toLowerCase();
     return term.includes(search) && (!statusFilter || (hospital.status || 'Active') === statusFilter);
   });
+  const countElem = document.getElementById('hospitalsResultsCount');
+  if (countElem) countElem.textContent = filtered.length;
   const paginated = getPaginatedData(filtered, 'hospitalsTable', 8);
   const rows = paginated.items.map((hospital) => {
     const totalRequests = requestsList.filter((req) => req.hospitalId === hospital.uid).length;
@@ -1708,6 +1718,8 @@ function renderIssueHistoryTable() {
     const term = `${item.hospitalName || ''} ${item.bloodGroup || ''} ${item.purpose || ''}`.toLowerCase();
     return term.includes(search) && (!statusFilter || item.status === statusFilter);
   });
+  const countElem = document.getElementById('issueResultsCount');
+  if (countElem) countElem.textContent = filtered.length;
   const paginated = getPaginatedData(filtered, 'issueHistoryTable', 8);
   const rows = paginated.items.map((issue) => `
     <tr>
@@ -1762,6 +1774,8 @@ function renderDonationHistoryTable() {
     const term = `${item.donorName || ''} ${item.bloodGroup || ''} ${item.organizationName || ''}`.toLowerCase();
     return term.includes(search) && (!statusFilter || item.status === statusFilter);
   });
+  const countElem = document.getElementById('donationHistoryResultsCount');
+  if (countElem) countElem.textContent = filtered.length;
   const paginated = getPaginatedData(filtered, 'donationHistoryTable', 8);
   const rows = paginated.items.map((donation) => `
     <tr>
@@ -1814,6 +1828,8 @@ function renderInventoryHistoryTable() {
     const term = `${item.bloodGroup || ''} ${item.reason || ''} ${item.userId || ''}`.toLowerCase();
     return term.includes(search) && (!groupFilter || item.bloodGroup === groupFilter);
   });
+  const countElem = document.getElementById('inventoryHistoryResultsCount');
+  if (countElem) countElem.textContent = filtered.length;
   const paginated = getPaginatedData(filtered, 'inventoryHistoryTable', 8);
   const rows = paginated.items.map((record) => `
     <tr>
@@ -2123,17 +2139,21 @@ function renderChart(elementId, label, labels, data, colors, type = 'bar') {
           data: data || [],
           backgroundColor: bgColors,
           borderColor: borderColors,
-          borderWidth: isPie ? 2 : 2.5,
-          hoverOffset: isPie ? 12 : 0,
+          borderWidth: isPie ? 1.5 : 2,
+          hoverOffset: isPie ? 6 : 0,
+          radius: isPie ? '85%' : undefined,
+          cutout: type === 'doughnut' ? '60%' : undefined,
           tension: type === 'line' ? 0.35 : 0,
           fill: type === 'line' ? { target: 'origin', above: 'rgba(193, 18, 31, 0.08)' } : (type !== 'pie' && type !== 'doughnut'),
-          borderRadius: type === 'bar' ? 6 : 0,
+          borderRadius: type === 'bar' ? 5 : 0,
           borderSkipped: false,
-          maxBarThickness: 45,
-          pointRadius: type === 'line' ? 5 : 0,
-          pointHoverRadius: type === 'line' ? 8 : 0,
+          maxBarThickness: 24,
+          barPercentage: 0.6,
+          categoryPercentage: 0.7,
+          pointRadius: type === 'line' ? 3.5 : 0,
+          pointHoverRadius: type === 'line' ? 6 : 0,
           pointBackgroundColor: type === 'line' ? '#ffffff' : undefined,
-          pointBorderWidth: type === 'line' ? 2.5 : undefined
+          pointBorderWidth: type === 'line' ? 2 : undefined
         }
       ]
     },
@@ -2142,22 +2162,24 @@ function renderChart(elementId, label, labels, data, colors, type = 'bar') {
       maintainAspectRatio: false,
       devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2),
       animation: {
-        duration: 1000,
+        duration: 800,
         easing: 'easeOutQuart'
       },
       layout: {
-        padding: { top: 8, right: 10, bottom: 8, left: 10 }
+        padding: isPie ? { top: 4, right: 6, bottom: 4, left: 6 } : { top: 6, right: 8, bottom: 4, left: 4 }
       },
       plugins: {
         legend: {
           display: isPie,
           position: 'bottom',
           labels: {
-            padding: 10,
+            padding: 6,
+            boxWidth: 10,
+            boxHeight: 10,
             usePointStyle: true,
             pointStyle: 'circle',
             font: {
-              size: 11,
+              size: 10.5,
               weight: '600',
               family: "'Outfit', 'Inter', system-ui, -apple-system, sans-serif"
             },
@@ -2169,11 +2191,11 @@ function renderChart(elementId, label, labels, data, colors, type = 'bar') {
           backgroundColor: '#1E293B',
           titleColor: '#FFFFFF',
           bodyColor: '#F8FAFC',
-          titleFont: { size: 14, weight: 'bold', family: "'Outfit', 'Inter', sans-serif" },
-          bodyFont: { size: 13, weight: '500', family: "'Outfit', 'Inter', sans-serif" },
-          padding: 12,
-          boxPadding: 6,
-          cornerRadius: 8,
+          titleFont: { size: 13, weight: 'bold', family: "'Outfit', 'Inter', sans-serif" },
+          bodyFont: { size: 12, weight: '500', family: "'Outfit', 'Inter', sans-serif" },
+          padding: 10,
+          boxPadding: 5,
+          cornerRadius: 6,
           displayColors: true,
           callbacks: {
             label: function(context) {
@@ -2193,15 +2215,15 @@ function renderChart(elementId, label, labels, data, colors, type = 'bar') {
         x: {
           grid: { display: false },
           ticks: {
-            font: { size: 12, weight: '500', family: "'Outfit', 'Inter', sans-serif" },
+            font: { size: 11, weight: '500', family: "'Outfit', 'Inter', sans-serif" },
             color: '#64748B'
           }
         },
         y: {
           beginAtZero: true,
-          grid: { color: 'rgba(226, 232, 240, 0.8)' },
+          grid: { color: 'rgba(226, 232, 240, 0.7)' },
           ticks: {
-            font: { size: 12, weight: '500', family: "'Outfit', 'Inter', sans-serif" },
+            font: { size: 11, weight: '500', family: "'Outfit', 'Inter', sans-serif" },
             color: '#64748B',
             precision: 0
           }
@@ -2440,4 +2462,56 @@ const addStyles = () => {
   document.head.appendChild(style);
 };
 addStyles();
+
+// Initialize Search & Filter Toolbar clear buttons and reset actions
+function initToolbarEnhancements() {
+  document.addEventListener('input', (e) => {
+    if (e.target.matches('.table-search, .filter-search-input, .filter-bar input[type="text"]')) {
+      const wrapper = e.target.closest('.filter-search-input-group');
+      if (wrapper) {
+        const clearBtn = wrapper.querySelector('.filter-clear-btn');
+        if (clearBtn) {
+          clearBtn.style.display = e.target.value.trim() ? 'flex' : 'none';
+        }
+      }
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    const clearBtn = e.target.closest('.filter-clear-btn');
+    if (clearBtn) {
+      const wrapper = clearBtn.closest('.filter-search-input-group');
+      const input = wrapper?.querySelector('input');
+      if (input) {
+        input.value = '';
+        clearBtn.style.display = 'none';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.focus();
+      }
+    }
+
+    const resetBtn = e.target.closest('.btn-reset-filters');
+    if (resetBtn) {
+      const container = resetBtn.closest('.filter-toolbar-card, .filter-bar, .table-actions');
+      if (container) {
+        container.querySelectorAll('input[type="text"]').forEach((inp) => {
+          inp.value = '';
+          inp.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        container.querySelectorAll('select').forEach((sel) => {
+          sel.selectedIndex = 0;
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        container.querySelectorAll('input[type="date"]').forEach((dt) => {
+          dt.value = '';
+          dt.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        container.querySelectorAll('.filter-clear-btn').forEach((btn) => {
+          btn.style.display = 'none';
+        });
+      }
+    }
+  });
+}
+initToolbarEnhancements();
 
