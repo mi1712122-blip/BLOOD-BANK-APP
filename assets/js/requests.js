@@ -365,7 +365,9 @@ class BloodRequestManager {
         message: notificationData.message || '',
         senderId: notificationData.senderId || null,
         senderRole: notificationData.senderRole || null,
-        senderName: notificationData.senderName || null,
+        senderName: notificationData.senderRole === 'admin'
+          ? 'Administration'
+          : (notificationData.senderName || null),
         targetType: notificationData.targetType || 'User',
         targetRole: notificationData.targetRole || null,
         targetUserId: notificationData.targetUserId || notificationData.recipientId || null,
@@ -408,7 +410,7 @@ class BloodRequestManager {
             console.warn(`Error fetching collection ${colName} for broadcast:`, e);
           }
         }
-      } else if (targetType === 'Role' || ['allDonors', 'allHospitals', 'allOrganizations'].includes(targetType) || targetRole) {
+      } else if (targetType === 'Role' || ['allDonors', 'allHospitals', 'allOrganizations'].includes(targetType)) {
         let role = (targetRole || targetType).toLowerCase();
         let targetRoleName = role.includes('donor') ? 'donor' : role.includes('hospital') ? 'hospital' : role.includes('org') ? 'organization' : role;
         let colName = role.includes('donor') ? 'donors' : role.includes('hospital') ? 'hospitals' : role.includes('org') ? 'organizations' : null;
@@ -461,13 +463,15 @@ class BloodRequestManager {
       const promises = uniqueRecipientIds.map((recipientId) => {
         const notification = {
           recipientId,
-          recipientRole: resolvedTargetRole || null,
+          // A sender copy belongs to the sender's role; each delivered copy keeps
+          // the selected recipient role. This keeps recipient metadata accurate.
+          recipientRole: recipientId === senderId ? (senderRole || null) : (resolvedTargetRole || null),
           type: normalizedTargetType === 'All' ? 'broadcast_all' : normalizedTargetType === 'Role' ? `broadcast_${resolvedTargetRole}` : 'individual',
           title,
           message,
           senderId,
           senderRole: senderRole || 'admin',
-          senderName: senderName || 'Admin',
+          senderName: senderRole === 'admin' ? 'Administration' : (senderName || 'Admin'),
           targetType: normalizedTargetType,
           targetRole: resolvedTargetRole || null,
           targetUserId: targetUserId || recipientId,

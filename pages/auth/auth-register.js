@@ -27,7 +27,49 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  document.getElementById('googleSignInBtn')?.addEventListener('click', handleGoogleSignIn);
 });
+
+async function handleGoogleSignIn() {
+  const btn = document.getElementById('googleSignInBtn');
+  if (!btn) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Signing in...';
+  showLoading();
+
+  try {
+    const result = await authManager.signInWithGoogle();
+    if (!result.success) {
+      showAlert(result.error || 'Google Sign-In failed.', result.cancelled ? 'warning' : 'danger');
+      return;
+    }
+
+    if (result.isNewUser || !result.profileComplete) {
+      window.location.href = 'complete-profile.html';
+      return;
+    }
+
+    redirectToDashboard(result.role);
+  } catch (error) {
+    console.error('Google sign-in error:', error);
+    showAlert('Google Sign-In could not be completed. Please try again.', 'danger');
+  } finally {
+    hideLoading();
+    btn.disabled = false;
+    btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="20" height="20"> Continue with Google';
+  }
+}
+
+function redirectToDashboard(role) {
+  const dashboardPaths = {
+    donor: '../../pages/dashboards/donor/dashboard.html',
+    organization: '../../pages/dashboards/organization/dashboard.html',
+    hospital: '../../pages/dashboards/hospital/dashboard.html'
+  };
+  window.location.href = dashboardPaths[role] || '../../index.html';
+}
 
 // Role selection
 roleButtons.forEach(btn => {

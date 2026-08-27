@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Complete Profile - Blood Bank Management System</title>
+  <link rel="stylesheet" href="../../assets/css/global.css">
+  <link rel="stylesheet" href="../../assets/css/auth.css">
+  <link rel="stylesheet" href="../../assets/css/register.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="register-page">
+  <div class="auth-container" style="--auth-bg-image: url('../../assets/images/login page.jpg')">
+    <main class="auth-card">
+      <div class="auth-header">
+        <div class="auth-logo"><i class="fas fa-droplet"></i></div>
+        <h1>Complete your profile</h1>
+        <p>Choose one role and add the information needed to use your account.</p>
+      </div>
+
+      <div id="alertContainer" aria-live="polite"></div>
+
+      <section id="roleSelection" class="role-selection" aria-labelledby="roleSelectionTitle">
+        <h2 id="roleSelectionTitle" class="role-selection-title">Select one role</h2>
+        <div class="role-buttons">
+          <button type="button" class="role-btn" data-role="donor"><img class="role-img" src="../../assets/images/blood-donor.png" alt=""><span>Donor</span></button>
+          <button type="button" class="role-btn" data-role="organization"><img class="role-img" src="../../assets/images/organization icon.png" alt=""><span>Organization</span></button>
+          <button type="button" class="role-btn" data-role="hospital"><img class="role-img" src="../../assets/images/hospital icon.png" alt=""><span>Hospital</span></button>
+        </div>
+      </section>
+
+      <form id="completeProfileForm" class="auth-form hidden" novalidate>
+        <section class="form-section">
+          <h2 class="form-section-title">Contact information</h2>
+          <div class="form-group">
+            <label for="email"><i class="fas fa-envelope"></i> Email Address</label>
+            <input type="email" id="email" readonly>
+          </div>
+          <div class="form-group">
+            <label for="phone"><i class="fas fa-phone"></i> Phone Number</label>
+            <input type="tel" id="phone" placeholder="Enter your phone number" required>
+          </div>
+        </section>
+
+        <section id="donorFields" class="form-section hidden">
+          <h2 class="form-section-title">Donor information</h2>
+          <div class="form-group"><label for="fullName">Full Name</label><input type="text" id="fullName" placeholder="Enter your full name"></div>
+          <div class="form-row">
+            <div class="form-group"><label for="age">Age</label><input type="number" id="age" min="18" max="65" placeholder="18-65"></div>
+            <div class="form-group"><label for="gender">Gender</label><select id="gender"><option value="">Select gender</option><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option></select></div>
+          </div>
+          <div class="form-group"><label for="bloodGroup">Blood Group</label><select id="bloodGroup"><option value="">Select blood group</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
+          <div class="form-group"><label for="city">City</label><input type="text" id="city" placeholder="Enter your city"></div>
+          <div class="form-group"><label for="address">Address</label><input type="text" id="address" placeholder="Enter your full address"></div>
+        </section>
+
+        <section id="organizationFields" class="form-section hidden">
+          <h2 class="form-section-title">Organization information</h2>
+          <div class="form-group"><label for="organizationName">Organization Name</label><input type="text" id="organizationName" placeholder="Enter organization name"></div>
+          <div class="form-group"><label for="organizationLicense">License/Registration Number</label><input type="text" id="organizationLicense" placeholder="Enter license number"></div>
+          <div class="form-group"><label for="organizationCity">City</label><input type="text" id="organizationCity" placeholder="Enter city"></div>
+          <div class="form-group"><label for="organizationAddress">Address</label><input type="text" id="organizationAddress" placeholder="Enter full address"></div>
+        </section>
+
+        <section id="hospitalFields" class="form-section hidden">
+          <h2 class="form-section-title">Hospital information</h2>
+          <div class="form-group"><label for="hospitalName">Hospital Name</label><input type="text" id="hospitalName" placeholder="Enter hospital name"></div>
+          <div class="form-group"><label for="hospitalLicense">License Number</label><input type="text" id="hospitalLicense" placeholder="Enter license number"></div>
+          <div class="form-group"><label for="hospitalCity">City</label><input type="text" id="hospitalCity" placeholder="Enter city"></div>
+          <div class="form-group"><label for="hospitalAddress">Address</label><input type="text" id="hospitalAddress" placeholder="Enter full address"></div>
+        </section>
+
+        <div class="form-actions">
+          <button type="button" id="changeRoleBtn" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Change role</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Save and continue</button>
+        </div>
+      </form>
+    </main>
+  </div>
+  <div id="loadingSpinner" class="loading-spinner hidden"><div class="spinner"></div></div>
+  <script type="module" src="complete-profile.js"></script>
+</body>
+</html>

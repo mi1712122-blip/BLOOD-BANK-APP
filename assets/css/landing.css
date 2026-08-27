@@ -438,8 +438,7 @@
   gap: 40px;
 }
 
-.inventory-copy .section-subtitle,
-.emergency-copy .section-subtitle {
+.inventory-copy .section-subtitle {
   display: inline-block;
   margin-bottom: 18px;
   color: var(--primary-color);
@@ -448,15 +447,13 @@
   font-size: 14px;
 }
 
-.inventory-copy h2,
-.emergency-copy h2 {
+.inventory-copy h2 {
   font-size: 42px;
   margin-bottom: 20px;
   color: var(--text-color);
 }
 
-.inventory-copy p,
-.emergency-copy p {
+.inventory-copy p {
   font-size: 18px;
   line-height: 1.8;
   color: var(--text-light);
@@ -503,47 +500,18 @@
   display: block;
 }
 
-.emergency-requests {
-  padding: 60px 50px;
-  background: linear-gradient(180deg, #fff5f6 0%, #ffffff 100%);
-}
-
-.emergency-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 30px;
-  background-color: #ffffff;
-  padding: 38px 40px;
-  border-radius: 20px;
-  border: 1px solid rgba(193, 18, 31, 0.14);
-  box-shadow: var(--shadow-lg);
-}
-
-.emergency-card .btn {
-  min-width: 220px;
-  padding: 16px 34px;
-}
-
 @media (max-width: 1024px) {
   .inventory-grid {
     grid-template-columns: 1fr;
   }
-
-  .emergency-card {
-    flex-direction: column;
-    text-align: center;
-  }
 }
 
 @media (max-width: 768px) {
-  .inventory-section,
-  .emergency-requests {
+  .inventory-section {
     padding: 40px 20px;
   }
 
-  .inventory-copy h2,
-  .emergency-copy h2 {
+  .inventory-copy h2 {
     font-size: 32px;
   }
 

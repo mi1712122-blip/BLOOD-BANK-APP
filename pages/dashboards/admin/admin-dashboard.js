@@ -805,6 +805,7 @@ function showView(view) {
   }
   if (view === 'sendNotification') populateRecipientSelector(document.getElementById('recipientType')?.value || 'specificDonor');
   if (view === 'notifications') {
+    displayAdminNotifications(adminNotifications);
     markAdminNotificationsRead();
   }
 }
@@ -1204,7 +1205,7 @@ async function handleNotificationSubmit() {
   }
 
   try {
-    const adminName = currentAdmin?.fullName || currentAdmin?.name || currentAdmin?.displayName || currentAdmin?.email || 'Admin';
+    const adminName = 'Administration';
     const result = await bloodRequestManager.sendNotificationToTargets({
       title,
       message,

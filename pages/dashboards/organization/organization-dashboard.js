@@ -3,10 +3,12 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   limit,
   onSnapshot,
   query,
+  runTransaction,
   updateDoc,
   where
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
@@ -34,6 +36,7 @@ let issuesList = [];
 let inventoryHistoryList = [];
 let inventoryItems = [];
 let currentInventorySummary = {};
+let donationSaveInProgress = false;
 const tablePaginationState = {};
 
 const viewSelectors = {
@@ -79,6 +82,10 @@ async function checkAuthAndLoadOrganization() {
   const user = await authManager.getCurrentUser();
   if (!user || user.role !== 'organization') {
     window.location.href = '../../auth/login.html';
+    return false;
+  }
+  if (user.data?.profileComplete === false) {
+    window.location.href = '../../auth/complete-profile.html';
     return false;
   }
 
@@ -1289,7 +1296,8 @@ async function handleSendNotificationSubmit() {
       targetType,
       targetRole,
       targetUserId,
-      includeSender: true
+      // A one-person message must not create a sender/broadcast copy.
+      includeSender: targetType !== 'User'
     });
 
     if (result.success) {
@@ -1403,7 +1411,12 @@ function showView(view) {
   });
 
   currentView = view;
-  if (view === 'notifications') markOrganizationNotificationsRead();
+  if (view === 'notifications') {
+    // Render the already-listened data immediately. Marking as read causes a
+    // later snapshot, so relying on that snapshot left this page empty.
+    displayNotifications(allNotifications);
+    markOrganizationNotificationsRead();
+  }
   if (view === 'sendNotification') populateRecipientSelector(document.getElementById('recipientType')?.value || 'specificDonor');
   renderCurrentView();
 }
@@ -1552,7 +1565,7 @@ function renderDonorsTable() {
   const groupFilter = document.getElementById('donorBloodGroupFilter')?.value || '';
 
   const filtered = donorsList.filter((donor) => {
-    const term = `${donor.fullName || ''} ${donor.bloodGroup || ''} ${donor.city || ''} ${donor.email || ''}`.toLowerCase();
+    const term = `${donor.fullName || ''} ${donor.uid || donor.id || ''} ${donor.email || ''} ${donor.phone || ''}`.toLowerCase();
     return term.includes(search) && (!groupFilter || donor.bloodGroup === groupFilter);
   });
   const countElem = document.getElementById('donorsResultsCount');
@@ -1565,10 +1578,9 @@ function renderDonorsTable() {
       <tr>
         <td>${donor.fullName || 'Unknown'}</td>
         <td>${donor.bloodGroup || '-'}</td>
-        <td>${donor.age || '-'}</td>
-        <td>${donor.gender || '-'}</td>
-        <td>${donor.city || '-'}</td>
         <td>${donor.phone || '-'}</td>
+        <td>${donor.email || '-'}</td>
+        <td>${Number(donor.totalDonations) || 0}</td>
         <td>${formatDate(donor.lastDonationDate)}</td>
         <td>${eligibility}</td>
         <td>${status}</td>
@@ -1588,10 +1600,9 @@ function renderDonorsTable() {
             <tr>
               <th>Name</th>
               <th>Blood Group</th>
-              <th>Age</th>
-              <th>Gender</th>
-              <th>City</th>
               <th>Phone</th>
+              <th>Email</th>
+              <th>Total Donations</th>
               <th>Last Donation</th>
               <th>Eligibility</th>
               <th>Status</th>
@@ -1627,7 +1638,193 @@ function renderDonorsTable() {
 function viewDonorDetails(id) {
   const donor = donorsList.find((item) => item.id === id);
   if (!donor) return;
-  alert(`Donor Details:\n\nName: ${donor.fullName || 'Unknown'}\nBlood Group: ${donor.bloodGroup || '-'}\nCity: ${donor.city || '-'}\nPhone: ${donor.phone || '-'}\nLast Donation: ${formatDate(donor.lastDonationDate)}\nEligibility: ${donor.isEligible ? 'Eligible' : 'Not Eligible'}`);
+  const donorDonations = donationsList
+    .filter((donation) => donation.donorId === (donor.uid || donor.id))
+    .sort((a, b) => getTimestamp(b.donationDate || b.createdAt) - getTimestamp(a.donationDate || a.createdAt));
+  const history = donorDonations.length
+    ? `<ul>${donorDonations.map((donation) => `<li>${formatDate(donation.donationDate || donation.createdAt)} — ${donation.bloodGroup || '-'} (${donation.units || 0} unit${Number(donation.units) === 1 ? '' : 's'})</li>`).join('')}</ul>`
+    : '<p>No donation history for this organization.</p>';
+  const content = document.getElementById('requestDetailsContent');
+  if (!content) return;
+  const title = document.getElementById('requestDetailsTitle');
+  if (title) title.textContent = 'Donor Profile';
+  content.innerHTML = `
+    <div class="details-grid">
+      <div><strong>Name:</strong> ${donor.fullName || 'Unknown'}</div>
+      <div><strong>Blood Group:</strong> ${donor.bloodGroup || '-'}</div>
+      <div><strong>Email:</strong> ${donor.email || '-'}</div>
+      <div><strong>Phone:</strong> ${donor.phone || '-'}</div>
+      <div><strong>Total Donations:</strong> ${Number(donor.totalDonations) || 0}</div>
+      <div><strong>Last Donation:</strong> ${formatDate(donor.lastDonationDate)}</div>
+      <div><strong>Eligibility:</strong> ${donor.isEligible === false ? 'Not Eligible' : 'Eligible'}</div>
+      <div><strong>Status:</strong> ${donor.isActive === false ? 'Inactive' : 'Active'}</div>
+    </div>
+    <div style="margin-top: 18px;"><h3>Donation History</h3>${history}</div>
+    <div class="modal-footer"><button type="button" class="btn btn-primary" id="recordDonationBtn">Record Donation</button></div>
+  `;
+  content.querySelector('#recordDonationBtn')?.addEventListener('click', () => {
+    closeRequestDetailsModal();
+    openRecordDonationModal(donor.uid || donor.id);
+  });
+  openRequestDetailsModal();
+}
+
+function openRecordDonationModal(donorId) {
+  const donor = donorsList.find((item) => (item.uid || item.id) === donorId || item.id === donorId);
+  if (!donor) {
+    alert('The selected donor could not be found.');
+    return;
+  }
+  document.getElementById('donationDonorId').value = donor.uid || donor.id;
+  document.getElementById('donationDonorName').value = donor.fullName || '';
+  document.getElementById('donationBloodGroup').value = donor.bloodGroup || '';
+  document.getElementById('donationOrganizationName').value = currentOrganization?.organizationName || '';
+  document.getElementById('donationUnits').value = '';
+  document.getElementById('donationRemarks').value = '';
+  document.getElementById('donationCollectionDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('recordDonationModal')?.classList.add('show');
+}
+
+function closeRecordDonationModal() {
+  if (!donationSaveInProgress) document.getElementById('recordDonationModal')?.classList.remove('show');
+}
+
+function isSameCalendarDay(value, compareDate) {
+  if (!value) return false;
+  const date = value?.toDate ? value.toDate() : value?.seconds ? new Date(value.seconds * 1000) : new Date(value);
+  return !Number.isNaN(date.getTime()) && date.getFullYear() === compareDate.getFullYear()
+    && date.getMonth() === compareDate.getMonth() && date.getDate() === compareDate.getDate();
+}
+
+function getDonationSaveErrorMessage(error) {
+  if (error?.code === 'permission-denied') return 'You do not have permission to record this donation.';
+  if (error?.code === 'unavailable' || error?.code === 'network-request-failed') return 'Network connection is unavailable. Please try again.';
+  return error?.message || 'The donation could not be recorded. Please try again.';
+}
+
+async function saveDonationRecord(event) {
+  event.preventDefault();
+  if (donationSaveInProgress) return;
+
+  const donorId = document.getElementById('donationDonorId')?.value;
+  const units = Number(document.getElementById('donationUnits')?.value);
+  const collectionDateValue = document.getElementById('donationCollectionDate')?.value;
+  const remarks = document.getElementById('donationRemarks')?.value.trim() || '';
+  const saveButton = document.getElementById('saveDonationBtn');
+
+  if (!currentOrganization?.uid || currentOrganization.role !== 'organization') {
+    alert('Only an active organization account can record a donation.');
+    return;
+  }
+  if (!donorId) {
+    alert('Please select a valid donor.');
+    return;
+  }
+  if (!Number.isFinite(units) || units <= 0) {
+    alert('Units collected must be greater than 0.');
+    return;
+  }
+  if (!collectionDateValue) {
+    alert('Please provide the collection date.');
+    return;
+  }
+
+  donationSaveInProgress = true;
+  if (saveButton) {
+    saveButton.disabled = true;
+    saveButton.textContent = 'Saving...';
+  }
+
+  try {
+    const donationId = await runTransaction(db, async (transaction) => {
+      const donorRef = doc(db, 'donors', donorId);
+      const organizationRef = doc(db, 'organizations', currentOrganization.uid);
+      const bloodGroup = document.getElementById('donationBloodGroup').value;
+      const donationQuery = query(collection(db, 'donations'), where('donorId', '==', donorId));
+      const inventoryQuery = query(collection(db, 'bloodInventory'), where('organizationId', '==', currentOrganization.uid), where('bloodGroup', '==', bloodGroup));
+      const [donorSnapshot, organizationSnapshot, donorDonationsSnapshot, inventorySnapshot] = await Promise.all([
+        transaction.get(donorRef), transaction.get(organizationRef), transaction.get(donationQuery), transaction.get(inventoryQuery)
+      ]);
+
+      if (!donorSnapshot.exists()) throw new Error('The selected donor no longer exists.');
+      if (!organizationSnapshot.exists()) throw new Error('The organization account could not be verified.');
+      const donor = donorSnapshot.data();
+      if (donor.isActive === false || ['inactive', 'rejected'].includes(String(donor.status || '').toLowerCase())) {
+        throw new Error('This donor account is inactive and cannot donate.');
+      }
+      if (donor.isEligible === false) throw new Error('This donor is currently not eligible to donate.');
+
+      const donationDate = new Date(`${collectionDateValue}T00:00:00`);
+      if (Number.isNaN(donationDate.getTime())) throw new Error('Please provide a valid collection date.');
+      if (donorDonationsSnapshot.docs.some((item) => isSameCalendarDay(item.data().donationDate || item.data().createdAt, donationDate))) {
+        throw new Error('A donation for this donor has already been recorded on this date.');
+      }
+      if (donor.lastDonationDate) {
+        const lastDate = donor.lastDonationDate?.toDate ? donor.lastDonationDate.toDate() : donor.lastDonationDate?.seconds ? new Date(donor.lastDonationDate.seconds * 1000) : new Date(donor.lastDonationDate);
+        const daysSinceLastDonation = Math.floor((donationDate - lastDate) / (24 * 60 * 60 * 1000));
+        if (!Number.isNaN(daysSinceLastDonation) && daysSinceLastDonation >= 0 && daysSinceLastDonation < 56) {
+          throw new Error('This donor is currently not eligible to donate.');
+        }
+      }
+
+      const donationRef = doc(collection(db, 'donations'));
+      const inventoryHistoryRef = doc(collection(db, 'inventoryHistory'));
+      const inventoryDocument = inventorySnapshot.docs.find((item) => item.data().status === 'Available') || inventorySnapshot.docs[0];
+      const previousUnits = inventoryDocument ? (Number(inventoryDocument.data().units) || 0) : 0;
+      const currentUnits = previousUnits + units;
+      const now = new Date();
+      const donorBloodGroup = donor.bloodGroup || bloodGroup;
+
+      transaction.set(donationRef, {
+        donationId: donationRef.id, donorId, organizationId: currentOrganization.uid,
+        organizationName: currentOrganization.organizationName || '', donorName: donor.fullName || '',
+        bloodGroup: donorBloodGroup, units, donationDate, status: 'Completed', remarks, createdAt: now
+      });
+      transaction.update(donorRef, {
+        totalDonations: (Number(donor.totalDonations) || 0) + 1,
+        lastDonationDate: donationDate, updatedAt: now
+      });
+      if (inventoryDocument) {
+        transaction.update(inventoryDocument.ref, { units: currentUnits, status: 'Available', updatedAt: now });
+      } else {
+        transaction.set(doc(collection(db, 'bloodInventory')), {
+          organizationId: currentOrganization.uid, organizationName: currentOrganization.organizationName || '',
+          bloodGroup: donorBloodGroup, units, donorId, status: 'Available', collectionDate: donationDate,
+          expiryDate: null, storageLocation: null, notes: remarks || null, createdAt: now, updatedAt: now
+        });
+      }
+      transaction.set(inventoryHistoryRef, {
+        organizationId: currentOrganization.uid, organizationName: currentOrganization.organizationName || '',
+        bloodGroup: donorBloodGroup, units, quantity: units, previousUnits, currentUnits, difference: units,
+        reason: 'Donation', donationId: donationRef.id, date: donationDate,
+        userId: currentOrganization.uid, createdAt: now
+      });
+      return donationRef.id;
+    });
+
+    const notificationResult = await bloodRequestManager.sendNotification({
+      recipientId: donorId, recipientRole: 'donor', type: 'donation_recorded',
+      title: 'Blood Donation Successful',
+      message: 'Thank you for donating blood. Your donation has been successfully recorded.',
+      senderId: currentOrganization.uid, senderRole: 'organization',
+      senderName: currentOrganization.organizationName || 'Organization',
+      targetType: 'User', targetRole: 'donor', targetUserId: donorId
+    });
+    if (!notificationResult.success) console.error('Donation recorded, but donor notification failed:', notificationResult.error);
+    closeRecordDonationModal();
+    await refreshAllData();
+    alert(notificationResult.success ? 'Donation recorded successfully.' : 'Donation recorded successfully, but the donor notification could not be sent.');
+    return donationId;
+  } catch (error) {
+    console.error('Error recording donation:', error);
+    alert(getDonationSaveErrorMessage(error));
+  } finally {
+    donationSaveInProgress = false;
+    if (saveButton) {
+      saveButton.disabled = false;
+      saveButton.textContent = 'Save';
+    }
+  }
 }
 
 function renderHospitalsTable() {
@@ -2514,4 +2711,3 @@ function initToolbarEnhancements() {
   });
 }
 initToolbarEnhancements();
-

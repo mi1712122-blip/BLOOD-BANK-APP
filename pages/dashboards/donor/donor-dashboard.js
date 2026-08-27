@@ -30,7 +30,8 @@ const viewSelectors = {
 document.addEventListener('DOMContentLoaded', initDashboard);
 
 async function initDashboard() {
-  await checkAuthAndLoadDonor();
+  const isAuthLoaded = await checkAuthAndLoadDonor();
+  if (!isAuthLoaded) return;
   setupNavigation();
   setupRequestActions();
   setupForms();
@@ -44,7 +45,11 @@ async function checkAuthAndLoadDonor() {
   const user = await authManager.getCurrentUser();
   if (!user || user.role !== 'donor') {
     window.location.href = '../../auth/login.html';
-    return;
+    return false;
+  }
+  if (user.data?.profileComplete === false) {
+    window.location.href = '../../auth/complete-profile.html';
+    return false;
   }
 
   currentDonor = user.data;
@@ -62,6 +67,7 @@ async function checkAuthAndLoadDonor() {
       displayNotifications(notifications);
     }
   });
+  return true;
 }
 
 function setupRealtimeListeners() {

@@ -16,6 +16,17 @@ This guide will help you set up Firebase for the Blood Bank Management System.
 2. Click **Get Started** or **Sign-in method**
 3. Click on **Email/Password**
 4. Enable it and click **Save**
+5. Click **Google**, enable the provider, select a project support email, and click **Save**.
+
+### Google Sign-In authorized domains
+
+Google Sign-In opens and then immediately closes when the app's current domain is not authorized. In **Authentication → Settings → Authorized domains**, add every host where this project runs. For example:
+
+- `localhost` when using a local development server
+- `127.0.0.1` when opening the local server by IP address
+- Your deployed domain, such as `blood-bank-app-ad002.web.app` or a custom domain
+
+Do not open the HTML files with a `file:///` URL. Start a local server and use its `http://localhost:...` address instead.
 
 Your authentication is now configured!
 

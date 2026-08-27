@@ -8,6 +8,7 @@ import {
   signInWithPopup
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';
 import {
+  writeBatch,
   doc,
   getDoc,
   setDoc,
@@ -15,6 +16,22 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
 import { auth, db } from './firebase-config.js';
 console.log('Auth module loaded with Firebase project:', auth?.app?.options?.projectId || 'unknown');
+
+function getGoogleSignInErrorMessage(error) {
+  const code = error?.code || '';
+  const host = typeof window !== 'undefined' ? window.location.hostname : '';
+  const errorMessages = {
+    'auth/popup-closed-by-user': 'Sign-in was cancelled.',
+    'auth/cancelled-popup-request': 'Sign-in was cancelled.',
+    'auth/popup-blocked': 'Your browser blocked the Google sign-in window. Please allow pop-ups for this site and try again.',
+    'auth/operation-not-allowed': 'Google Sign-In is not enabled for this Firebase project. Enable the Google provider in Firebase Authentication, then try again.',
+    'auth/unauthorized-domain': `Google Sign-In is not authorized for ${host || 'this domain'}. Add this domain in Firebase Authentication > Settings > Authorized domains.`,
+    'auth/operation-not-supported-in-this-environment': 'Google Sign-In requires the app to be opened from a local or hosted web server, not directly from a file.',
+    'auth/account-exists-with-different-credential': 'An account already exists for this email with another sign-in method. Please use email and password to sign in.',
+    'auth/network-request-failed': 'A network error prevented Google Sign-In. Check your connection and try again.'
+  };
+  return errorMessages[code] || 'Google Sign-In could not be completed. Please try again.';
+}
 
 class AuthManager {
   constructor() {
@@ -148,7 +165,14 @@ class AuthManager {
 
   async signInWithGoogle() {
     try {
+      if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
+        return {
+          success: false,
+          error: 'Google Sign-In requires the app to be opened from a local or hosted web server, not directly from a file.'
+        };
+      }
       const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
       const userCredential = await signInWithPopup(auth, provider);
       const user = userCredential.user;
 
@@ -163,7 +187,8 @@ class AuthManager {
           return { success: false, error: 'Admin accounts cannot use Google Sign-In.' };
         }
         const role = data.role;
-        const profileComplete = data.profileComplete !== false;
+        const profileComplete = ['donor', 'organization', 'hospital'].includes(role)
+          && data.profileComplete !== false;
         this.setSessionUser(user, role, data);
         return { success: true, user, role, isNewUser: false, profileComplete };
       }
@@ -181,11 +206,90 @@ class AuthManager {
 
       return { success: true, user, isNewUser: true, profileComplete: false };
     } catch (error) {
-      if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
-        return { success: false, cancelled: true, error: 'Sign-in was cancelled.' };
+      const cancelled = error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request';
+      console.error('Google sign-in error:', { code: error?.code, message: error?.message, error });
+      return { success: false, cancelled, error: getGoogleSignInErrorMessage(error) };
+    }
+  }
+
+  async completeGoogleProfile(role, profileData) {
+    const allowedRoles = ['donor', 'organization', 'hospital'];
+    const user = auth.currentUser;
+
+    if (!user) {
+      return { success: false, error: 'Please sign in with Google before completing your profile.' };
+    }
+    if (!user.providerData.some((provider) => provider.providerId === 'google.com')) {
+      return { success: false, error: 'Please sign in with Google before completing your profile.' };
+    }
+    if (!allowedRoles.includes(role)) {
+      return { success: false, error: 'Please choose one account role.' };
+    }
+
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const userSnapshot = await getDoc(userRef);
+      const existingData = userSnapshot.exists() ? userSnapshot.data() : {};
+
+      if (existingData.role === 'admin') {
+        await signOut(auth);
+        return { success: false, error: 'Admin accounts cannot use Google Sign-In.' };
       }
-      console.error('Google sign-in error:', error);
-      return { success: false, error: error.message || 'Google Sign-In failed.' };
+
+      const batch = writeBatch(db);
+      const userData = {
+        uid: user.uid,
+        email: user.email || existingData.email || '',
+        displayName: user.displayName || existingData.displayName || '',
+        photoURL: user.photoURL || existingData.photoURL || '',
+        authProvider: 'google',
+        role,
+        profileComplete: true,
+        completedAt: new Date(),
+        ...profileData
+      };
+      batch.set(userRef, userData, { merge: true });
+
+      if (role === 'donor') {
+        batch.set(doc(db, 'donors', user.uid), {
+          uid: user.uid,
+          email: userData.email,
+          fullName: profileData.fullName,
+          phone: profileData.phone,
+          bloodGroup: profileData.bloodGroup,
+          age: profileData.age,
+          gender: profileData.gender,
+          city: profileData.city,
+          address: profileData.address,
+          lastDonationDate: null,
+          profilePhoto: user.photoURL || null,
+          totalDonations: 0,
+          isEligible: true,
+          createdAt: new Date()
+        }, { merge: true });
+      } else {
+        const collectionName = role === 'hospital' ? 'hospitals' : 'organizations';
+        const nameField = role === 'hospital' ? 'hospitalName' : 'organizationName';
+        batch.set(doc(db, collectionName, user.uid), {
+          uid: user.uid,
+          email: userData.email,
+          [nameField]: profileData[nameField],
+          phone: profileData.phone,
+          address: profileData.address,
+          city: profileData.city,
+          licenseNumber: profileData.licenseNumber,
+          isApproved: false,
+          createdAt: new Date()
+        }, { merge: true });
+      }
+
+      await batch.commit();
+      const savedData = { ...existingData, ...userData };
+      this.setSessionUser(user, role, savedData);
+      return { success: true, user, role };
+    } catch (error) {
+      console.error('Google profile completion error:', error);
+      return { success: false, error: 'We could not save your profile. Please try again.' };
     }
   }
 

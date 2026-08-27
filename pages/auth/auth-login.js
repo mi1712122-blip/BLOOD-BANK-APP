@@ -158,9 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
         hideLoading();
         btn.disabled = false;
         btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="20" height="20"> Continue with Google';
-        if (!result.cancelled) {
-          showAlert(result.error || 'Google Sign-In failed.', 'danger');
-        }
+        showAlert(result.error || 'Google Sign-In failed.', result.cancelled ? 'warning' : 'danger');
         return;
       }
 

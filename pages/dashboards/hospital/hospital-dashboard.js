@@ -17,6 +17,7 @@ let organizationsListener = null;
 
 let allOrganizations = [];
 let allInventoryItems = [];
+let allNotifications = [];
 
 const viewSelectors = {
   dashboard: 'dashboardView',
@@ -31,7 +32,8 @@ const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 const rareBloodGroups = ['AB-', 'O-', 'B-', 'A-'];
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await checkAuthAndLoadHospital();
+  const isAuthLoaded = await checkAuthAndLoadHospital();
+  if (!isAuthLoaded) return;
   setupNavigation();
   setupAvailabilityControls();
   setupRealtimeListeners();
@@ -43,7 +45,11 @@ async function checkAuthAndLoadHospital() {
   const user = await authManager.getCurrentUser();
   if (!user || user.role !== 'hospital') {
     window.location.href = '../../auth/login.html';
-    return;
+    return false;
+  }
+  if (user.data?.profileComplete === false) {
+    window.location.href = '../../auth/complete-profile.html';
+    return false;
   }
   
   currentHospital = user.data;
@@ -54,12 +60,14 @@ async function checkAuthAndLoadHospital() {
   notificationsListener = bloodRequestManager.listenNotifications(currentHospital.uid, (result) => {
     if (!result.success) return;
     const notifications = result.data || [];
+    allNotifications = notifications;
     const unreadCount = notifications.filter((item) => !item.isRead).length;
     updateHospitalNotificationBadges(unreadCount);
     if (currentView === 'notifications') {
       displayNotifications(notifications);
     }
   });
+  return true;
 }
 
 function setupRealtimeListeners() {
@@ -351,6 +359,7 @@ async function loadNotifications() {
   try {
     const result = await bloodRequestManager.getNotifications(currentHospital.uid);
     if (result.success) {
+      allNotifications = result.data || [];
       const unreadCount = result.data.filter((n) => !n.isRead).length;
       document.getElementById('notificationBadge').textContent = unreadCount;
       document.getElementById('notificationBadge2').textContent = unreadCount;
@@ -474,7 +483,11 @@ function showView(view) {
   });
 
   currentView = view;
-  if (view === 'notifications') markHospitalNotificationsRead();
+  if (view === 'notifications') {
+    // Render the active listener's data before the read-status update returns.
+    displayNotifications(allNotifications);
+    markHospitalNotificationsRead();
+  }
   if (view === 'blood-availability') renderBloodAvailability();
 }
 
