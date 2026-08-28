@@ -52,7 +52,20 @@ async function checkAuthAndLoadDonor() {
     return false;
   }
 
-  currentDonor = user.data;
+  currentDonor = user.data || {};
+
+  try {
+    const donorUid = user.user?.uid || user.data?.uid || sessionStorage.getItem('userId');
+    if (donorUid) {
+      const donorDocSnap = await getDoc(doc(db, 'donors', donorUid));
+      if (donorDocSnap.exists()) {
+        currentDonor = { ...currentDonor, ...donorDocSnap.data() };
+      }
+    }
+  } catch (err) {
+    console.error('Error fetching donor profile:', err);
+  }
+
   document.getElementById('donorName').textContent = currentDonor.fullName || 'Donor';
   document.getElementById('welcomeName').textContent = currentDonor.fullName || 'Donor';
 
@@ -73,6 +86,16 @@ async function checkAuthAndLoadDonor() {
 function setupRealtimeListeners() {
   if (!currentDonor) return;
 
+  const donorUid = currentDonor.uid || currentDonor.id;
+  if (donorUid) {
+    onSnapshot(doc(db, 'donors', donorUid), (docSnap) => {
+      if (docSnap.exists()) {
+        currentDonor = { ...currentDonor, ...docSnap.data() };
+        updateEligibilityDisplay();
+      }
+    });
+  }
+
   donationsListener = onSnapshot(collection(db, 'donations'), (snapshot) => {
     donorDonations = [];
     snapshot.forEach((docSnap) => {
@@ -83,32 +106,82 @@ function setupRealtimeListeners() {
     });
     donorDonations.sort((a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt));
     renderDonationHistory();
+    updateEligibilityDisplay();
   });
 }
 
 function matchesCurrentDonor(donation) {
-  if (!currentDonor) return false;
-  const donorIdValues = [
+  if (!currentDonor || !donation) return false;
+  const donorUid = currentDonor.uid || currentDonor.id;
+  const donorName = (currentDonor.fullName || '').trim().toLowerCase();
+  const donorEmail = (currentDonor.email || '').trim().toLowerCase();
+
+  const recordDonorIds = [
     donation.donorId,
     donation.donorUid,
     donation.donor_id,
     donation.userId,
     donation.uid,
-    donation.user?.uid,
-    currentDonor.uid
-  ].filter(Boolean);
+    donation.user?.uid
+  ].filter(Boolean).map((id) => String(id));
 
-  const donorNameValues = [
+  if (donorUid && recordDonorIds.includes(String(donorUid))) {
+    return true;
+  }
+
+  const recordDonorNames = [
     donation.donorName,
     donation.fullName,
-    donation.userName,
-    currentDonor.fullName,
-    currentDonor.email
-  ].filter(Boolean);
+    donation.userName
+  ].filter(Boolean).map((n) => String(n).trim().toLowerCase());
 
-  return donorIdValues.includes(currentDonor.uid)
-    || donorNameValues.some((value) => value && value.toString().toLowerCase() === (currentDonor.fullName || '').toLowerCase())
-    || donorNameValues.some((value) => value && value.toString().toLowerCase() === (currentDonor.email || '').toLowerCase());
+  if (donorName && recordDonorNames.includes(donorName)) {
+    return true;
+  }
+
+  if (donorEmail && donation.email && String(donation.email).trim().toLowerCase() === donorEmail) {
+    return true;
+  }
+
+  return false;
+}
+
+function calculateDonorEligibility(donor, donations) {
+  if (!donor) return false;
+  if (donor.isActive === false) return false;
+  if (donor.status && ['inactive', 'rejected'].includes(String(donor.status).toLowerCase())) {
+    return false;
+  }
+  if (donor.isEligible === false) return false;
+
+  const completedDonations = (donations || [])
+    .filter((d) => (d.status || 'Completed').toLowerCase() === 'completed')
+    .sort((a, b) => getTimestamp(b.createdAt || b.donationDate) - getTimestamp(a.createdAt || a.donationDate));
+
+  let lastDate = null;
+  if (completedDonations.length > 0) {
+    lastDate = parseDonationDate(completedDonations[0].createdAt || completedDonations[0].donationDate);
+  } else if (donor.lastDonationDate) {
+    lastDate = parseDonationDate(donor.lastDonationDate);
+  }
+
+  if (lastDate && !Number.isNaN(lastDate.getTime())) {
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - lastDate.getTime()) / (24 * 60 * 60 * 1000));
+    if (diffDays >= 0 && diffDays < 56) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function updateEligibilityDisplay() {
+  const isEligible = calculateDonorEligibility(currentDonor, donorDonations);
+  const statusElem = document.getElementById('eligibilityStatus');
+  if (statusElem) {
+    statusElem.textContent = isEligible ? 'Eligible' : 'Not Eligible';
+  }
 }
 
 function normalizeDonationRecord(record) {
@@ -148,7 +221,7 @@ async function loadDashboardData() {
   try {
     document.getElementById('totalDonations').textContent = donorDonations.length || currentDonor.totalDonations || 0;
     document.getElementById('bloodGroupDisplay').textContent = currentDonor.bloodGroup || '-';
-    document.getElementById('eligibilityStatus').textContent = currentDonor.isEligible ? 'Eligible' : 'Not Eligible';
+    updateEligibilityDisplay();
 
     document.getElementById('profileFullName').value = currentDonor.fullName || '';
     document.getElementById('profileEmail').value = currentDonor.email || '';

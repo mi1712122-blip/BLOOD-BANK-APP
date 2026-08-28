@@ -9,9 +9,20 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
     function isAdmin() {
-      return isSignedIn()
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isSignedIn() && getUserRole() == 'admin';
+    }
+
+    function isOrganization() {
+      return isSignedIn() && getUserRole() == 'organization';
+    }
+
+    function isDonor() {
+      return isSignedIn() && getUserRole() == 'donor';
     }
 
     match /users/{userId} {
@@ -26,9 +37,14 @@ service cloud.firestore {
 
     match /donors/{userId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && isOwner(userId);
-      allow update: if isSignedIn() && isOwner(userId);
-      allow delete: if isSignedIn() && isOwner(userId);
+      allow create: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow update: if isSignedIn()
+        && (
+          isOwner(userId)
+          || isAdmin()
+          || (isOrganization() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalDonations', 'lastDonationDate', 'updatedAt']))
+        );
+      allow delete: if isSignedIn() && (isOwner(userId) || isAdmin());
     }
 
     match /organizations/{orgId} {
@@ -52,11 +68,94 @@ service cloud.firestore {
       allow delete: if isSignedIn();
     }
 
+    match /bloodIssues/{issueId} {
+      allow read: if isSignedIn()
+        && (
+          (isOrganization() && resource.data.organizationId == request.auth.uid)
+          || (isSignedIn() && resource.data.hospitalId == request.auth.uid)
+          || isAdmin()
+        );
+      allow create: if isSignedIn()
+        && (
+          (isOrganization() && request.resource.data.organizationId == request.auth.uid)
+          || isAdmin()
+        );
+      allow update: if isSignedIn()
+        && (
+          (isOrganization() && resource.data.organizationId == request.auth.uid && request.resource.data.organizationId == resource.data.organizationId)
+          || isAdmin()
+        );
+      allow delete: if isSignedIn()
+        && (
+          (isOrganization() && resource.data.organizationId == request.auth.uid)
+          || isAdmin()
+        );
+    }
+
+    match /donations/{donationId} {
+      allow read: if isSignedIn()
+        && (
+          isOrganization()
+          || resource.data.donorId == request.auth.uid
+          || isAdmin()
+        );
+      allow create: if isSignedIn()
+        && (
+          (isOrganization() && request.resource.data.organizationId == request.auth.uid)
+          || isAdmin()
+        );
+      allow update: if isSignedIn()
+        && (
+          (isOrganization() && resource.data.organizationId == request.auth.uid && request.resource.data.organizationId == resource.data.organizationId)
+          || isAdmin()
+        );
+      allow delete: if isSignedIn()
+        && (
+          (isOrganization() && resource.data.organizationId == request.auth.uid)
+          || isAdmin()
+        );
+    }
+
     match /bloodInventory/{inventoryId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow create: if isSignedIn()
+        && (
+          (isOrganization() && request.resource.data.organizationId == request.auth.uid)
+          || isAdmin()
+        );
+      allow update: if isSignedIn()
+        && (
+          (isOrganization() && resource.data.organizationId == request.auth.uid && request.resource.data.organizationId == resource.data.organizationId)
+          || isAdmin()
+        );
+      allow delete: if isSignedIn()
+        && (
+          (isOrganization() && resource.data.organizationId == request.auth.uid)
+          || isAdmin()
+        );
+    }
+
+    match /inventoryHistory/{historyId} {
+      allow read: if isSignedIn()
+        && (
+          (isOrganization() && resource.data.organizationId == request.auth.uid)
+          || isAdmin()
+        );
+      allow create: if isSignedIn()
+        && (
+          (isOrganization() && request.resource.data.organizationId == request.auth.uid)
+          || isAdmin()
+        );
+      allow update: if isSignedIn()
+        && (
+          (isOrganization() && resource.data.organizationId == request.auth.uid && request.resource.data.organizationId == resource.data.organizationId)
+          || isAdmin()
+        );
+      allow delete: if isSignedIn()
+        && (
+          (isOrganization() && resource.data.organizationId == request.auth.uid)
+          || isAdmin()
+        );
     }
 
     match /notifications/{notificationId} {

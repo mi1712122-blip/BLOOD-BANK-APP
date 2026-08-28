@@ -99,7 +99,7 @@ async function checkAuthAndLoadOrganization() {
     allNotifications = notifications.sort((a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt));
     const unreadCount = notifications.filter((item) => !item.isRead).length;
     updateOrgNotificationBadges(unreadCount);
-    document.getElementById('totalNotifications').textContent = notifications.length;
+    if (document.getElementById('totalNotifications')) document.getElementById('totalNotifications').textContent = notifications.length;
     renderRecentNotificationsPreview();
     renderRecentActivityPreview();
     if (currentView === 'notifications') displayNotifications(notifications);
@@ -164,7 +164,8 @@ function setupRealtimeDataListeners() {
     (snapshot) => {
       donationsList = [];
       snapshot.forEach((docSnap) => donationsList.push({ id: docSnap.id, ...docSnap.data() }));
-      document.getElementById('todaysDonations').textContent = donationsList.filter((donation) => isSameDay(donation.createdAt, new Date())).length;
+      const todaysDonationsElem = document.getElementById('todayDonations') || document.getElementById('todaysDonations');
+      if (todaysDonationsElem) todaysDonationsElem.textContent = donationsList.filter((donation) => isSameDay(donation.createdAt, new Date())).length;
       renderDashboardCards();
       renderCurrentView();
     }
@@ -513,7 +514,8 @@ async function loadDonations() {
   const snapshot = await getDocs(donationsQuery);
   donationsList = [];
   snapshot.forEach((docSnap) => donationsList.push({ id: docSnap.id, ...docSnap.data() }));
-  document.getElementById('todaysDonations').textContent = donationsList.filter((donation) => isSameDay(donation.createdAt, new Date())).length;
+  const todaysDonationsElem = document.getElementById('todayDonations') || document.getElementById('todaysDonations');
+  if (todaysDonationsElem) todaysDonationsElem.textContent = donationsList.filter((donation) => isSameDay(donation.createdAt, new Date())).length;
 }
 
 async function loadIssueHistory() {
@@ -535,7 +537,7 @@ async function loadNotifications() {
   if (result.success) {
     const notifications = result.data || [];
     allNotifications = notifications.sort((a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt));
-    document.getElementById('totalNotifications').textContent = notifications.length;
+    if (document.getElementById('totalNotifications')) document.getElementById('totalNotifications').textContent = notifications.length;
     document.getElementById('notificationBadge').textContent = notifications.filter((item) => !item.isRead).length;
     document.getElementById('notificationBadge2').textContent = notifications.filter((item) => !item.isRead).length;
     renderRecentNotificationsPreview();
@@ -926,7 +928,7 @@ function renderRequestsTable() {
     button.addEventListener('click', () => openRejectModal(button.dataset.requestId));
   });
   tableContainer.querySelectorAll('[data-action="issue-blood"]').forEach((button) => {
-    button.addEventListener('click', () => issueBlood(button.dataset.requestId));
+    button.addEventListener('click', (e) => issueBlood(button.dataset.requestId, e.currentTarget));
   });
   tableContainer.querySelectorAll('[data-action="mark-request-completed"]').forEach((button) => {
     button.addEventListener('click', () => openRequestDetails(button.dataset.requestId));
@@ -947,82 +949,185 @@ function renderRequestsTable() {
   });
 }
 
-async function issueBlood(requestId) {
-  const request = requestsList.find((req) => req.id === requestId);
-  if (!request) {
-    alert('Request not found.');
+let bloodIssueInProgress = false;
+
+async function issueBlood(requestId, targetButton = null) {
+  if (bloodIssueInProgress) return;
+
+  if (!currentOrganization?.uid || (currentOrganization.role && currentOrganization.role !== 'organization')) {
+    alert('Only an active organization account can issue blood.');
     return;
   }
 
-  if (request.status === 'Completed') {
-    alert('This request has already been completed.');
+  if (!requestId) {
+    alert('Invalid request ID.');
     return;
   }
 
-  const success = await deductInventory(request.bloodGroup, request.units);
-  if (!success) {
-    alert('Insufficient inventory to issue blood.');
-    return;
+  const actionButton = targetButton || document.querySelector(`[data-action="issue-blood"][data-request-id="${requestId}"]`);
+  const originalText = actionButton ? actionButton.textContent : '';
+
+  if (actionButton) {
+    actionButton.disabled = true;
+    actionButton.textContent = 'Processing...';
   }
 
-  await addDoc(collection(db, 'bloodIssues'), {
-    hospitalId: request.hospitalId,
-    hospitalName: request.hospitalName,
-    organizationId: currentOrganization.uid,
-    organizationName: currentOrganization.organizationName,
-    bloodGroup: request.bloodGroup,
-    units: request.units,
-    issuedBy: currentOrganization.uid,
-    issueDate: new Date(),
-    purpose: request.purpose || 'Hospital request',
-    status: 'Completed',
-    createdAt: new Date()
-  });
+  bloodIssueInProgress = true;
 
-  const completeResult = await bloodRequestManager.completeRequest(requestId, {
-    organizationId: currentOrganization.uid,
-    organizationName: currentOrganization.organizationName,
-    issuedBy: currentOrganization.uid,
-    bloodGroup: request.bloodGroup,
-    units: request.units
-  });
+  try {
+    const requestRef = doc(db, 'bloodRequests', requestId);
+    const requestSnapForGroup = await getDoc(requestRef);
 
-  if (!completeResult.success) {
-    console.error('Failed to complete blood request:', completeResult.error);
-    alert('Request was issued but final status update failed.');
-    return;
-  }
+    if (!requestSnapForGroup.exists()) {
+      throw new Error('Blood request not found.');
+    }
 
-  alert('Blood issued successfully.');
-  await refreshAllData();
-}
+    const initialRequestData = requestSnapForGroup.data();
 
-async function deductInventory(group, unitsNeeded) {
-  const availableItems = inventoryItems
-    .filter((item) => item.bloodGroup === group && item.status === 'Available')
-    .sort((a, b) => {
-      const aExpiry = a.expiryDate?.seconds ? a.expiryDate.seconds * 1000 : a.expiryDate?.toMillis?.() || 0;
-      const bExpiry = b.expiryDate?.seconds ? b.expiryDate.seconds * 1000 : b.expiryDate?.toMillis?.() || 0;
-      return aExpiry - bExpiry;
+    if (initialRequestData.organizationId && initialRequestData.organizationId !== currentOrganization.uid) {
+      throw new Error('This request was not submitted to your organization.');
+    }
+
+    if (['Completed', 'Rejected', 'Cancelled'].includes(initialRequestData.status)) {
+      throw new Error(`This request has already been ${initialRequestData.status.toLowerCase()}.`);
+    }
+
+    const bloodGroup = initialRequestData.bloodGroup;
+    const unitsNeeded = Number(initialRequestData.units);
+
+    if (!bloodGroup) {
+      throw new Error('Request has no valid blood group specified.');
+    }
+
+    if (!Number.isFinite(unitsNeeded) || unitsNeeded <= 0) {
+      throw new Error('Requested blood units must be greater than zero.');
+    }
+
+    const inventoryQuery = query(
+      collection(db, 'bloodInventory'),
+      where('organizationId', '==', currentOrganization.uid),
+      where('bloodGroup', '==', bloodGroup),
+      where('status', '==', 'Available')
+    );
+    const inventorySnapshot = await getDocs(inventoryQuery);
+
+    const transactionResult = await runTransaction(db, async (transaction) => {
+      const reqSnap = await transaction.get(requestRef);
+      if (!reqSnap.exists()) {
+        throw new Error('Blood request not found.');
+      }
+
+      const request = reqSnap.data();
+
+      if (request.organizationId && request.organizationId !== currentOrganization.uid) {
+        throw new Error('This request was not submitted to your organization.');
+      }
+
+      if (['Completed', 'Rejected', 'Cancelled'].includes(request.status)) {
+        throw new Error(`This request has already been ${request.status.toLowerCase()}.`);
+      }
+
+      const reqUnits = Number(request.units);
+      if (!Number.isFinite(reqUnits) || reqUnits <= 0) {
+        throw new Error('Invalid units in blood request.');
+      }
+
+      const inventoryDocSnaps = await Promise.all(
+        inventorySnapshot.docs.map((docSnap) => transaction.get(docSnap.ref))
+      );
+
+      const availableItems = inventoryDocSnaps
+        .filter((snap) => snap.exists() && snap.data().status === 'Available')
+        .map((snap) => ({ ref: snap.ref, id: snap.id, ...snap.data() }))
+        .sort((a, b) => {
+          const aExp = a.expiryDate?.seconds ? a.expiryDate.seconds * 1000 : (a.expiryDate ? new Date(a.expiryDate).getTime() : 0);
+          const bExp = b.expiryDate?.seconds ? b.expiryDate.seconds * 1000 : (b.expiryDate ? new Date(b.expiryDate).getTime() : 0);
+          return aExp - bExp;
+        });
+
+      const totalAvailable = availableItems.reduce((sum, item) => sum + (Number(item.units) || 0), 0);
+      if (totalAvailable < reqUnits) {
+        throw new Error(`Insufficient inventory for blood group ${request.bloodGroup}. Available: ${totalAvailable} units, Required: ${reqUnits} units.`);
+      }
+
+      let remaining = reqUnits;
+      const now = new Date();
+
+      for (const item of availableItems) {
+        if (remaining <= 0) break;
+        const currentUnits = Number(item.units) || 0;
+        const reduceBy = Math.min(currentUnits, remaining);
+        const newUnits = currentUnits - reduceBy;
+        remaining -= reduceBy;
+
+        transaction.update(item.ref, {
+          units: newUnits,
+          status: newUnits > 0 ? 'Available' : 'Used',
+          updatedAt: now
+        });
+      }
+
+      const bloodIssueRef = doc(collection(db, 'bloodIssues'));
+      transaction.set(bloodIssueRef, {
+        issueId: bloodIssueRef.id,
+        requestId: requestId,
+        hospitalId: request.hospitalId || '',
+        hospitalName: request.hospitalName || '',
+        organizationId: currentOrganization.uid,
+        organizationName: currentOrganization.organizationName || 'Organization',
+        bloodGroup: request.bloodGroup,
+        units: reqUnits,
+        issuedBy: currentOrganization.uid,
+        issueDate: now,
+        purpose: request.purpose || 'Hospital request',
+        status: 'Completed',
+        createdAt: now
+      });
+
+      transaction.update(requestRef, {
+        status: 'Completed',
+        issuedAt: now,
+        completedAt: now,
+        updatedAt: now,
+        issueDetails: {
+          organizationId: currentOrganization.uid,
+          organizationName: currentOrganization.organizationName || 'Organization',
+          unitsIssued: reqUnits,
+          bloodGroup: request.bloodGroup,
+          issuedBy: currentOrganization.uid
+        }
+      });
+
+      return { request, reqUnits };
     });
 
-  let remaining = unitsNeeded;
-  const updates = [];
-  for (const item of availableItems) {
-    if (remaining <= 0) break;
-    const reduceBy = Math.min(item.units, remaining);
-    updates.push({ id: item.id, units: item.units - reduceBy });
-    remaining -= reduceBy;
+    try {
+      await bloodRequestManager.broadcastRequestNotification({
+        request: { ...transactionResult.request, id: requestId },
+        event: 'blood_delivered',
+        title: 'Blood Delivered',
+        message: `${transactionResult.reqUnits} units of ${transactionResult.request.bloodGroup} have been issued and delivered to your hospital.`,
+        senderId: currentOrganization.uid,
+        senderRole: 'organization',
+        senderName: currentOrganization.organizationName || 'Organization'
+      });
+    } catch (notifErr) {
+      console.error('Blood issued successfully, but notification failed:', notifErr);
+    }
+
+    alert('Blood issued successfully.');
+    await refreshAllData();
+
+  } catch (error) {
+    console.error('Error issuing blood:', error);
+    alert(error?.message || 'Failed to issue blood. Please try again.');
+  } finally {
+    bloodIssueInProgress = false;
+    if (actionButton) {
+      actionButton.disabled = false;
+      actionButton.textContent = originalText || 'Issue Blood';
+    }
   }
-
-  if (remaining > 0) return false;
-
-  await Promise.all(updates.map((update) => updateDoc(doc(db, 'bloodInventory', update.id), {
-    units: update.units,
-    status: update.units > 0 ? 'Available' : 'Used',
-    updatedAt: new Date()
-  })));
-  return true;
 }
 
 function openRequestDetails(requestId) {
@@ -1189,6 +1294,13 @@ function setupNavigation() {
     });
   });
 
+  document.querySelectorAll('[data-action="close-record-donation-modal"]').forEach((element) => {
+    element.addEventListener('click', (event) => {
+      event.preventDefault();
+      closeRecordDonationModal();
+    });
+  });
+
   const profileButton = document.querySelector('.dropdown > button');
   const dropdownMenu = document.querySelector('.dropdown-menu');
   if (profileButton && dropdownMenu) {
@@ -1348,19 +1460,6 @@ function displayNotifications(notifications) {
     `;
   });
   container.innerHTML = html;
-
-  container.querySelectorAll('.delete-notification-btn').forEach((button) => {
-    button.addEventListener('click', async (event) => {
-      event.stopPropagation();
-      const notificationId = button.dataset.notificationId;
-      if (!notificationId) return;
-      try {
-        await bloodRequestManager.deleteNotification(notificationId);
-      } catch (error) {
-        console.error('Error deleting notification:', error);
-      }
-    });
-  });
 }
 
 function updateOrgNotificationBadges(unreadCount) {
@@ -1441,7 +1540,23 @@ function setupSearchAndFilters() {
   document.getElementById('hospitalStatusFilter')?.addEventListener('change', renderHospitalsTable);
   document.getElementById('notificationsList')?.addEventListener('click', async (event) => {
     const deleteButton = event.target.closest('.delete-notification-btn');
-    if (deleteButton) return;
+    if (deleteButton) {
+      const notificationId = deleteButton.dataset.notificationId;
+      if (!notificationId) return;
+      try {
+        await bloodRequestManager.deleteNotification(notificationId);
+        const card = deleteButton.closest('.notification-item');
+        if (card) card.remove();
+        allNotifications = allNotifications.filter((n) => n.id !== notificationId);
+        const unreadCount = allNotifications.filter((n) => !n.isRead).length;
+        updateOrgNotificationBadges(unreadCount);
+        if (document.getElementById('totalNotifications')) document.getElementById('totalNotifications').textContent = allNotifications.length;
+        renderRecentNotificationsPreview();
+      } catch (error) {
+        console.error('Error deleting notification:', error);
+      }
+      return;
+    }
     const item = event.target.closest('.notification-item');
     if (!item) return;
     const id = item.dataset.notificationId;
@@ -1710,9 +1825,10 @@ async function saveDonationRecord(event) {
   const units = Number(document.getElementById('donationUnits')?.value);
   const collectionDateValue = document.getElementById('donationCollectionDate')?.value;
   const remarks = document.getElementById('donationRemarks')?.value.trim() || '';
+  const bloodGroup = document.getElementById('donationBloodGroup')?.value || '';
   const saveButton = document.getElementById('saveDonationBtn');
 
-  if (!currentOrganization?.uid || currentOrganization.role !== 'organization') {
+  if (!currentOrganization?.uid || (currentOrganization.role && currentOrganization.role !== 'organization')) {
     alert('Only an active organization account can record a donation.');
     return;
   }
@@ -1729,6 +1845,12 @@ async function saveDonationRecord(event) {
     return;
   }
 
+  const donationDate = new Date(`${collectionDateValue}T00:00:00`);
+  if (Number.isNaN(donationDate.getTime())) {
+    alert('Please provide a valid collection date.');
+    return;
+  }
+
   donationSaveInProgress = true;
   if (saveButton) {
     saveButton.disabled = true;
@@ -1736,84 +1858,163 @@ async function saveDonationRecord(event) {
   }
 
   try {
+    // Queries MUST be run BEFORE runTransaction because transaction.get() only accepts DocumentReferences
+    const donationQuery = query(collection(db, 'donations'), where('donorId', '==', donorId));
+    const inventoryQuery = query(
+      collection(db, 'bloodInventory'),
+      where('organizationId', '==', currentOrganization.uid),
+      where('bloodGroup', '==', bloodGroup),
+      where('status', '==', 'Available')
+    );
+
+    const [donorDonationsSnapshot, inventorySnapshot] = await Promise.all([
+      getDocs(donationQuery),
+      getDocs(inventoryQuery)
+    ]);
+
     const donationId = await runTransaction(db, async (transaction) => {
       const donorRef = doc(db, 'donors', donorId);
       const organizationRef = doc(db, 'organizations', currentOrganization.uid);
-      const bloodGroup = document.getElementById('donationBloodGroup').value;
-      const donationQuery = query(collection(db, 'donations'), where('donorId', '==', donorId));
-      const inventoryQuery = query(collection(db, 'bloodInventory'), where('organizationId', '==', currentOrganization.uid), where('bloodGroup', '==', bloodGroup));
-      const [donorSnapshot, organizationSnapshot, donorDonationsSnapshot, inventorySnapshot] = await Promise.all([
-        transaction.get(donorRef), transaction.get(organizationRef), transaction.get(donationQuery), transaction.get(inventoryQuery)
-      ]);
 
-      if (!donorSnapshot.exists()) throw new Error('The selected donor no longer exists.');
-      if (!organizationSnapshot.exists()) throw new Error('The organization account could not be verified.');
+      const donorSnapshot = await transaction.get(donorRef);
+      const organizationSnapshot = await transaction.get(organizationRef);
+
+      if (!donorSnapshot.exists()) {
+        throw new Error('The selected donor no longer exists.');
+      }
+      if (!organizationSnapshot.exists()) {
+        throw new Error('The organization account could not be verified.');
+      }
+
       const donor = donorSnapshot.data();
+
       if (donor.isActive === false || ['inactive', 'rejected'].includes(String(donor.status || '').toLowerCase())) {
         throw new Error('This donor account is inactive and cannot donate.');
       }
-      if (donor.isEligible === false) throw new Error('This donor is currently not eligible to donate.');
+      if (donor.isEligible === false) {
+        throw new Error('This donor is currently not eligible to donate.');
+      }
 
-      const donationDate = new Date(`${collectionDateValue}T00:00:00`);
-      if (Number.isNaN(donationDate.getTime())) throw new Error('Please provide a valid collection date.');
-      if (donorDonationsSnapshot.docs.some((item) => isSameCalendarDay(item.data().donationDate || item.data().createdAt, donationDate))) {
+      const isSameDayDonation = donorDonationsSnapshot.docs.some((item) =>
+        isSameCalendarDay(item.data().donationDate || item.data().createdAt, donationDate)
+      );
+      if (isSameDayDonation) {
         throw new Error('A donation for this donor has already been recorded on this date.');
       }
+
       if (donor.lastDonationDate) {
-        const lastDate = donor.lastDonationDate?.toDate ? donor.lastDonationDate.toDate() : donor.lastDonationDate?.seconds ? new Date(donor.lastDonationDate.seconds * 1000) : new Date(donor.lastDonationDate);
-        const daysSinceLastDonation = Math.floor((donationDate - lastDate) / (24 * 60 * 60 * 1000));
-        if (!Number.isNaN(daysSinceLastDonation) && daysSinceLastDonation >= 0 && daysSinceLastDonation < 56) {
-          throw new Error('This donor is currently not eligible to donate.');
+        const lastDate = donor.lastDonationDate?.toDate
+          ? donor.lastDonationDate.toDate()
+          : donor.lastDonationDate?.seconds
+          ? new Date(donor.lastDonationDate.seconds * 1000)
+          : new Date(donor.lastDonationDate);
+
+        if (!Number.isNaN(lastDate.getTime())) {
+          const daysSinceLastDonation = Math.floor((donationDate - lastDate) / (24 * 60 * 60 * 1000));
+          if (daysSinceLastDonation >= 0 && daysSinceLastDonation < 56) {
+            throw new Error('This donor is currently not eligible to donate.');
+          }
         }
       }
 
       const donationRef = doc(collection(db, 'donations'));
       const inventoryHistoryRef = doc(collection(db, 'inventoryHistory'));
-      const inventoryDocument = inventorySnapshot.docs.find((item) => item.data().status === 'Available') || inventorySnapshot.docs[0];
+
+      const inventoryDocument = inventorySnapshot.docs[0];
       const previousUnits = inventoryDocument ? (Number(inventoryDocument.data().units) || 0) : 0;
       const currentUnits = previousUnits + units;
       const now = new Date();
       const donorBloodGroup = donor.bloodGroup || bloodGroup;
 
+      // 1. Create Donation Record
       transaction.set(donationRef, {
-        donationId: donationRef.id, donorId, organizationId: currentOrganization.uid,
-        organizationName: currentOrganization.organizationName || '', donorName: donor.fullName || '',
-        bloodGroup: donorBloodGroup, units, donationDate, status: 'Completed', remarks, createdAt: now
+        donationId: donationRef.id,
+        donorId,
+        organizationId: currentOrganization.uid,
+        organizationName: currentOrganization.organizationName || '',
+        donorName: donor.fullName || '',
+        bloodGroup: donorBloodGroup,
+        units,
+        donationDate,
+        status: 'Completed',
+        remarks,
+        createdAt: now
       });
+
+      // 2. Update Donor Statistics
       transaction.update(donorRef, {
         totalDonations: (Number(donor.totalDonations) || 0) + 1,
-        lastDonationDate: donationDate, updatedAt: now
+        lastDonationDate: donationDate,
+        updatedAt: now
       });
+
+      // 3. Update or Create Blood Inventory Record
       if (inventoryDocument) {
-        transaction.update(inventoryDocument.ref, { units: currentUnits, status: 'Available', updatedAt: now });
+        transaction.update(inventoryDocument.ref, {
+          units: currentUnits,
+          status: 'Available',
+          updatedAt: now
+        });
       } else {
-        transaction.set(doc(collection(db, 'bloodInventory')), {
-          organizationId: currentOrganization.uid, organizationName: currentOrganization.organizationName || '',
-          bloodGroup: donorBloodGroup, units, donorId, status: 'Available', collectionDate: donationDate,
-          expiryDate: null, storageLocation: null, notes: remarks || null, createdAt: now, updatedAt: now
+        const newInventoryRef = doc(collection(db, 'bloodInventory'));
+        transaction.set(newInventoryRef, {
+          organizationId: currentOrganization.uid,
+          organizationName: currentOrganization.organizationName || '',
+          bloodGroup: donorBloodGroup,
+          units: units,
+          donorId: donorId,
+          status: 'Available',
+          collectionDate: donationDate,
+          createdAt: now,
+          updatedAt: now
         });
       }
+
+      // 4. Create Inventory History Record
       transaction.set(inventoryHistoryRef, {
-        organizationId: currentOrganization.uid, organizationName: currentOrganization.organizationName || '',
-        bloodGroup: donorBloodGroup, units, quantity: units, previousUnits, currentUnits, difference: units,
-        reason: 'Donation', donationId: donationRef.id, date: donationDate,
-        userId: currentOrganization.uid, createdAt: now
+        organizationId: currentOrganization.uid,
+        organizationName: currentOrganization.organizationName || '',
+        bloodGroup: donorBloodGroup,
+        units: units,
+        quantity: units,
+        previousUnits: previousUnits,
+        currentUnits: currentUnits,
+        difference: units,
+        reason: 'Donation',
+        donationId: donationRef.id,
+        date: donationDate,
+        userId: currentOrganization.uid,
+        createdAt: now
       });
+
       return donationRef.id;
     });
 
     const notificationResult = await bloodRequestManager.sendNotification({
-      recipientId: donorId, recipientRole: 'donor', type: 'donation_recorded',
+      recipientId: donorId,
+      recipientRole: 'donor',
+      type: 'donation_recorded',
       title: 'Blood Donation Successful',
       message: 'Thank you for donating blood. Your donation has been successfully recorded.',
-      senderId: currentOrganization.uid, senderRole: 'organization',
+      senderId: currentOrganization.uid,
+      senderRole: 'organization',
       senderName: currentOrganization.organizationName || 'Organization',
-      targetType: 'User', targetRole: 'donor', targetUserId: donorId
+      targetType: 'User',
+      targetRole: 'donor',
+      targetUserId: donorId
     });
-    if (!notificationResult.success) console.error('Donation recorded, but donor notification failed:', notificationResult.error);
+
+    if (!notificationResult.success) {
+      console.error('Donation recorded, but donor notification failed:', notificationResult.error);
+    }
+
     closeRecordDonationModal();
     await refreshAllData();
-    alert(notificationResult.success ? 'Donation recorded successfully.' : 'Donation recorded successfully, but the donor notification could not be sent.');
+    alert(
+      notificationResult.success
+        ? 'Donation recorded successfully.'
+        : 'Donation recorded successfully, but the donor notification could not be sent.'
+    );
     return donationId;
   } catch (error) {
     console.error('Error recording donation:', error);
@@ -2525,6 +2726,14 @@ document.getElementById('requestDetailsModal')?.addEventListener('click', (e) =>
     closeRequestDetailsModal();
   }
 });
+
+document.getElementById('recordDonationModal')?.addEventListener('click', (e) => {
+  if (e.target === document.getElementById('recordDonationModal')) {
+    closeRecordDonationModal();
+  }
+});
+
+document.getElementById('recordDonationForm')?.addEventListener('submit', saveDonationRecord);
 
 document.getElementById('inventoryActionForm')?.addEventListener('submit', async (event) => {
   event.preventDefault();

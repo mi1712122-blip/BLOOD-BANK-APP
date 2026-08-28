@@ -46,7 +46,7 @@ function getProfileData() {
   if (selectedRole === 'donor') {
     const data = { phone, fullName: value('fullName'), age: Number(value('age')), gender: value('gender'), bloodGroup: value('bloodGroup'), city: value('city'), address: value('address') };
     if (!data.fullName || !data.age || !data.gender || !data.bloodGroup || !data.city || !data.address) return { error: 'Please complete all donor information.' };
-    if (data.age < 18 || data.age > 65) return { error: 'Donor age must be between 18 and 65.' };
+    if (data.age < 18 || data.age > 60) return { error: 'Donor age must be between 18 and 60.' };
     return { data };
   }
 

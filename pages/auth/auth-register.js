@@ -179,6 +179,115 @@ function isStrongPassword(password) {
   return hasUppercase && hasLowercase && hasNumbers && hasMinLength;
 }
 
+
+// Role selection
+roleButtons.forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    const role = btn.dataset.role;
+    selectRole(role);
+  });
+});
+
+function selectRole(role) {
+  selectedRole = role;
+  
+  // Update UI
+  roleButtons.forEach(btn => btn.classList.remove('active'));
+  document.querySelector(`[data-role="${role}"]`).classList.add('active');
+  
+  // Show form and hide role selection
+  roleSelection.style.display = 'none';
+  registerForm.classList.remove('hidden');
+  
+  // Show/hide role-specific fields
+  document.getElementById('donorFields').classList.toggle('hidden', role !== 'donor');
+  document.getElementById('organizationFields').classList.toggle('hidden', role !== 'organization');
+  document.getElementById('hospitalFields').classList.toggle('hidden', role !== 'hospital');
+  
+  // Show/hide role icons on sides
+  document.querySelectorAll('.donor-icon').forEach(icon => icon.classList.toggle('active', role === 'donor'));
+  document.querySelectorAll('.organization-icon').forEach(icon => icon.classList.toggle('active', role === 'organization'));
+  document.querySelectorAll('.hospital-icon').forEach(icon => icon.classList.toggle('active', role === 'hospital'));
+  
+  // Scroll to form
+  registerForm.scrollIntoView({ behavior: 'smooth' });
+}
+
+function goBackToRoleSelection() {
+  roleSelection.style.display = 'block';
+  registerForm.classList.add('hidden');
+  selectedRole = null;
+  roleButtons.forEach(btn => btn.classList.remove('active'));
+  
+  // Hide all role icons
+  document.querySelectorAll('.role-icon').forEach(icon => icon.classList.remove('active'));
+  
+  alertContainer.innerHTML = '';
+}
+
+// Toggle password visibility
+function togglePasswordVisibility(event, fieldId) {
+  const field = document.getElementById(fieldId);
+  const btn = event.currentTarget || event.target.closest('.toggle-password');
+  const icon = btn?.querySelector('i');
+
+  if (!field || !btn || !icon) return;
+  
+  if (field.type === 'password') {
+    field.type = 'text';
+    icon.classList.remove('fa-eye');
+    icon.classList.add('fa-eye-slash');
+  } else {
+    field.type = 'password';
+    icon.classList.remove('fa-eye-slash');
+    icon.classList.add('fa-eye');
+  }
+}
+
+// Show alert
+function showAlert(message, type = 'info') {
+  const alertDiv = document.createElement('div');
+  alertDiv.className = `alert alert-${type}`;
+  
+  let icon = 'fa-info-circle';
+  if (type === 'success') icon = 'fa-check-circle';
+  if (type === 'danger') icon = 'fa-exclamation-circle';
+  if (type === 'warning') icon = 'fa-warning';
+  
+  alertDiv.innerHTML = `
+    <i class="fas ${icon}"></i>
+    <span>${message}</span>
+  `;
+  
+  alertContainer.innerHTML = '';
+  alertContainer.appendChild(alertDiv);
+}
+
+// Show loading
+function showLoading() {
+  loadingSpinner.classList.remove('hidden');
+}
+
+function hideLoading() {
+  loadingSpinner.classList.add('hidden');
+}
+
+// Validate email
+function isValidEmail(email) {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+}
+
+// Validate password strength
+function isStrongPassword(password) {
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasLowercase = /[a-z]/.test(password);
+  const hasNumbers = /[0-9]/.test(password);
+  const hasMinLength = password.length >= 8;
+  
+  return hasUppercase && hasLowercase && hasNumbers && hasMinLength;
+}
+
 // Validate phone number
 function isValidPhone(phone) {
   const phoneRegex = /^[\d\s\-\+\(\)]{10,}$/;
@@ -233,7 +342,7 @@ registerForm.addEventListener('submit', async (e) => {
     email: email,
     phone: phone
   };
-  
+
   if (selectedRole === 'donor') {
     const fullName = document.getElementById('fullName').value.trim();
     const age = document.getElementById('age').value;
@@ -241,21 +350,21 @@ registerForm.addEventListener('submit', async (e) => {
     const bloodGroup = document.getElementById('bloodGroup').value;
     const city = document.getElementById('city').value.trim();
     const address = document.getElementById('address').value.trim();
-    
+
     if (!fullName || !age || !gender || !bloodGroup || !city || !address) {
       showAlert('Please fill in all donor information', 'warning');
       return;
     }
-    
-    if (age < 18 || age > 65) {
-      showAlert('Donor age must be between 18 and 65', 'danger');
+
+    if (age < 18 || age > 60) {
+      showAlert('Donor age must be between 18 and 60', 'danger');
       return;
     }
-    
+
     userData = {
       ...userData,
       fullName,
-      age: parseInt(age),
+      age: parseInt(age, 10),
       gender,
       bloodGroup,
       city,
@@ -266,12 +375,12 @@ registerForm.addEventListener('submit', async (e) => {
     const licenseNumber = document.getElementById('licenseNumber').value.trim();
     const city = document.getElementById('orgCity').value.trim();
     const address = document.getElementById('orgAddress').value.trim();
-    
+
     if (!organizationName || !licenseNumber || !city || !address) {
       showAlert('Please fill in all organization information', 'warning');
       return;
     }
-    
+
     userData = {
       ...userData,
       organizationName,
@@ -284,12 +393,12 @@ registerForm.addEventListener('submit', async (e) => {
     const licenseNumber = document.getElementById('hospitalLicense').value.trim();
     const city = document.getElementById('hospitalCity').value.trim();
     const address = document.getElementById('hospitalAddress').value.trim();
-    
+
     if (!hospitalName || !licenseNumber || !city || !address) {
       showAlert('Please fill in all hospital information', 'warning');
       return;
     }
-    
+
     userData = {
       ...userData,
       hospitalName,
@@ -298,11 +407,10 @@ registerForm.addEventListener('submit', async (e) => {
       address
     };
   }
-  
+
   showLoading();
-  
+
   try {
-    // Register user
     const result = await authManager.register(email, password, userData);
     
     if (result.success) {
