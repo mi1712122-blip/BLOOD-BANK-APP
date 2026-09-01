@@ -76,6 +76,15 @@ async function checkAuthAndLoadAdmin() {
 }
 
 function setupRealtimeListeners() {
+  onSnapshot(collection(db, 'users'), (snapshot) => {
+    usersList = [];
+    snapshot.forEach((docSnap) => {
+      usersList.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    const totalUsersElem = document.getElementById('totalUsers');
+    if (totalUsersElem) totalUsersElem.textContent = snapshot.size;
+  });
+
   // Listen for inventory items
   onSnapshot(collection(db, 'bloodInventory'), (snapshot) => {
     allInventoryItems = [];
@@ -652,6 +661,12 @@ function renderAdminAnalytics() {
   const totalUnits = allInventoryItems.reduce((sum, i) => sum + (Number(i.units) || 0), 0);
   if (document.getElementById('analyticsTotalUnits')) document.getElementById('analyticsTotalUnits').textContent = totalUnits;
   if (document.getElementById('analyticsTotalRequests')) document.getElementById('analyticsTotalRequests').textContent = filteredRequests.length;
+
+  // Donation Metrics
+  const totalDonations = filteredDonations.length;
+  const todayDonations = filteredDonations.filter((d) => isSameDay(d.createdAt, now)).length;
+  if (document.getElementById('analyticsTotalDonations')) document.getElementById('analyticsTotalDonations').textContent = totalDonations;
+  if (document.getElementById('analyticsTodayDonations')) document.getElementById('analyticsTodayDonations').textContent = todayDonations;
 
   const completed = filteredRequests.filter((r) => r.status === 'Completed').length;
   const pending = filteredRequests.filter((r) => r.status === 'Pending').length;

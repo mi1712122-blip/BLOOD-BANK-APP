@@ -62,10 +62,51 @@ service cloud.firestore {
     }
 
     match /bloodRequests/{requestId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow read: if isSignedIn()
+        && (
+          (getUserRole() == 'hospital' && resource.data.hospitalId == request.auth.uid)
+          || (getUserRole() == 'organization' && resource.data.organizationId == request.auth.uid)
+          || isAdmin()
+        );
+      allow create: if isSignedIn()
+        && getUserRole() == 'hospital'
+        && request.resource.data.hospitalId == request.auth.uid
+        && request.resource.data.status == 'Pending'
+        && request.resource.data.keys().hasOnly([
+             'hospitalId', 'hospitalName', 'bloodGroup', 'units', 'urgencyLevel',
+             'patientName', 'patientAge', 'purpose', 'organizationId', 'organizationName',
+             'status', 'createdAt', 'updatedAt'
+           ]);
+      allow update: if isSignedIn()
+        && (
+          // Hospital can cancel their own pending requests
+          (getUserRole() == 'hospital'
+            && resource.data.hospitalId == request.auth.uid
+            && resource.data.status == 'Pending'
+            && request.resource.data.status == 'Cancelled'
+            && request.resource.data.keys().hasOnly(['status', 'cancellationReason', 'cancelledAt', 'updatedAt']))
+          ||
+          // Organization can approve/reject/issue for their requests
+          (getUserRole() == 'organization'
+            && resource.data.organizationId == request.auth.uid
+            && (
+              // Approve: Pending -> Processing
+              (resource.data.status == 'Pending'
+                && request.resource.data.status == 'Processing'
+                && request.resource.data.keys().hasOnly(['status', 'approvedAt', 'updatedAt', 'organizationId']))
+              ||
+              // Reject: Pending -> Rejected
+              (resource.data.status == 'Pending'
+                && request.resource.data.status == 'Rejected'
+                && request.resource.data.keys().hasOnly(['status', 'rejectionReason', 'rejectedAt']))
+              ||
+              // Issue blood: Processing -> Completed
+              (resource.data.status == 'Processing'
+                && request.resource.data.status == 'Completed'
+                && request.resource.data.keys().hasOnly(['status', 'issuedAt', 'completedAt', 'updatedAt', 'issueDetails']))
+            ))
+        );
+      allow delete: if false;
     }
 
     match /bloodIssues/{issueId} {
