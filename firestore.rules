@@ -50,15 +50,15 @@ service cloud.firestore {
     match /organizations/{orgId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isOwner(orgId);
-      allow update: if isSignedIn() && isOwner(orgId);
-      allow delete: if isSignedIn() && isOwner(orgId);
+      allow update: if isSignedIn() && (isOwner(orgId) || isAdmin());
+      allow delete: if isSignedIn() && (isOwner(orgId) || isAdmin());
     }
 
     match /hospitals/{hospitalId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isOwner(hospitalId);
-      allow update: if isSignedIn() && isOwner(hospitalId);
-      allow delete: if isSignedIn() && isOwner(hospitalId);
+      allow update: if isSignedIn() && (isOwner(hospitalId) || isAdmin());
+      allow delete: if isSignedIn() && (isOwner(hospitalId) || isAdmin());
     }
 
     match /bloodRequests/{requestId} {
@@ -162,14 +162,13 @@ service cloud.firestore {
       allow read: if isSignedIn()
         && (
           resource.data.recipientId == request.auth.uid
-          || resource.data.senderId == request.auth.uid
           || isAdmin()
         );
       allow create: if isSignedIn()
         && request.resource.data.recipientId is string
+        && request.resource.data.senderId is string
         && (
-          request.resource.data.recipientId == request.auth.uid
-          || request.resource.data.senderId == request.auth.uid
+          request.resource.data.senderId == request.auth.uid
           || isAdmin()
         );
       allow update: if isSignedIn()

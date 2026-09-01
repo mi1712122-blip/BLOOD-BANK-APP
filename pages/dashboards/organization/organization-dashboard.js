@@ -988,8 +988,8 @@ async function issueBlood(requestId, targetButton = null) {
       throw new Error('This request was not submitted to your organization.');
     }
 
-    if (['Completed', 'Rejected', 'Cancelled'].includes(initialRequestData.status)) {
-      throw new Error(`This request has already been ${initialRequestData.status.toLowerCase()}.`);
+    if (initialRequestData.status !== 'Processing') {
+      throw new Error('This request must be in Processing status before blood can be issued.');
     }
 
     const bloodGroup = initialRequestData.bloodGroup;
@@ -1023,8 +1023,8 @@ async function issueBlood(requestId, targetButton = null) {
         throw new Error('This request was not submitted to your organization.');
       }
 
-      if (['Completed', 'Rejected', 'Cancelled'].includes(request.status)) {
-        throw new Error(`This request has already been ${request.status.toLowerCase()}.`);
+      if (request.status !== 'Processing') {
+        throw new Error('This request must be in Processing status before blood can be issued.');
       }
 
       const reqUnits = Number(request.units);
@@ -1064,6 +1064,23 @@ async function issueBlood(requestId, targetButton = null) {
           units: newUnits,
           status: newUnits > 0 ? 'Available' : 'Used',
           updatedAt: now
+        });
+
+        const inventoryHistoryRef = doc(collection(db, 'inventoryHistory'));
+        transaction.set(inventoryHistoryRef, {
+          organizationId: currentOrganization.uid,
+          organizationName: currentOrganization.organizationName || 'Organization',
+          bloodGroup: request.bloodGroup,
+          quantity: reduceBy,
+          units: reduceBy,
+          previousUnits: currentUnits,
+          currentUnits: newUnits,
+          difference: -reduceBy,
+          reason: 'Blood Issue',
+          requestId,
+          date: now,
+          userId: currentOrganization.uid,
+          createdAt: now
         });
       }
 
