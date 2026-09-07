@@ -208,8 +208,8 @@ async function loadDonorsData(snapshot) {
         <td><span class="badge ${statusBadgeClass}">${donorStatus}</span></td>
         <td>
           ${!isApproved ? `<button class="btn btn-sm btn-primary" data-action="approve-donor" data-user-id="${uid}">Approve</button> <button class="btn btn-sm btn-danger" data-action="reject-donor" data-user-id="${uid}">Reject</button>` : ''}
-          <button class="btn btn-sm btn-secondary" data-action="view-donor" data-user-id="${uid}">View</button>
-          <button class="btn btn-sm btn-secondary" data-action="delete-donor" data-user-id="${uid}">Delete</button>
+          <button type="button" class="btn btn-sm btn-secondary" data-action="view-donor" data-user-id="${uid}">View</button>
+          <button type="button" class="btn btn-sm btn-danger delete-btn" data-action="delete-donor" data-user-id="${uid}" title="Delete Donor"><i class="fas fa-trash-alt"></i> Delete</button>
         </td>
       </tr>
     `;
@@ -262,8 +262,8 @@ async function loadOrganizationsData(snapshot) {
         <td><span class="badge ${statusBadgeClass}">${status}</span></td>
         <td>
           ${needsAction ? `<button class="btn btn-sm btn-primary" data-action="approve-org" data-user-id="${org.uid}">Approve</button> <button class="btn btn-sm btn-danger" data-action="reject-org" data-user-id="${org.uid}">Reject</button>` : ''}
-          <button class="btn btn-sm btn-secondary" data-action="view-org" data-user-id="${org.uid}">View</button>
-          <button class="btn btn-sm btn-secondary" data-action="delete-org" data-user-id="${org.uid}">Delete</button>
+          <button type="button" class="btn btn-sm btn-secondary" data-action="view-org" data-user-id="${org.uid}">View</button>
+          <button type="button" class="btn btn-sm btn-danger delete-btn" data-action="delete-org" data-user-id="${org.uid}" title="Delete Organization"><i class="fas fa-trash-alt"></i> Delete</button>
         </td>
       </tr>
     `;
@@ -288,8 +288,8 @@ async function loadHospitalsData(snapshot) {
         <td><span class="badge ${statusBadgeClass}">${status}</span></td>
         <td>
           ${needsAction ? `<button class="btn btn-sm btn-primary" data-action="approve-hospital" data-user-id="${hospital.uid}">Approve</button> <button class="btn btn-sm btn-danger" data-action="reject-hospital" data-user-id="${hospital.uid}">Reject</button>` : ''}
-          <button class="btn btn-sm btn-secondary" data-action="view-hospital" data-user-id="${hospital.uid}">View</button>
-          <button class="btn btn-sm btn-secondary" data-action="delete-hospital" data-user-id="${hospital.uid}">Delete</button>
+          <button type="button" class="btn btn-sm btn-secondary" data-action="view-hospital" data-user-id="${hospital.uid}">View</button>
+          <button type="button" class="btn btn-sm btn-danger delete-btn" data-action="delete-hospital" data-user-id="${hospital.uid}" title="Delete Hospital"><i class="fas fa-trash-alt"></i> Delete</button>
         </td>
       </tr>
     `;
@@ -489,7 +489,7 @@ function renderAdminInventoryCharts(groupStats) {
 
   renderChart('adminInventoryDistChart', 'Blood Group Distribution', labels, totalData, null, 'pie');
 
-  // Available vs Reserved Bar Chart
+  // Available Bar Chart
   const ctx2 = document.getElementById('adminInventoryReserveChart')?.getContext('2d');
   if (ctx2) {
     if (chartInstances['adminInventoryReserveChart']) {
@@ -883,9 +883,9 @@ function renderContactMessagesTable() {
         <td>${dateStr}</td>
         <td><span class="badge ${badgeClass}">${status}</span></td>
         <td>
-          <button class="btn btn-sm btn-secondary" data-action="view-contact-msg" data-id="${msg.id}">View</button>
-          ${status !== 'Read' ? `<button class="btn btn-sm btn-primary" data-action="read-contact-msg" data-id="${msg.id}">Mark Read</button>` : ''}
-          <button class="btn btn-sm btn-danger" data-action="delete-contact-msg" data-id="${msg.id}">Delete</button>
+          <button type="button" class="btn btn-sm btn-secondary" data-action="view-contact-msg" data-id="${msg.id}">View</button>
+          ${status !== 'Read' ? `<button type="button" class="btn btn-sm btn-primary" data-action="read-contact-msg" data-id="${msg.id}">Mark Read</button>` : ''}
+          <button type="button" class="btn btn-sm btn-danger delete-btn" data-action="delete-contact-msg" data-id="${msg.id}" title="Delete Message"><i class="fas fa-trash-alt"></i> Delete</button>
         </td>
       </tr>
     `;
@@ -1063,6 +1063,7 @@ async function deleteDonor(uid) {
   if (!confirm('Are you sure you want to delete this donor?')) return;
   try {
     await deleteDoc(doc(db, 'donors', uid));
+    await deleteDoc(doc(db, 'users', uid));
     alert('Donor deleted.');
     await loadDashboardData();
   } catch (err) {
@@ -1094,6 +1095,7 @@ async function deleteOrg(uid) {
   if (!confirm('Are you sure you want to delete this organization?')) return;
   try {
     await deleteDoc(doc(db, 'organizations', uid));
+    await deleteDoc(doc(db, 'users', uid));
     alert('Organization deleted.');
     await loadDashboardData();
   } catch (err) {
@@ -1125,6 +1127,7 @@ async function deleteHospital(uid) {
   if (!confirm('Are you sure you want to delete this hospital?')) return;
   try {
     await deleteDoc(doc(db, 'hospitals', uid));
+    await deleteDoc(doc(db, 'users', uid));
     alert('Hospital deleted.');
     await loadDashboardData();
   } catch (err) {
@@ -1511,7 +1514,7 @@ function displayAdminNotifications(notifications) {
           <div class="notification-message">${notif.message || ''}</div>
           <div class="notification-time">${timeAgo} · ${formattedDateTime}</div>
         </div>
-        <button type="button" class="btn btn-danger btn-sm delete-notification-btn" data-notification-id="${notif.id}" aria-label="Delete notification" title="Delete notification">
+        <button type="button" class="btn btn-danger btn-sm delete-notification-btn delete-btn" data-notification-id="${notif.id}" aria-label="Delete notification" title="Delete notification">
           <i class="fas fa-trash-alt"></i>
         </button>
       </div>

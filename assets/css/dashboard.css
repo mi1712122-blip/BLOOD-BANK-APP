@@ -259,24 +259,10 @@
 }
 
 .delete-notification-btn {
-  background: transparent;
-  border: none;
-  color: #999;
-  font-size: 15px;
-  padding: 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  font-size: 14px;
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
-.delete-notification-btn:hover {
-  color: #dc3545;
-  background-color: rgba(220, 53, 69, 0.1);
-}
 
 .notification-badge.hidden,
 .notification-badge:empty {

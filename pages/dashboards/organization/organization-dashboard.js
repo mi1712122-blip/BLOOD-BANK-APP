@@ -696,7 +696,7 @@ function renderInventoryTable() {
           <button class="btn btn-secondary btn-sm" data-action="edit-inventory" data-group="${group}">Edit</button>
           <button class="btn btn-primary btn-sm" data-action="adjust-inventory" data-group="${group}" data-adjust="increase">Increase</button>
           <button class="btn btn-secondary btn-sm" data-action="adjust-inventory" data-group="${group}" data-adjust="decrease">Decrease</button>
-          <button class="btn btn-danger btn-sm" data-action="remove-inventory" data-group="${group}">Remove</button>
+          <button class="btn btn-danger btn-sm delete-btn" data-action="remove-inventory" data-group="${group}">Remove</button>
           <button class="btn btn-secondary btn-sm" data-action="inventory-history" data-group="${group}">History</button>
         </td>
       </tr>
@@ -1470,7 +1470,7 @@ function displayNotifications(notifications) {
           <div class="notification-message">${notif.message || ''}</div>
           <div class="notification-time">${timeAgo} · ${formattedDateTime}</div>
         </div>
-        <button type="button" class="btn btn-danger btn-sm delete-notification-btn" data-notification-id="${notif.id}" aria-label="Delete notification" title="Delete notification">
+        <button type="button" class="btn btn-danger btn-sm delete-notification-btn delete-btn" data-notification-id="${notif.id}" aria-label="Delete notification" title="Delete notification">
           <i class="fas fa-trash-alt"></i>
         </button>
       </div>

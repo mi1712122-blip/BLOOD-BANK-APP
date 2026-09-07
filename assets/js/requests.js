@@ -90,20 +90,22 @@ class BloodRequestManager {
       });
     }
 
-    const adminIds = await this.getAdminRecipientIds();
-    adminIds.forEach((adminId) => {
-      notifications.push({
-        recipientId: adminId,
-        recipientRole: 'admin',
-        type: `${event}_admin`,
-        title: `${title} - Admin`,
-        message: `${message} (${request?.hospitalName || 'Hospital'} / ${request?.bloodGroup || 'Blood'})`,
-        senderId,
-        senderRole,
-        senderName,
-        isRead: false
+    if (event !== 'request_submitted') {
+      const adminIds = await this.getAdminRecipientIds();
+      adminIds.forEach((adminId) => {
+        notifications.push({
+          recipientId: adminId,
+          recipientRole: 'admin',
+          type: `${event}_admin`,
+          title: `${title} - Admin`,
+          message: `${message} (${request?.hospitalName || 'Hospital'} / ${request?.bloodGroup || 'Blood'})`,
+          senderId,
+          senderRole,
+          senderName,
+          isRead: false
+        });
       });
-    });
+    }
 
     for (const notification of notifications) {
       await this.sendNotification(notification);
@@ -172,6 +174,12 @@ class BloodRequestManager {
       const requests = [];
       snapshot.forEach((docSnap) => {
         requests.push({ id: docSnap.id, ...docSnap.data() });
+      });
+
+      requests.sort((a, b) => {
+        const aTime = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : new Date(a.createdAt || 0).getTime();
+        const bTime = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : new Date(b.createdAt || 0).getTime();
+        return bTime - aTime;
       });
 
       return { success: true, data: requests };

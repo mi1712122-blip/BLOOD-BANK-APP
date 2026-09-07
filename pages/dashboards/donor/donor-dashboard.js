@@ -350,7 +350,7 @@ function renderDonationHistory() {
                   <td>${timeStr}</td>
                   <td><span class="badge ${badgeClass}">${status}</span></td>
                   <td>
-                    <button type="button" class="btn btn-sm btn-danger btn-delete-donation" data-id="${d.id}">
+                    <button type="button" class="btn btn-sm btn-danger btn-delete-donation delete-btn" data-id="${d.id}">
                       <i class="fas fa-trash"></i> Delete
                     </button>
                   </td>
@@ -583,7 +583,7 @@ function displayNotifications(notifications) {
           <div class="notification-message">${notif.message || ''}</div>
           <div class="notification-time">${timeAgo} · ${formattedDateTime}</div>
         </div>
-        <button type="button" class="btn btn-danger btn-sm delete-notification-btn" data-notification-id="${notif.id}" aria-label="Delete notification" title="Delete notification">
+        <button type="button" class="btn btn-danger btn-sm delete-notification-btn delete-btn" data-notification-id="${notif.id}" aria-label="Delete notification" title="Delete notification">
           <i class="fas fa-trash-alt"></i>
         </button>
       </div>

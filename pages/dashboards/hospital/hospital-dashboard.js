@@ -287,6 +287,33 @@ function renderBloodAvailability() {
    REQUESTS & NOTIFICATIONS DISPLAY
    ========================================================================== */
 
+function attachCancelRequestListeners(container) {
+  if (!container) return;
+  container.querySelectorAll('.btn-cancel-request').forEach((button) => {
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const requestId = button.dataset.requestId;
+      if (!requestId) return;
+
+      const reason = prompt('Please enter a reason for cancelling this blood request:');
+      if (reason === null) return;
+
+      try {
+        const result = await bloodRequestManager.cancelRequest(requestId, reason.trim() || 'Cancelled by hospital');
+        if (result.success) {
+          alert('Blood request cancelled successfully.');
+          await loadDashboardData();
+        } else {
+          alert('Failed to cancel blood request: ' + (result.error || 'Unknown error'));
+        }
+      } catch (error) {
+        console.error('Error cancelling request:', error);
+        alert('Failed to cancel request.');
+      }
+    });
+  });
+}
+
 function displayRecentRequests(requests) {
   let html = '';
   if (requests.length === 0) {
@@ -294,6 +321,7 @@ function displayRecentRequests(requests) {
   } else {
     requests.forEach((req) => {
       const statusClass = req.status.toLowerCase();
+      const isPending = req.status === 'Pending';
       html += `
         <div class="request-card ${statusClass}">
           <div class="request-header">
@@ -310,11 +338,20 @@ function displayRecentRequests(requests) {
               <span class="request-detail-value">${req.urgencyLevel}</span>
             </div>
           </div>
+          ${isPending ? `
+            <div class="request-actions" style="margin-top: 12px; text-align: right;">
+              <button type="button" class="btn btn-danger btn-sm btn-cancel-request" data-request-id="${req.id}">Cancel Request</button>
+            </div>
+          ` : ''}
         </div>
       `;
     });
   }
-  document.getElementById('recentRequestsList').innerHTML = html;
+  const container = document.getElementById('recentRequestsList');
+  if (container) {
+    container.innerHTML = html;
+    attachCancelRequestListeners(container);
+  }
 }
 
 function displayRequestHistory(requests) {
@@ -324,6 +361,7 @@ function displayRequestHistory(requests) {
   } else {
     requests.forEach((req) => {
       const statusClass = req.status.toLowerCase();
+      const isPending = req.status === 'Pending';
       html += `
         <div class="request-card ${statusClass}">
           <div class="request-header">
@@ -348,11 +386,20 @@ function displayRequestHistory(requests) {
               <span class="request-detail-value">${req.purpose || 'N/A'}</span>
             </div>
           </div>
+          ${isPending ? `
+            <div class="request-actions" style="margin-top: 12px; text-align: right;">
+              <button type="button" class="btn btn-danger btn-sm btn-cancel-request" data-request-id="${req.id}">Cancel Request</button>
+            </div>
+          ` : ''}
         </div>
       `;
     });
   }
-  document.getElementById('requestHistoryList').innerHTML = html;
+  const container = document.getElementById('requestHistoryList');
+  if (container) {
+    container.innerHTML = html;
+    attachCancelRequestListeners(container);
+  }
 }
 
 async function loadNotifications() {
@@ -396,7 +443,7 @@ function displayNotifications(notifications) {
           <div class="notification-message">${notif.message || ''}</div>
           <div class="notification-time">${timeAgo} · ${formattedDateTime}</div>
         </div>
-        <button type="button" class="btn btn-danger btn-sm delete-notification-btn" data-notification-id="${notif.id}" aria-label="Delete notification" title="Delete notification">
+        <button type="button" class="btn btn-danger btn-sm delete-notification-btn delete-btn" data-notification-id="${notif.id}" aria-label="Delete notification" title="Delete notification">
           <i class="fas fa-trash-alt"></i>
         </button>
       </div>
