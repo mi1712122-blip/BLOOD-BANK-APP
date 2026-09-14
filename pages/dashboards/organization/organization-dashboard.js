@@ -1935,7 +1935,7 @@ async function saveDonationRecord(event) {
         isSameCalendarDay(item.data().donationDate || item.data().createdAt, donationDate)
       );
       if (isSameDayDonation) {
-        throw new Error('A donation for this donor has already been recorded on this date.');
+        throw new Error('This donor is currently not eligible to donate blood again. Please wait until the donor’s eligibility status becomes eligible before recording another donation.');
       }
 
       if (donor.lastDonationDate) {
