@@ -8,6 +8,79 @@
   <link rel="stylesheet" href="../../../assets/css/dashboard.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    @media (max-width: 768px) {
+      .main-layout,
+      .main-layout.with-sidebar {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        min-height: 100vh;
+        margin-left: 0;
+      }
+
+      .sidebar {
+        width: 100%;
+        height: auto;
+        min-height: auto;
+        position: relative;
+        top: auto;
+        left: auto;
+        padding: 15px 0 0 0;
+        overflow: visible;
+      }
+
+      .sidebar-header {
+        padding: 10px 20px;
+        margin-bottom: 10px;
+      }
+
+      .sidebar-nav {
+        display: flex;
+        flex-wrap: wrap;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .sidebar-nav a {
+        flex: 1 1 50%;
+        padding: 10px 14px;
+        font-size: 12px;
+        border: none;
+        border-left: none;
+        justify-content: flex-start;
+      }
+
+      .sidebar-nav a.active {
+        border-left: none;
+        border-bottom: 2px solid var(--secondary-color);
+      }
+
+      .main-content {
+        width: 100%;
+        min-width: 0;
+        flex: 1;
+        overflow-x: hidden;
+      }
+
+      .dashboard-container {
+        padding: 15px;
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .sidebar-nav a {
+        flex: 1 1 50%;
+        padding: 8px 10px;
+        font-size: 11px;
+        gap: 8px;
+      }
+
+      .dashboard-container {
+        padding: 12px 10px;
+      }
+    }
+  </style>
 </head>
 <body>
   <div class="main-layout with-sidebar">

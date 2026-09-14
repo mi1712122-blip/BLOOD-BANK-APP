@@ -3,7 +3,9 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
+  limit,
   onSnapshot,
   query,
   updateDoc,
@@ -31,6 +33,31 @@ class BloodInventoryManager {
       const targetOrganizationId = organizationId || bloodData?.organizationId || bloodData?.organization?.uid || bloodData?.organization?.id || null;
       if (!targetOrganizationId) {
         return { success: false, error: 'Organization not found.' };
+      }
+
+      if (bloodData.donorId) {
+        let donorBloodGroup = null;
+        try {
+          const donorDoc = await getDoc(doc(db, 'donors', bloodData.donorId));
+          if (donorDoc.exists()) {
+            donorBloodGroup = donorDoc.data()?.bloodGroup;
+          } else {
+            const donorQuery = query(collection(db, 'donors'), where('uid', '==', bloodData.donorId), limit(1));
+            const querySnap = await getDocs(donorQuery);
+            if (!querySnap.empty) {
+              donorBloodGroup = querySnap.docs[0].data()?.bloodGroup;
+            }
+          }
+        } catch (donorErr) {
+          console.error('Error validating donor blood group in addBlood:', donorErr);
+        }
+
+        if (donorBloodGroup && bloodData.bloodGroup && donorBloodGroup.trim().toUpperCase() !== bloodData.bloodGroup.trim().toUpperCase()) {
+          return {
+            success: false,
+            error: `Selected donor's blood group (${donorBloodGroup}) does not match the selected blood group (${bloodData.bloodGroup}).`
+          };
+        }
       }
 
       const parsedExpiryDate = bloodData.expiryDate ? new Date(bloodData.expiryDate) : null;

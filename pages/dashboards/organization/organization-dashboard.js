@@ -268,11 +268,24 @@ function setupDashboardReportActions() {
   // CSV / Excel / Print buttons were removed from the dashboard.
 }
 
-function populateDonorOptions() {
+function populateDonorOptions(selectedBloodGroup = '') {
   const select = document.getElementById('donorSelect');
   if (!select) return;
+  const group = selectedBloodGroup || document.getElementById('bloodGroupSelect')?.value || '';
+  const currentSelectedValue = select.value;
+
+  const filteredDonors = group
+    ? donorsList.filter((donor) => (donor.bloodGroup || '').trim().toUpperCase() === group.trim().toUpperCase())
+    : [];
+
   select.innerHTML = '<option value="">Choose donor (optional)</option>' +
-    donorsList.map((donor) => `<option value="${donor.id}">${donor.fullName || donor.email || donor.id}</option>`).join('');
+    filteredDonors.map((donor) => `<option value="${donor.id || donor.uid}">${donor.fullName || donor.email || donor.id}</option>`).join('');
+
+  if (currentSelectedValue && filteredDonors.some((d) => (d.id === currentSelectedValue || d.uid === currentSelectedValue))) {
+    select.value = currentSelectedValue;
+  } else {
+    select.value = '';
+  }
 }
 
 function setupQuickActions() {
@@ -1244,13 +1257,19 @@ async function removeInventoryItem(group) {
 }
 
 function openAddBloodModal(group = '') {
-  document.getElementById('bloodGroupSelect').value = group || '';
-  document.getElementById('organizationInput').value = currentOrganization.organizationName || '';
+  const bloodGroupSelect = document.getElementById('bloodGroupSelect');
+  if (bloodGroupSelect) {
+    bloodGroupSelect.value = group || '';
+  }
+  document.getElementById('organizationInput').value = currentOrganization?.organizationName || '';
+  populateDonorOptions(group || '');
   document.getElementById('addBloodModal')?.classList.add('show');
 }
 
 function closeAddBloodModal() {
   document.getElementById('addBloodModal')?.classList.remove('show');
+  document.getElementById('addBloodForm')?.reset();
+  populateDonorOptions('');
 }
 
 function openInventoryActionModal(group = '', action = 'increase') {
@@ -2807,6 +2826,10 @@ document.getElementById('inventoryActionForm')?.addEventListener('submit', async
   }
 });
 
+document.getElementById('bloodGroupSelect')?.addEventListener('change', (e) => {
+  populateDonorOptions(e.target.value);
+});
+
 document.getElementById('addBloodForm')?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const bloodGroup = document.getElementById('bloodGroupSelect').value;
@@ -2820,6 +2843,34 @@ document.getElementById('addBloodForm')?.addEventListener('submit', async (e) =>
   if (!bloodGroup || !units || units <= 0 || !collectionDate || !expiryDate || !storageLocation) {
     alert('Please fill in all required fields.');
     return;
+  }
+
+  if (donorId) {
+    let donorBloodGroup = null;
+    try {
+      const donorDoc = await getDoc(doc(db, 'donors', donorId));
+      if (donorDoc.exists()) {
+        donorBloodGroup = donorDoc.data()?.bloodGroup;
+      } else {
+        const donorQuery = query(collection(db, 'donors'), where('uid', '==', donorId), limit(1));
+        const querySnap = await getDocs(donorQuery);
+        if (!querySnap.empty) {
+          donorBloodGroup = querySnap.docs[0].data()?.bloodGroup;
+        } else {
+          const cachedDonor = donorsList.find((d) => (d.id === donorId || d.uid === donorId));
+          if (cachedDonor) donorBloodGroup = cachedDonor.bloodGroup;
+        }
+      }
+    } catch (err) {
+      console.error('Error verifying donor blood group:', err);
+      const cachedDonor = donorsList.find((d) => (d.id === donorId || d.uid === donorId));
+      if (cachedDonor) donorBloodGroup = cachedDonor.bloodGroup;
+    }
+
+    if (!donorBloodGroup || donorBloodGroup.trim().toUpperCase() !== bloodGroup.trim().toUpperCase()) {
+      alert(`The selected donor's blood group (${donorBloodGroup || 'Unknown'}) does not match the selected blood group (${bloodGroup}).`);
+      return;
+    }
   }
 
   try {
@@ -2837,7 +2888,10 @@ document.getElementById('addBloodForm')?.addEventListener('submit', async (e) =>
       alert('Blood added successfully!');
       closeAddBloodModal();
       document.getElementById('addBloodForm').reset();
+      populateDonorOptions('');
       await refreshAllData();
+    } else {
+      alert(result.error || 'Failed to add blood');
     }
   } catch (error) {
     console.error('Error adding blood:', error);
