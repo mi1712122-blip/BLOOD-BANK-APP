@@ -9,6 +9,15 @@
   <link rel="stylesheet" href="assets/css/landing.css">
   <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    (function() {
+      try {
+        if (localStorage.getItem('theme') === 'dark') {
+          document.documentElement.classList.add('dark-mode');
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   
@@ -26,6 +35,9 @@
       <li><a href="#contact">Contact</a></li>
     </ul>
     <div class="navbar-actions">
+      <button type="button" id="themeToggleBtn" class="theme-toggle-btn" aria-label="Toggle Dark Mode" title="Toggle Dark/Light Mode">
+        <i class="fas fa-moon" id="themeToggleIcon"></i>
+      </button>
       <a href="pages/auth/login.html" class="btn btn-secondary">Login</a>
       <a href="pages/auth/register.html" class="btn btn-primary">Register</a>
     </div>

@@ -8,6 +8,53 @@ import {
 import { auth, db } from './firebase-config.js';
 
 document.addEventListener('DOMContentLoaded', function() {
+  // ==========================================
+  // DARK / LIGHT THEME TOGGLE
+  // ==========================================
+  const themeToggleBtn = document.getElementById('themeToggleBtn');
+  const themeToggleIcon = document.getElementById('themeToggleIcon');
+
+  function updateThemeUI(isDark) {
+    if (isDark) {
+      document.documentElement.classList.add('dark-mode');
+      document.body.classList.add('dark-mode');
+      if (themeToggleIcon) {
+        themeToggleIcon.className = 'fas fa-sun';
+      }
+      if (themeToggleBtn) {
+        themeToggleBtn.setAttribute('aria-label', 'Switch to Light Mode');
+        themeToggleBtn.setAttribute('title', 'Switch to Light Mode');
+      }
+    } else {
+      document.documentElement.classList.remove('dark-mode');
+      document.body.classList.remove('dark-mode');
+      if (themeToggleIcon) {
+        themeToggleIcon.className = 'fas fa-moon';
+      }
+      if (themeToggleBtn) {
+        themeToggleBtn.setAttribute('aria-label', 'Switch to Dark Mode');
+        themeToggleBtn.setAttribute('title', 'Switch to Dark Mode');
+      }
+    }
+  }
+
+  const savedTheme = localStorage.getItem('theme');
+  const isDarkMode = savedTheme === 'dark';
+  updateThemeUI(isDarkMode);
+
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', function() {
+      const isCurrentlyDark = document.body.classList.contains('dark-mode') || document.documentElement.classList.contains('dark-mode');
+      const nextDark = !isCurrentlyDark;
+      updateThemeUI(nextDark);
+      try {
+        localStorage.setItem('theme', nextDark ? 'dark' : 'light');
+      } catch (err) {
+        console.error('Could not save theme preference to localStorage:', err);
+      }
+    });
+  }
+
   // Smooth scrolling for navigation links
   const navLinks = document.querySelectorAll('a[href^="#"]');
   
