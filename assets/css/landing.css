@@ -1,4 +1,9 @@
 /* ===== LANDING PAGE STYLES ===== */
+:root {
+  /* Unified vertical padding for sections */
+  --section-vert-pad: 80px;
+  --section-vert-pad-sm: 48px;
+}
 
 /* Landing Navbar */
 .landing-navbar {
@@ -73,7 +78,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: clamp(72px, 9vw, 110px) clamp(20px, 4vw, 50px);
+  padding: var(--section-vert-pad) clamp(20px, 4vw, 50px);
   background: #030814;
   color: #1f2937;
   overflow: hidden;
@@ -138,7 +143,7 @@
 
 .hero-content p {
   font-size: clamp(1rem, 1.7vw, 1.2rem);
-  margin-bottom: 28px;
+  margin-bottom: 16px;
   color: #f3f4f6;
   line-height: 1.7;
   max-width: 640px;
@@ -234,14 +239,14 @@
 
 /* Stats Section */
 .stats-section {
-  padding: 24px 0 12px;
+  padding: var(--section-vert-pad-sm) 0 var(--section-vert-pad-sm);
   background: #fdf8f6;
 }
 
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 18px;
+  gap: 24px; /* increased gap for better spacing */
 }
 
 .stat-card {
@@ -255,9 +260,10 @@
 
 .stat-card strong {
   display: block;
-  font-size: 26px;
+  font-size: 32px; /* larger, more prominent */
+  font-weight: 600;
   color: var(--primary-color);
-  margin-bottom: 6px;
+  margin-bottom: 8px; /* slight increase for breathing space */
 }
 
 .stat-card span {
@@ -310,7 +316,7 @@
 
 /* Features Section */
 .features {
-  padding: 78px 50px 84px;
+  padding: var(--section-vert-pad) 50px var(--section-vert-pad);
   background: linear-gradient(135deg, #fcf7f3 0%, #f5ebe4 45%, #efe2d7 100%);
   position: relative;
 }
@@ -365,18 +371,19 @@
 .features-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 24px;
+  gap: 32px; /* increased gap for clearer spacing */
+  align-items: stretch; /* ensure equal height cards */
 }
 
 .feature-card {
   background: linear-gradient(145deg, rgba(252, 247, 243, 0.95) 0%, rgba(245, 237, 231, 0.96) 100%);
   backdrop-filter: blur(14px);
-  padding: 30px 24px;
-  border-radius: 18px;
-  text-align: left;
+  padding: 28px 24px;
+  border-radius: 14px;
+  text-align: center;
   transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
-  border: 1px solid rgba(185, 28, 28, 0.14);
-  box-shadow: 0 14px 34px rgba(66, 32, 17, 0.08);
+  border: 1px solid rgba(185, 28, 28, 0.12);
+  box-shadow: 0 12px 28px rgba(66, 32, 17, 0.10);
 }
 
 .feature-card:hover {
@@ -400,8 +407,8 @@
 }
 
 .feature-card h3 {
-  font-size: 1.25rem;
-  margin-bottom: 10px;
+  font-size: 1.35rem;
+  margin-bottom: 12px;
   color: #111827;
   font-weight: 600;
 }
@@ -453,43 +460,49 @@
 
 .steps-container {
   display: flex;
-  justify-content: center;
+  justify-content: space-around; /* more even spacing */
   align-items: center;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: 32px; /* increased gap for clarity */
 }
 
 .step {
   background-color: rgba(255, 255, 255, 0.08);
-  padding: 30px;
+  padding: 24px; /* tighter padding */
   border-radius: 12px;
   text-align: center;
-  min-width: 200px;
+  min-width: 260px; /* larger cards */
+  max-width: 300px;
+  width: 100%;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 12px 28px rgba(25, 11, 12, 0.18);
+  box-shadow: 0 8px 24px rgba(25, 11, 12, 0.15); /* subtle shadow */
 }
 
 .step-number {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 50px;
-  height: 50px;
+  width: 56px;
+  height: 56px;
   background-color: rgba(255, 255, 255, 0.12);
   border-radius: 50%;
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
-  margin-bottom: 15px;
+  margin-bottom: 16px;
 }
 
 .step h3 {
-  font-size: 20px;
-  margin-bottom: 10px;
+  font-size: 22px; /* more prominent */
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--secondary-color);
 }
 
 .step p {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.5;
+  margin-bottom: 0;
 }
 
 .step-arrow {
@@ -521,15 +534,15 @@
 
 /* Blood Inventory Section */
 .inventory-section {
-  padding: 76px 50px 80px;
+  padding: var(--section-vert-pad) 50px var(--section-vert-pad);
   background-color: var(--secondary-color);
 }
 
 .inventory-grid {
   display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
+  grid-template-columns: repeat(2, 1fr);
   align-items: center;
-  gap: 40px;
+  gap: 32px; /* align spacing with other sections */
 }
 
 .inventory-copy .section-subtitle {
@@ -565,13 +578,42 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 18px 20px;
-  border-radius: 16px;
+  padding: 22px 24px; /* slightly larger for comfort */
+  border-radius: 14px; /* subtle */
   background-color: #ffffff;
-  border: 1px solid rgba(193, 18, 31, 0.12);
-  box-shadow: 0 16px 30px rgba(193, 18, 31, 0.08);
+  border: 1px solid rgba(185, 28, 28, 0.12); /* matches theme */
+  box-shadow: 0 12px 28px rgba(66, 32, 17, 0.10); /* subtle shadow */
   color: var(--text-color);
   font-weight: 600;
+}
+
+/* Search widget card – visual consistency with feature cards */
+.search-widget-card {
+  background-color: #ffffff;
+  border: 1px solid rgba(185, 28, 28, 0.12);
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 12px 28px rgba(66, 32, 17, 0.10);
+  margin-top: 24px;
+}
+
+.search-widget-card .widget-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.search-widget-card .widget-header h3 {
+  font-size: 1.2rem;
+  margin: 0;
+  color: var(--text-color);
+}
+
+.search-widget-card .widget-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-light);
+  margin-bottom: 16px;
 }
 
 .inventory-feature i {
@@ -632,16 +674,22 @@
 .roles-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 30px;
+  gap: 32px;
 }
 
 .role-card {
   background-color: var(--bg-color);
-  padding: 40px 30px;
+  padding: 32px 24px;
   border-radius: 12px;
   text-align: center;
   transition: var(--transition);
-  border-bottom: 5px solid var(--primary-color);
+  border: 1px solid rgba(185, 28, 28, 0.12);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
 }
 
 .role-card:hover {
@@ -682,14 +730,15 @@
 }
 
 .role-card h3 {
-  font-size: 24px;
+  font-size: 26px;
   margin-bottom: 15px;
-  color: var(--text-color);
+  font-weight: 700;
+  color: var(--primary-color);
 }
 
 .role-card p {
   color: var(--text-light);
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 @media (max-width: 768px) {
@@ -734,15 +783,16 @@
 .contact h2 {
   text-align: center;
   font-size: clamp(2.2rem, 3vw, 3rem);
-  margin-bottom: 50px;
-  color: var(--secondary-color);
-  line-height: 1.2;
+  margin-bottom: 40px;
+  color: var(--primary-color);
+  line-height: 1.3;
+  font-weight: 700;
 }
 
 .contact-content {
   display: flex;
   justify-content: center;
-  gap: 50px;
+  gap: 40px;
   flex-wrap: wrap;
 }
 
@@ -781,6 +831,58 @@
   margin: 0;
 }
 
+/* Contact Form Styles */
+.contact-form .form-group {
+  margin-bottom: 20px;
+}
+
+.contact-form input[type="text"],
+.contact-form input[type="email"],
+.contact-form textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid rgba(185, 28, 28, 0.2);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.9);
+  color: var(--text-color);
+  font-size: 15px;
+  transition: var(--transition);
+}
+
+.contact-form input[type="text"]:focus,
+.contact-form input[type="email"]:focus,
+.contact-form textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(193, 18, 31, 0.1);
+}
+
+.contact-form textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.contact-form .submit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-color);
+  color: #fff;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.contact-form .submit-btn:hover {
+  background: var(--primary-dark);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+}
+
+
 @media (max-width: 768px) {
   .contact {
     padding: 40px 20px;
@@ -799,26 +901,46 @@
     text-align: center;
     align-items: center;
   }
+
+  .footer {
+    padding: 30px 20px;
+    text-align: center;
+  }
+
+  .footer-content {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .footer-section a {
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+  }
 }
 
 /* Footer */
 .footer {
   background-color: #1A1A1A;
   color: var(--secondary-color);
-  padding: 60px 50px;
+  padding: clamp(30px, 5vw, 60px) clamp(20px, 5vw, 50px);
+  text-align: left;
 }
 
 .footer-content {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 40px;
-  margin-bottom: 40px;
+  gap: clamp(30px, 4vw, 40px);
+  margin-bottom: clamp(30px, 4vw, 40px);
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .footer-section h4 {
   color: var(--primary-color);
-  margin-bottom: 18px;
-  font-size: 19px;
+  margin-bottom: 12px;
+  font-size: clamp(1.1rem, 2vw, 1.25rem);
+  font-weight: 600;
 }
 
 .footer-section ul {
@@ -826,17 +948,18 @@
 }
 
 .footer-section a {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.85);
   text-decoration: none;
   transition: var(--transition);
   display: block;
-  margin-bottom: 10px;
-  font-size: 16px;
+  margin-bottom: 8px;
+  font-size: clamp(0.95rem, 1.5vw, 1rem);
+  line-height: 1.5;
 }
 
 .footer-section a:hover {
   color: var(--primary-color);
-  padding-left: 5px;
+  text-decoration: underline;
 }
 
 .social-links {
@@ -848,12 +971,18 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 46px;
-  height: 46px;
-  background-color: rgba(193, 18, 31, 0.2);
+  width: 44px;
+  height: 44px;
+  background-color: rgba(193, 18, 31, 0.25);
   border-radius: 50%;
-  font-size: 20px;
+  font-size: 18px;
   margin: 0;
+  transition: var(--transition);
+}
+
+.social-links a:hover {
+  background-color: rgba(193, 18, 31, 0.45);
+  transform: scale(1.08);
 }
 
 .social-links a:hover {

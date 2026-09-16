@@ -27,7 +27,15 @@
   background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
   color: var(--secondary-color);
   text-align: center;
-  border: none;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 24px 16px;
+  box-shadow: var(--shadow);
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .stat-card h3 {
