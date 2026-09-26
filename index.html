@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,17 +11,18 @@
   <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script>
-    (function() {
+    (function () {
       try {
         if (localStorage.getItem('theme') === 'dark') {
           document.documentElement.classList.add('dark-mode');
         }
-      } catch (e) {}
+      } catch (e) { }
     })();
   </script>
 </head>
+
 <body>
-  
+
   <!-- Navigation Bar -->
   <nav class="navbar landing-navbar">
     <div class="navbar-brand">
@@ -35,7 +37,8 @@
       <li><a href="#contact">Contact</a></li>
     </ul>
     <div class="navbar-actions">
-      <button type="button" id="themeToggleBtn" class="theme-toggle-btn" aria-label="Toggle Dark Mode" title="Toggle Dark/Light Mode">
+      <button type="button" id="themeToggleBtn" class="theme-toggle-btn" aria-label="Toggle Dark Mode"
+        title="Toggle Dark/Light Mode">
         <i class="fas fa-moon" id="themeToggleIcon"></i>
       </button>
       <a href="pages/auth/login.html" class="btn btn-secondary">Login</a>
@@ -50,9 +53,11 @@
     </video>
     <div class="hero-overlay"></div>
     <div class="hero-content">
-      <span class="hero-eyebrow animate__animated animate__fadeInDown">Trusted blood network for donors, hospitals, and patients</span>
+      <span class="hero-eyebrow animate__animated animate__fadeInDown">Trusted blood network for donors, hospitals, and
+        patients</span>
       <h1 class="animate__animated animate__fadeInDown animate__delay-1s">A Simple Way to Save Lives</h1>
-      <p class="animate__animated animate__fadeInUp animate__delay-2s">A secure platform that helps donors, hospitals, and organizations connect with clarity, reliability, and purpose.</p>
+      <p class="animate__animated animate__fadeInUp animate__delay-2s">A secure platform that helps donors, hospitals,
+        and organizations connect with clarity, reliability, and purpose.</p>
     </div>
   </section>
 
@@ -210,7 +215,7 @@
             <h3>Quick Blood Finder</h3>
           </div>
           <p class="widget-subtitle">Check availability in real-time across our network.</p>
-          
+
           <form id="quick-search-form" class="widget-form">
             <div class="form-row">
               <div class="form-group">
@@ -294,17 +299,20 @@
       <div class="testimonials-grid">
         <figure class="testimonial-card">
           <i class="fas fa-quote-left" aria-hidden="true"></i>
-          <blockquote>"The platform made it simple to find the blood group we needed without wasting critical time."</blockquote>
+          <blockquote>"The platform made it simple to find the blood group we needed without wasting critical time."
+          </blockquote>
           <figcaption>Hospital Coordinator</figcaption>
         </figure>
         <figure class="testimonial-card">
           <i class="fas fa-quote-left" aria-hidden="true"></i>
-          <blockquote>"I can respond to donation requests quickly and know exactly where my help is needed."</blockquote>
+          <blockquote>"I can respond to donation requests quickly and know exactly where my help is needed."
+          </blockquote>
           <figcaption>Registered Donor</figcaption>
         </figure>
         <figure class="testimonial-card">
           <i class="fas fa-quote-left" aria-hidden="true"></i>
-          <blockquote>"Real-time inventory gives our team a clearer way to coordinate with hospitals and donors."</blockquote>
+          <blockquote>"Real-time inventory gives our team a clearer way to coordinate with hospitals and donors."
+          </blockquote>
           <figcaption>Organization Manager</figcaption>
         </figure>
       </div>
@@ -324,7 +332,9 @@
           </button>
           <div class="faq-content">
             <div class="faq-answer">
-              <p>Generally, healthy individuals who are at least 18 years old, weigh at least 50 kg (110 lbs), and pass the physical and health history evaluation are eligible to donate. Some medical conditions or travel history may defer eligibility temporarily or permanently.</p>
+              <p>Generally, healthy individuals who are at least 18 years old, weigh at least 50 kg (110 lbs), and pass
+                the physical and health history evaluation are eligible to donate. Some medical conditions or travel
+                history may defer eligibility temporarily or permanently.</p>
             </div>
           </div>
         </div>
@@ -335,7 +345,9 @@
           </button>
           <div class="faq-content">
             <div class="faq-answer">
-              <p>You can donate whole blood once every 56 days (approximately every 8 weeks). This allows your body enough time to replenish its red blood cell count and ensure your donation is completely safe for your health.</p>
+              <p>You can donate whole blood once every 56 days (approximately every 8 weeks). This allows your body
+                enough time to replenish its red blood cell count and ensure your donation is completely safe for your
+                health.</p>
             </div>
           </div>
         </div>
@@ -346,7 +358,9 @@
           </button>
           <div class="faq-content">
             <div class="faq-answer">
-              <p>Hospitals can register on our platform. Once approved by our administrator, they can access their dashboard and submit emergency requests specifying the blood group and quantity. Organizations in the network will receive real-time notifications to dispatch blood instantly.</p>
+              <p>Hospitals can register on our platform. Once approved by our administrator, they can access their
+                dashboard and submit emergency requests specifying the blood group and quantity. Organizations in the
+                network will receive real-time notifications to dispatch blood instantly.</p>
             </div>
           </div>
         </div>
@@ -357,7 +371,9 @@
           </button>
           <div class="faq-content">
             <div class="faq-answer">
-              <p>Yes. We take privacy extremely seriously. We use Firebase's secure authentication and strict Firestore Security Rules, ensuring that donor contact information and organization inventories are only visible to authorized and verified roles.</p>
+              <p>Yes. We take privacy extremely seriously. We use Firebase's secure authentication and strict Firestore
+                Security Rules, ensuring that donor contact information and organization inventories are only visible to
+                authorized and verified roles.</p>
             </div>
           </div>
         </div>
@@ -411,7 +427,8 @@
             </div>
             <div class="form-group">
               <label for="contact-message">Message</label>
-              <textarea id="contact-message" rows="4" placeholder="Type Your message here..." maxlength="2000" required></textarea>
+              <textarea id="contact-message" rows="4" placeholder="Type Your message here..." maxlength="2000"
+                required></textarea>
             </div>
             <button type="submit" class="btn btn-secondary btn-block submit-btn">
               <i class="fas fa-paper-plane"></i> Send Message
@@ -468,4 +485,5 @@
 
   <script type="module" src="assets/js/landing.js"></script>
 </body>
+
 </html>

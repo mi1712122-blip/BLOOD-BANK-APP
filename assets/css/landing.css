@@ -973,20 +973,20 @@
   justify-content: center;
   width: 44px;
   height: 44px;
-  background-color: rgba(193, 18, 31, 0.25);
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.14);
   border-radius: 50%;
   font-size: 18px;
   margin: 0;
   transition: var(--transition);
 }
 
-.social-links a:hover {
-  background-color: rgba(193, 18, 31, 0.45);
+.social-links a:hover,
+.social-links a:focus-visible {
+  background-color: #f4f4f7;
+  color: #C1121F;
+  text-decoration: none;
   transform: scale(1.08);
-}
-
-.social-links a:hover {
-  background-color: var(--primary-color);
 }
 
 .features h2,
@@ -1941,6 +1941,21 @@ body.dark-mode .footer-section a {
 html.dark-mode .footer-section a:hover,
 body.dark-mode .footer-section a:hover {
   color: #f4f4f7;
+}
+
+html.dark-mode .social-links a,
+body.dark-mode .social-links a {
+  color: #f4f4f7;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+html.dark-mode .social-links a:hover,
+body.dark-mode .social-links a:hover,
+html.dark-mode .social-links a:focus-visible,
+body.dark-mode .social-links a:focus-visible {
+  background-color: #f4f4f7;
+  color: #C1121F;
+  text-decoration: none;
 }
 
 html.dark-mode .footer-bottom,

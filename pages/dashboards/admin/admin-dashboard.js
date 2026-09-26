@@ -66,7 +66,7 @@ async function checkAuthAndLoadAdmin() {
   if (notificationsListener) notificationsListener();
   notificationsListener = bloodRequestManager.listenNotifications(currentAdmin.uid, (result) => {
     if (!result.success) return;
-    adminNotifications = result.data || [];
+    adminNotifications = sortAdminNotificationsByDateTime(result.data || []);
     const unreadCount = adminNotifications.filter((item) => !item.isRead).length;
     updateAdminNotificationBadges(unreadCount);
     if (document.getElementById('notificationsView') && !document.getElementById('notificationsView').classList.contains('hidden')) {
@@ -1483,27 +1483,110 @@ async function markAdminNotificationsRead() {
   await bloodRequestManager.markAllNotificationsRead(currentAdmin.uid);
 }
 
+function readAdminNotificationTimeValue(value) {
+  if (value == null || value === '') return 0;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value < 1e12 ? value * 1000 : value;
+  }
+  if (typeof value.toMillis === 'function') {
+    const millis = value.toMillis();
+    if (Number.isFinite(millis)) return millis;
+  }
+  const seconds = typeof value.seconds === 'number'
+    ? value.seconds
+    : (typeof value._seconds === 'number' ? value._seconds : null);
+  if (seconds != null) {
+    const nanos = typeof value.nanoseconds === 'number'
+      ? value.nanoseconds
+      : (typeof value._nanoseconds === 'number' ? value._nanoseconds : 0);
+    return seconds * 1000 + Math.floor(nanos / 1e6);
+  }
+  if (value instanceof Date) {
+    const millis = value.getTime();
+    return Number.isNaN(millis) ? 0 : millis;
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
+function getAdminNotificationTime(notif) {
+  const value = notif?.createdAt ?? notif?.timestamp ?? notif?.sentAt ?? notif?.date ?? null;
+  return readAdminNotificationTimeValue(value);
+}
+
+function sortAdminNotificationsByDateTime(notifications) {
+  return [...(notifications || [])].sort((a, b) => {
+    const diff = getAdminNotificationTime(b) - getAdminNotificationTime(a);
+    if (diff !== 0) return diff;
+    return String(b.id || '').localeCompare(String(a.id || ''));
+  });
+}
+
+function adminNotificationDateKey(timestamp) {
+  if (!timestamp) return 'undated';
+  const date = new Date(timestamp);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function adminNotificationDateLabel(timestamp) {
+  if (!timestamp) return 'Earlier';
+  const date = new Date(timestamp);
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const dayDiff = Math.round((startToday - startDate) / 86400000);
+  if (dayDiff === 0) return 'Today';
+  if (dayDiff === 1) return 'Yesterday';
+  return date.toLocaleDateString(undefined, {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+}
+
 function displayAdminNotifications(notifications) {
   const container = document.getElementById('notificationsList');
   if (!container) return;
 
-  if (!notifications || notifications.length === 0) {
+  const sortedNotifications = sortAdminNotificationsByDateTime(notifications);
+
+  if (!sortedNotifications.length) {
     container.innerHTML = '<div class="empty-state"><p>No notifications available.</p></div>';
     return;
   }
 
-  let html = '';
-  notifications.forEach((notif) => {
-    const date = notif.createdAt?.seconds
-      ? new Date(notif.createdAt.seconds * 1000)
-      : notif.createdAt
-      ? new Date(notif.createdAt)
-      : new Date();
-    const timeAgo = getTimeAgo(date);
-    const formattedDateTime = date.toLocaleString();
-    const senderLabel = notif.senderName ? `From: ${notif.senderName}` : 'From: System';
+  const groups = [];
+  const groupMap = new Map();
+  sortedNotifications.forEach((notif) => {
+    const timestamp = getAdminNotificationTime(notif);
+    const key = adminNotificationDateKey(timestamp);
+    if (!groupMap.has(key)) {
+      const group = { key, label: adminNotificationDateLabel(timestamp), items: [] };
+      groupMap.set(key, group);
+      groups.push(group);
+    }
+    groupMap.get(key).items.push({ notif, timestamp });
+  });
 
-    html += `
+  let html = '';
+  groups.forEach((group) => {
+    html += `<section class="notification-date-group"><h3 class="notification-date-heading">${group.label}</h3>`;
+    group.items.forEach(({ notif, timestamp }) => {
+      const date = timestamp ? new Date(timestamp) : null;
+      const timeAgo = date ? getTimeAgo(date) : '';
+      const clock = date
+        ? date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+        : '';
+      const timeLabel = [clock, timeAgo].filter(Boolean).join(' · ');
+      const senderLabel = notif.senderName ? `From: ${notif.senderName}` : 'From: System';
+
+      html += `
       <div class="notification-item ${!notif.isRead ? 'unread' : ''}" data-notification-id="${notif.id}">
         <div class="notification-icon">
           <i class="fas fa-bell"></i>
@@ -1512,13 +1595,15 @@ function displayAdminNotifications(notifications) {
           <div class="notification-title">${notif.title || 'Notification'}</div>
           <div class="notification-sender">${senderLabel}</div>
           <div class="notification-message">${notif.message || ''}</div>
-          <div class="notification-time">${timeAgo} · ${formattedDateTime}</div>
+          <div class="notification-time">${timeLabel}</div>
         </div>
         <button type="button" class="btn btn-danger btn-sm delete-notification-btn delete-btn" data-notification-id="${notif.id}" aria-label="Delete notification" title="Delete notification">
           <i class="fas fa-trash-alt"></i>
         </button>
       </div>
     `;
+    });
+    html += '</section>';
   });
   container.innerHTML = html;
 

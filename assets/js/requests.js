@@ -523,8 +523,7 @@ class BloodRequestManager {
     try {
       const notificationQuery = query(
         collection(db, 'notifications'),
-        where('recipientId', '==', userId),
-        limit(50)
+        where('recipientId', '==', userId)
       );
 
       return onSnapshot(
