@@ -1,0 +1,13 @@
+{
+  "name": "blood-bank-app-functions",
+  "description": "Scheduled backend tasks for the Blood Bank Management System",
+  "private": true,
+  "engines": {
+    "node": "22"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.0.0"
+  }
+}

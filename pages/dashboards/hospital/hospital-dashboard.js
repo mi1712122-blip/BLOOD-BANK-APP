@@ -5,7 +5,7 @@ import {
   where
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
 import { authManager } from '../../../assets/js/auth.js';
-import { bloodInventoryManager } from '../../../assets/js/inventory.js';
+import { bloodInventoryManager, isAvailableInventory } from '../../../assets/js/inventory.js';
 import { bloodRequestManager } from '../../../assets/js/requests.js';
 import { db } from '../../../assets/js/firebase-config.js';
 
@@ -167,7 +167,7 @@ function renderBloodAvailability() {
 
   const stockMap = {};
   allInventoryItems.forEach((item) => {
-    if (item.status !== 'Available') return;
+    if (!isAvailableInventory(item)) return;
 
     const orgId = item.organizationId;
     const bloodGroup = item.bloodGroup;

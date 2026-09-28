@@ -9,6 +9,7 @@ import {
   where
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
 import { authManager } from '../../../assets/js/auth.js';
+import { isAvailableInventory } from '../../../assets/js/inventory.js';
 import { bloodRequestManager } from '../../../assets/js/requests.js';
 import { db } from '../../../assets/js/firebase-config.js';
 
@@ -42,6 +43,11 @@ const viewSelectors = {
 };
 
 const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+const VALID_USER_ROLES = ['admin', 'donor', 'hospital', 'organization'];
+
+function countRoleBearingUsers(snapshot) {
+  return snapshot.docs.filter((docSnap) => VALID_USER_ROLES.includes(docSnap.data()?.role)).length;
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   await checkAuthAndLoadAdmin();
@@ -82,7 +88,7 @@ function setupRealtimeListeners() {
       usersList.push({ id: docSnap.id, ...docSnap.data() });
     });
     const totalUsersElem = document.getElementById('totalUsers');
-    if (totalUsersElem) totalUsersElem.textContent = snapshot.size;
+    if (totalUsersElem) totalUsersElem.textContent = countRoleBearingUsers(snapshot);
   });
 
   // Listen for inventory items
@@ -146,7 +152,7 @@ function setupRealtimeListeners() {
 async function loadDashboardData() {
   try {
     const usersSnapshot = await getDocs(collection(db, 'users'));
-    document.getElementById('totalUsers').textContent = usersSnapshot.size;
+    document.getElementById('totalUsers').textContent = countRoleBearingUsers(usersSnapshot);
     usersList = [];
     usersSnapshot.forEach((docSnap) => {
       usersList.push({ id: docSnap.id, ...docSnap.data() });
@@ -262,7 +268,7 @@ async function loadOrganizationsData(snapshot) {
         <td><span class="badge ${statusBadgeClass}">${status}</span></td>
         <td>
           ${needsAction ? `<button class="btn btn-sm btn-primary" data-action="approve-org" data-user-id="${org.uid}">Approve</button> <button class="btn btn-sm btn-danger" data-action="reject-org" data-user-id="${org.uid}">Reject</button>` : ''}
-          <button type="button" class="btn btn-sm btn-secondary" data-action="view-org" data-user-id="${org.uid}">View</button>
+          <button type="button" class="btn btn-sm btn-secondary" data-action="view-org" data-user-id="${org.uid || org.id}">View</button>
           <button type="button" class="btn btn-sm btn-danger delete-btn" data-action="delete-org" data-user-id="${org.uid}" title="Delete Organization"><i class="fas fa-trash-alt"></i> Delete</button>
         </td>
       </tr>
@@ -288,7 +294,7 @@ async function loadHospitalsData(snapshot) {
         <td><span class="badge ${statusBadgeClass}">${status}</span></td>
         <td>
           ${needsAction ? `<button class="btn btn-sm btn-primary" data-action="approve-hospital" data-user-id="${hospital.uid}">Approve</button> <button class="btn btn-sm btn-danger" data-action="reject-hospital" data-user-id="${hospital.uid}">Reject</button>` : ''}
-          <button type="button" class="btn btn-sm btn-secondary" data-action="view-hospital" data-user-id="${hospital.uid}">View</button>
+          <button type="button" class="btn btn-sm btn-secondary" data-action="view-hospital" data-user-id="${hospital.uid || hospital.id}">View</button>
           <button type="button" class="btn btn-sm btn-danger delete-btn" data-action="delete-hospital" data-user-id="${hospital.uid}" title="Delete Hospital"><i class="fas fa-trash-alt"></i> Delete</button>
         </td>
       </tr>
@@ -332,7 +338,7 @@ function renderAdminInventory() {
       groupStats[bg].expired += units;
     } else if (item.status === 'Reserved') {
       groupStats[bg].reserved += units;
-    } else {
+    } else if (isAvailableInventory(item, now)) {
       groupStats[bg].available += units;
     }
 
@@ -350,8 +356,8 @@ function renderAdminInventory() {
 
   // Summary Metrics
   const totalUnitsSum = Object.values(groupStats).reduce((sum, g) => sum + g.total, 0);
-  const activeGroupsCount = Object.values(groupStats).filter((g) => g.total > 0).length;
-  const lowStockCount = Object.values(groupStats).filter((g) => g.total > 0 && g.total < 10).length;
+  const activeGroupsCount = Object.values(groupStats).filter((g) => g.available > 0).length;
+  const lowStockCount = Object.values(groupStats).filter((g) => g.available > 0 && g.available < 10).length;
   const expiredUnitsSum = Object.values(groupStats).reduce((sum, g) => sum + g.expired, 0);
 
   if (document.getElementById('adminTotalUnits')) document.getElementById('adminTotalUnits').textContent = totalUnitsSum;
@@ -369,10 +375,10 @@ function renderAdminInventory() {
     const data = groupStats[bg];
     let status = 'In Stock';
     let statusClass = 'badge-stock-available';
-    if (data.total === 0) {
+    if (data.available === 0) {
       status = 'Out of Stock';
       statusClass = 'badge-stock-out';
-    } else if (data.total < 10) {
+    } else if (data.available < 10) {
       status = 'Low Stock';
       statusClass = 'badge-stock-low';
     }
@@ -1006,6 +1012,13 @@ async function markAllContactMessagesRead() {
 }
 
 function setupActionHandlers() {
+  document.getElementById('adminRecordDetailsModal')?.addEventListener('click', (event) => {
+    if (event.target.id === 'adminRecordDetailsModal'
+      || event.target.closest('[data-action="close-admin-record-details"]')) {
+      closeAdminRecordDetails();
+    }
+  });
+
   document.querySelectorAll('.dashboard-container').forEach((container) => {
     container.addEventListener('click', async (event) => {
       const button = event.target.closest('button[data-action]');
@@ -1135,9 +1148,147 @@ async function deleteHospital(uid) {
   }
 }
 
-function viewDonor(uid) { alert('Donor ID: ' + uid); }
-function viewOrg(uid) { alert('Organization ID: ' + uid); }
-function viewHospital(uid) { alert('Hospital ID: ' + uid); }
+function viewDonor(uid) {
+  const donor = donorsList.find((item) => (item.uid || item.id) === uid || item.id === uid);
+  if (!donor) {
+    showAdminRecordDetails('Donor Details', '<p>Record not found.</p>');
+    return;
+  }
+
+  const donorId = donor.uid || donor.id;
+  const donations = allDonations
+    .filter((donation) => donation.donorId === donorId || donation.donorId === donor.id)
+    .sort((a, b) => getTimestamp(b.donationDate || b.createdAt) - getTimestamp(a.donationDate || a.createdAt));
+  const history = donations.length
+    ? `<ul>${donations.map((donation) => `<li><strong>Date:</strong> ${escapeAdminDetail(formatDate(donation.donationDate || donation.createdAt))} &nbsp; <strong>Blood Group:</strong> ${escapeAdminDetail(donation.bloodGroup || 'Not available')} &nbsp; <strong>Units:</strong> ${escapeAdminDetail(donation.units ?? 'Not available')}</li>`).join('')}</ul>`
+    : '<p>No matching donation history found.</p>';
+  const status = donor.status || getDonorStatus(donor);
+  const eligibility = typeof donor.isEligible === 'boolean' ? (donor.isEligible ? 'Eligible' : 'Not eligible') : 'Not available';
+  const accountStatus = typeof donor.isActive === 'boolean' ? (donor.isActive ? 'Active' : 'Inactive') : 'Not available';
+
+  showAdminRecordDetails('Donor Details', `
+    <div class="details-grid">
+      ${adminDetailField('Name', donor.fullName)}
+      ${adminDetailField('Blood Group', donor.bloodGroup)}
+      ${adminDetailField('Email', donor.email)}
+      ${adminDetailField('Phone', donor.phone)}
+      ${adminDetailField('City', donor.city)}
+      ${adminDetailField('Address', donor.address)}
+      ${adminDetailField('Age', donor.age)}
+      ${adminDetailField('Gender', donor.gender)}
+      ${adminDetailField('Total Donations', donor.totalDonations)}
+      ${adminDetailField('Last Donation', donor.lastDonationDate ? formatDate(donor.lastDonationDate) : null)}
+      ${adminDetailField('Eligibility', eligibility)}
+      ${adminDetailField('Status', status)}
+      ${adminDetailField('Account Status', accountStatus)}
+      ${adminDetailField('Registration Date', donor.createdAt ? formatDate(donor.createdAt) : null)}
+      ${adminDetailField('Donor ID', donorId)}
+    </div>
+    <section class="admin-record-activity" style="margin-top: 18px;"><h3>Donation History</h3>${history}</section>
+  `);
+}
+
+function viewOrg(uid) {
+  const organization = organizationsList.find((item) => (item.uid || item.id) === uid || item.id === uid);
+  if (!organization) {
+    showAdminRecordDetails('Organization Details', '<p>Record not found.</p>');
+    return;
+  }
+
+  const organizationId = organization.uid || organization.id;
+  const belongsToOrganization = (item) => item.organizationId === organizationId || item.organizationId === organization.id;
+  const donations = allDonations.filter(belongsToOrganization).sort((a, b) => getTimestamp(b.donationDate || b.createdAt) - getTimestamp(a.donationDate || a.createdAt));
+  const requests = allRequests.filter(belongsToOrganization).sort((a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt));
+  const inventory = allInventoryItems.filter(belongsToOrganization);
+  const inventoryHistory = allInventoryLogs.filter(belongsToOrganization).sort((a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt));
+  const status = organization.status || (typeof organization.isApproved === 'boolean' ? (organization.isApproved ? 'Approved' : 'Pending') : 'Not available');
+  const activityList = (items, renderItem, emptyMessage) => items.length
+    ? `<ul>${items.slice(0, 10).map(renderItem).join('')}</ul>`
+    : `<p>${emptyMessage}</p>`;
+
+  showAdminRecordDetails('Organization Details', `
+    <div class="details-grid">
+      ${adminDetailField('Name', organization.organizationName)}
+      ${adminDetailField('Email', organization.email)}
+      ${adminDetailField('Phone', organization.phone)}
+      ${adminDetailField('Address', organization.address)}
+      ${adminDetailField('City', organization.city)}
+      ${adminDetailField('License Number', organization.licenseNumber)}
+      ${adminDetailField('Status', status)}
+      ${adminDetailField('Registration Date', organization.createdAt ? formatDate(organization.createdAt) : null)}
+      ${adminDetailField('Organization ID', organizationId)}
+    </div>
+    <section class="admin-record-activity" style="margin-top: 18px;"><h3>Donation Activity</h3>${activityList(donations, (item) => `<li>${escapeAdminDetail(item.donorName || 'Donor')} — ${escapeAdminDetail(item.bloodGroup || 'Not available')}, ${escapeAdminDetail(item.units ?? 'Not available')} units, ${escapeAdminDetail(formatDate(item.donationDate || item.createdAt))}</li>`, 'No matching donation activity found.')}</section>
+    <section class="admin-record-activity" style="margin-top: 18px;"><h3>Requests</h3>${activityList(requests, (item) => `<li>${escapeAdminDetail(item.hospitalName || 'Hospital')} — ${escapeAdminDetail(item.bloodGroup || 'Not available')}, ${escapeAdminDetail(item.units ?? 'Not available')} units, ${escapeAdminDetail(item.status || 'Status not available')}, ${escapeAdminDetail(formatDate(item.createdAt))}</li>`, 'No matching requests found.')}</section>
+    <section class="admin-record-activity" style="margin-top: 18px;"><h3>Current Inventory</h3>${activityList(inventory, (item) => `<li>${escapeAdminDetail(item.bloodGroup || 'Blood group not available')} — ${escapeAdminDetail(item.units ?? 'Not available')} units, ${escapeAdminDetail(item.status || 'Status not available')}</li>`, 'No matching inventory found.')}</section>
+    <section class="admin-record-activity" style="margin-top: 18px;"><h3>Inventory History</h3>${activityList(inventoryHistory, (item) => `<li>${escapeAdminDetail(item.bloodGroup || 'Blood group not available')} — ${escapeAdminDetail(item.reason || 'Inventory update')}, ${escapeAdminDetail(item.difference ?? 'Not available')} units, ${escapeAdminDetail(formatDate(item.createdAt))}</li>`, 'No matching inventory history found.')}</section>
+  `);
+}
+
+function viewHospital(uid) {
+  const hospital = hospitalsList.find((item) => (item.uid || item.id) === uid || item.id === uid);
+  if (!hospital) {
+    showAdminRecordDetails('Hospital Details', '<p>Record not found.</p>');
+    return;
+  }
+
+  const hospitalId = hospital.uid || hospital.id;
+  const requests = allRequests
+    .filter((request) => request.hospitalId === hospitalId || request.hospitalId === hospital.id)
+    .sort((a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt));
+  const requestHistory = requests.length
+    ? `<ul>${requests.slice(0, 10).map((request) => `<li>${escapeAdminDetail(request.bloodGroup || 'Blood group not available')} — ${escapeAdminDetail(request.units ?? 'Not available')} units, ${escapeAdminDetail(request.status || 'Status not available')}, ${escapeAdminDetail(formatDate(request.createdAt))}${request.organizationName ? `, ${escapeAdminDetail(request.organizationName)}` : ''}</li>`).join('')}</ul>`
+    : '<p>No matching request activity found.</p>';
+  const status = hospital.status || (typeof hospital.isApproved === 'boolean' ? (hospital.isApproved ? 'Approved' : 'Pending') : 'Not available');
+
+  showAdminRecordDetails('Hospital Details', `
+    <div class="details-grid">
+      ${adminDetailField('Name', hospital.hospitalName)}
+      ${adminDetailField('Email', hospital.email)}
+      ${adminDetailField('Phone', hospital.phone)}
+      ${adminDetailField('Address', hospital.address)}
+      ${adminDetailField('City', hospital.city)}
+      ${adminDetailField('License Number', hospital.licenseNumber)}
+      ${adminDetailField('Status', status)}
+      ${adminDetailField('Registration Date', hospital.createdAt ? formatDate(hospital.createdAt) : null)}
+      ${adminDetailField('Hospital ID', hospitalId)}
+    </div>
+    <section class="admin-record-activity" style="margin-top: 18px;"><h3>Request Activity</h3>${requestHistory}</section>
+  `);
+}
+
+function adminDetailField(label, value) {
+  const displayValue = value === null || value === undefined || value === '' ? 'Not available' : value;
+  return `<div><strong>${escapeAdminDetail(label)}:</strong> ${escapeAdminDetail(displayValue)}</div>`;
+}
+
+function escapeAdminDetail(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[character]);
+}
+
+function showAdminRecordDetails(title, content) {
+  const modal = document.getElementById('adminRecordDetailsModal');
+  const titleElement = document.getElementById('adminRecordDetailsTitle');
+  const contentElement = document.getElementById('adminRecordDetailsContent');
+  if (!modal || !titleElement || !contentElement) return;
+  titleElement.textContent = title;
+  contentElement.innerHTML = content;
+  modal.classList.add('show');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeAdminRecordDetails() {
+  const modal = document.getElementById('adminRecordDetailsModal');
+  if (!modal) return;
+  modal.classList.remove('show');
+  modal.setAttribute('aria-hidden', 'true');
+}
 
 function setupNotificationHandlers() {
   const recipientType = document.getElementById('recipientType');

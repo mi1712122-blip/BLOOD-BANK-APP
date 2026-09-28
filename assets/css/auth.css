@@ -3,6 +3,7 @@
 .auth-container {
   --auth-bg-image: url('../../assets/images/login page.jpg'); /* default, override inline in HTML if needed */
   min-height: 100vh;
+  min-height: 100svh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -11,7 +12,8 @@
   padding: 20px;
   background-image: var(--auth-bg-image);
   background-size: cover;
-  background-position: center center;
+  background-position: center 44%;
+  background-attachment: fixed;
   background-repeat: no-repeat;
 }
 
@@ -19,8 +21,9 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.55));
+  background: linear-gradient(90deg, rgba(24, 10, 13, 0.24) 0%, rgba(24, 10, 13, 0.50) 50%, rgba(24, 10, 13, 0.24) 100%);
   z-index: 0;
+  pointer-events: none;
 }
 
 .auth-background {
@@ -80,8 +83,8 @@
 }
 
 .auth-card {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(24, 14, 17, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 16px;
   padding: 60px 40px;
   width: 100%;
@@ -90,7 +93,7 @@
   z-index: 2;
   position: relative;
   color: #fff;
-  backdrop-filter: blur(8px) saturate(120%);
+  backdrop-filter: blur(14px) saturate(125%);
 }
 
 .auth-header {
@@ -400,6 +403,10 @@
 
 /* Responsive */
 @media (max-width: 480px) {
+  .auth-container {
+    background-position: 56% center;
+  }
+
   .auth-card {
     padding: 45px 30px;
     border-radius: 12px;

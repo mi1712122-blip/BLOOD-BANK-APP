@@ -13,6 +13,23 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
 import { db } from './firebase-config.js';
 
+export function getInventoryExpiryDate(value) {
+  if (!value) return null;
+  let date;
+  if (typeof value.toDate === 'function') date = value.toDate();
+  else if (typeof value.toMillis === 'function') date = new Date(value.toMillis());
+  else if (value.seconds) date = new Date(value.seconds * 1000);
+  else date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function isAvailableInventory(item, now = new Date()) {
+  const expiryDate = getInventoryExpiryDate(item?.expiryDate);
+  const units = Number(item?.units);
+  return item?.status === 'Available' && expiryDate !== null && expiryDate > now
+    && Number.isFinite(units) && units > 0;
+}
+
 class BloodInventoryManager {
   constructor() {
     this.bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -98,7 +115,7 @@ class BloodInventoryManager {
 
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        inventory[data.bloodGroup] = (inventory[data.bloodGroup] || 0) + data.units;
+        if (isAvailableInventory(data)) inventory[data.bloodGroup] = (inventory[data.bloodGroup] || 0) + Number(data.units);
       });
 
       return { success: true, data: inventory };
@@ -185,7 +202,8 @@ class BloodInventoryManager {
 
         let totalUnits = 0;
         inventorySnapshot.forEach((docSnap) => {
-          totalUnits += docSnap.data().units;
+          const item = docSnap.data();
+          if (isAvailableInventory(item)) totalUnits += Number(item.units);
         });
 
         if (totalUnits > 0) {

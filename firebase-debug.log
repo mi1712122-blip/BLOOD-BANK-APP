@@ -1,0 +1,32 @@
+[debug] [2026-09-28T11:02:43.496Z] ----------------------------------------------------------------------
+[debug] [2026-09-28T11:02:43.508Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\lenovo\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js auth:export C:\Users\lenovo\AppData\Local\Temp\blood-bank-app-auth-export-review.json --format=json --project=blood-bank-app-ad002
+[debug] [2026-09-28T11:02:43.509Z] CLI Version:   15.31.0
+[debug] [2026-09-28T11:02:43.510Z] Platform:      win32
+[debug] [2026-09-28T11:02:43.511Z] Node Version:  v25.9.0
+[debug] [2026-09-28T11:02:43.513Z] Detected Agent: codex_cli
+[debug] [2026-09-28T11:02:43.514Z] Time:          Mon Sep 28 2026 16:02:43 GMT+0500 (Pakistan Standard Time)
+[debug] [2026-09-28T11:02:43.515Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-09-28T11:02:44.040Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-09-28T11:02:44.041Z] > authorizing via signed-in user (mi1712122@gmail.com)
+[debug] [2026-09-28T11:02:44.041Z] [iam] checking project blood-bank-app-ad002 for permissions ["firebase.projects.get","firebaseauth.users.get"]
+[debug] [2026-09-28T11:02:44.084Z] Checked if tokens are valid: false, expires at: 1790593895315
+[debug] [2026-09-28T11:02:44.085Z] Checked if tokens are valid: false, expires at: 1790593895315
+[debug] [2026-09-28T11:02:44.085Z] > refreshing access token with scopes: []
+[debug] [2026-09-28T11:02:44.092Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-09-28T11:02:44.092Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-09-28T11:02:44.716Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-09-28T11:02:44.717Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-09-28T11:02:44.830Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/blood-bank-app-ad002:testIamPermissions [none]
+[debug] [2026-09-28T11:02:44.830Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/blood-bank-app-ad002:testIamPermissions  x-goog-user-project=blood-bank-app-ad002
+[debug] [2026-09-28T11:02:44.831Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/blood-bank-app-ad002:testIamPermissions {"permissions":["firebase.projects.get","firebaseauth.users.get"]}
+[debug] [2026-09-28T11:02:46.539Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/blood-bank-app-ad002:testIamPermissions 200
+[debug] [2026-09-28T11:02:46.539Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/blood-bank-app-ad002:testIamPermissions {"permissions":["firebase.projects.get","firebaseauth.users.get"]}
+[info] Exporting accounts to C:\Users\lenovo\AppData\Local\Temp\blood-bank-app-auth-export-review.json
+[debug] [2026-09-28T11:02:46.542Z] Checked if tokens are valid: true, expires at: 1790596963718
+[debug] [2026-09-28T11:02:46.542Z] Checked if tokens are valid: true, expires at: 1790596963718
+[debug] [2026-09-28T11:02:46.543Z] >>> [apiv2][query] POST https://www.googleapis.com/identitytoolkit/v3/relyingparty/downloadAccount [none]
+[debug] [2026-09-28T11:02:46.544Z] >>> [apiv2][body] POST https://www.googleapis.com/identitytoolkit/v3/relyingparty/downloadAccount {"targetProjectId":"blood-bank-app-ad002","maxResults":1000}
+[debug] [2026-09-28T11:02:46.869Z] <<< [apiv2][status] POST https://www.googleapis.com/identitytoolkit/v3/relyingparty/downloadAccount 200
+[debug] [2026-09-28T11:02:46.870Z] <<< [apiv2][body] POST https://www.googleapis.com/identitytoolkit/v3/relyingparty/downloadAccount [omitted]
+[info] +  Exported 27 account(s) successfully. 

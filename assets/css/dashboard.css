@@ -242,6 +242,18 @@
   padding: 10px 15px;
 }
 
+/* Canceling a hospital request is a cautionary action, distinct from deletion. */
+.btn-cancel-request {
+  background-color: #b45309;
+  border-color: #b45309;
+  color: #ffffff;
+}
+
+.btn-cancel-request:hover:not(:disabled) {
+  background-color: #92400e;
+  border-color: #92400e;
+}
+
 /* Notification Item */
 .notification-date-group {
   margin: 0;

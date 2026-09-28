@@ -13,12 +13,14 @@ import {
   where
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
 import { authManager } from '../../../assets/js/auth.js';
-import { bloodInventoryManager } from '../../../assets/js/inventory.js';
+import { bloodInventoryManager, getInventoryExpiryDate, isAvailableInventory } from '../../../assets/js/inventory.js';
 import { bloodRequestManager } from '../../../assets/js/requests.js';
 import { db } from '../../../assets/js/firebase-config.js';
 
 let currentOrganization = null;
 let currentView = 'dashboard';
+// Project configuration: set this to the approved blood product and storage policy.
+const DONATION_BATCH_SHELF_LIFE_DAYS = 42;
 let notificationsListener = null;
 let inventoryListener = null;
 let donorsListener = null;
@@ -577,8 +579,8 @@ async function loadInventorySummary() {
     if (!result.success) return;
     inventoryItems = result.data;
     currentInventorySummary = inventoryItems.reduce((summary, item) => {
-      if (item.status === 'Available') {
-        summary[item.bloodGroup] = (summary[item.bloodGroup] || 0) + item.units;
+      if (isAvailableInventory(item)) {
+        summary[item.bloodGroup] = (summary[item.bloodGroup] || 0) + Number(item.units);
       }
       return summary;
     }, bloodGroups.reduce((summary, group) => ({ ...summary, [group]: 0 }), {}));
@@ -688,10 +690,10 @@ function renderInventoryTable() {
   if (countElem) countElem.textContent = rows.length;
   const bodyRows = paginated.items.map((group) => {
     const available = currentInventorySummary[group] || 0;
-    const groupItems = inventoryItems.filter((item) => item.bloodGroup === group && item.status === 'Available');
+    const groupItems = inventoryItems.filter((item) => item.bloodGroup === group && isAvailableInventory(item));
     const expiringSoon = groupItems.filter((item) => {
-      const expiry = item.expiryDate?.seconds ? item.expiryDate.seconds * 1000 : item.expiryDate?.toMillis?.();
-      return expiry && expiry < Date.now() + 14 * 24 * 60 * 60 * 1000;
+      const expiry = getInventoryExpiryDate(item.expiryDate);
+      return expiry && expiry.getTime() < Date.now() + 14 * 24 * 60 * 60 * 1000;
     }).length;
     const lastUpdated = groupItems.reduce((latest, item) => {
       const timestamp = item.updatedAt?.seconds ? item.updatedAt.seconds * 1000 : item.updatedAt?.toMillis?.() || 0;
@@ -1016,13 +1018,6 @@ async function issueBlood(requestId, targetButton = null) {
       throw new Error('Requested blood units must be greater than zero.');
     }
 
-    const inventoryQuery = query(
-      collection(db, 'bloodInventory'),
-      where('bloodGroup', '==', bloodGroup),
-      where('status', '==', 'Available')
-    );
-    const inventorySnapshot = await getDocs(inventoryQuery);
-
     const transactionResult = await runTransaction(db, async (transaction) => {
       const reqSnap = await transaction.get(requestRef);
       if (!reqSnap.exists()) {
@@ -1044,30 +1039,44 @@ async function issueBlood(requestId, targetButton = null) {
         throw new Error('Invalid units in blood request.');
       }
 
+      const inventoryQuery = query(
+        collection(db, 'bloodInventory'),
+        where('bloodGroup', '==', request.bloodGroup),
+        where('status', '==', 'Available')
+      );
+      const inventorySnapshot = await getDocs(inventoryQuery);
       const inventoryDocSnaps = await Promise.all(
         inventorySnapshot.docs.map((docSnap) => transaction.get(docSnap.ref))
       );
 
+      const now = new Date();
       const availableItems = inventoryDocSnaps
-        .filter((snap) => snap.exists() && snap.data().status === 'Available')
+        .filter((snap) => {
+          if (!snap.exists()) return false;
+          const item = snap.data();
+          if (item.status !== 'Available' || item.bloodGroup !== request.bloodGroup) return false;
+          return isAvailableInventory(item, now);
+        })
         .map((snap) => ({ ref: snap.ref, id: snap.id, ...snap.data() }))
         .sort((a, b) => {
-          const aExp = a.expiryDate?.seconds ? a.expiryDate.seconds * 1000 : (a.expiryDate ? new Date(a.expiryDate).getTime() : 0);
-          const bExp = b.expiryDate?.seconds ? b.expiryDate.seconds * 1000 : (b.expiryDate ? new Date(b.expiryDate).getTime() : 0);
-          return aExp - bExp;
+          return getInventoryExpiryDate(a.expiryDate) - getInventoryExpiryDate(b.expiryDate);
         });
 
-      const totalAvailable = availableItems.reduce((sum, item) => sum + (Number(item.units) || 0), 0);
+      const totalAvailable = availableItems.reduce((sum, item) => {
+        const units = Number(item.units);
+        return sum + (Number.isFinite(units) && units > 0 ? units : 0);
+      }, 0);
       if (totalAvailable < reqUnits) {
-        throw new Error(`Insufficient inventory for blood group ${request.bloodGroup}. Available: ${totalAvailable} units, Required: ${reqUnits} units.`);
+        throw new Error(`Insufficient inventory. Requested: ${reqUnits}, Available: ${totalAvailable}.`);
       }
 
       let remaining = reqUnits;
-      const now = new Date();
 
       for (const item of availableItems) {
         if (remaining <= 0) break;
-        const currentUnits = Number(item.units) || 0;
+        const rawUnits = Number(item.units);
+        const currentUnits = Number.isFinite(rawUnits) && rawUnits > 0 ? rawUnits : 0;
+        if (currentUnits <= 0) continue;
         const reduceBy = Math.min(currentUnits, remaining);
         const newUnits = currentUnits - reduceBy;
         remaining -= reduceBy;
@@ -1226,7 +1235,11 @@ function openInventoryGroupDetails(group) {
 }
 
 async function removeInventoryItem(group) {
-  const groupItems = inventoryItems.filter((item) => item.bloodGroup === group);
+  const groupItems = inventoryItems.filter((item) =>
+    item.bloodGroup === group
+      && item.organizationId === currentOrganization?.uid
+      && isAvailableInventory(item)
+  );
   if (!groupItems.length) {
     alert('No inventory items available for this blood group.');
     return;
@@ -1895,16 +1908,7 @@ async function saveDonationRecord(event) {
   try {
     // Queries MUST be run BEFORE runTransaction because transaction.get() only accepts DocumentReferences
     const donationQuery = query(collection(db, 'donations'), where('donorId', '==', donorId));
-    const inventoryQuery = query(
-      collection(db, 'bloodInventory'),
-      where('bloodGroup', '==', bloodGroup),
-      where('status', '==', 'Available')
-    );
-
-    const [donorDonationsSnapshot, inventorySnapshot] = await Promise.all([
-      getDocs(donationQuery),
-      getDocs(inventoryQuery)
-    ]);
+    const donorDonationsSnapshot = await getDocs(donationQuery);
 
     const donationId = await runTransaction(db, async (transaction) => {
       const donorRef = doc(db, 'donors', donorId);
@@ -1954,11 +1958,11 @@ async function saveDonationRecord(event) {
       const donationRef = doc(collection(db, 'donations'));
       const inventoryHistoryRef = doc(collection(db, 'inventoryHistory'));
 
-      const inventoryDocument = inventorySnapshot.docs[0];
-      const previousUnits = inventoryDocument ? (Number(inventoryDocument.data().units) || 0) : 0;
-      const currentUnits = previousUnits + units;
+      const newInventoryRef = doc(collection(db, 'bloodInventory'));
       const now = new Date();
       const donorBloodGroup = donor.bloodGroup || bloodGroup;
+      const batchExpiryDate = new Date(donationDate);
+      batchExpiryDate.setDate(batchExpiryDate.getDate() + DONATION_BATCH_SHELF_LIFE_DAYS);
 
       // 1. Create Donation Record
       transaction.set(donationRef, {
@@ -1982,27 +1986,20 @@ async function saveDonationRecord(event) {
         updatedAt: now
       });
 
-      // 3. Update or Create Blood Inventory Record
-      if (inventoryDocument) {
-        transaction.update(inventoryDocument.ref, {
-          units: currentUnits,
-          status: 'Available',
-          updatedAt: now
-        });
-      } else {
-        const newInventoryRef = doc(collection(db, 'bloodInventory'));
-        transaction.set(newInventoryRef, {
-          organizationId: currentOrganization.uid,
-          organizationName: currentOrganization.organizationName || '',
-          bloodGroup: donorBloodGroup,
-          units: units,
-          donorId: donorId,
-          status: 'Available',
-          collectionDate: donationDate,
-          createdAt: now,
-          updatedAt: now
-        });
-      }
+      // 3. Create an independent inventory batch for this donation.
+      transaction.set(newInventoryRef, {
+        organizationId: currentOrganization.uid,
+        organizationName: currentOrganization.organizationName || '',
+        bloodGroup: donorBloodGroup,
+        units,
+        donorId,
+        donationId: donationRef.id,
+        status: 'Available',
+        collectionDate: donationDate,
+        expiryDate: batchExpiryDate,
+        createdAt: now,
+        updatedAt: now
+      });
 
       // 4. Create Inventory History Record
       transaction.set(inventoryHistoryRef, {
@@ -2011,8 +2008,8 @@ async function saveDonationRecord(event) {
         bloodGroup: donorBloodGroup,
         units: units,
         quantity: units,
-        previousUnits: previousUnits,
-        currentUnits: currentUnits,
+        previousUnits: 0,
+        currentUnits: units,
         difference: units,
         reason: 'Donation',
         donationId: donationRef.id,

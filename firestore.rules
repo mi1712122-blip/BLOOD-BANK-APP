@@ -171,7 +171,13 @@ service cloud.firestore {
         );
       allow delete: if isSignedIn()
         && (
-          (isOrganization() && resource.data.organizationId == request.auth.uid)
+          (isOrganization()
+            && resource.data.organizationId == request.auth.uid
+            && resource.data.status == 'Available'
+            && resource.data.expiryDate is timestamp
+            && resource.data.expiryDate > request.time
+            && resource.data.units is number
+            && resource.data.units > 0)
           || isAdmin()
         );
     }
