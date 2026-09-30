@@ -10,6 +10,29 @@
   display: none;
 }
 
+/* Admin approval rejection actions */
+button.btn.btn-sm.btn-danger[data-action^="reject-"] {
+  color: #ffffff;
+  background-color: #c62828;
+  border: 1px solid #b71c1c;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+button.btn.btn-sm.btn-danger[data-action^="reject-"]:hover {
+  background-color: #b71c1c;
+  border-color: #9f1717;
+  box-shadow: 0 3px 8px rgba(183, 28, 28, 0.24);
+}
+
+button.btn.btn-sm.btn-danger[data-action^="reject-"]:active {
+  background-color: #9f1717;
+  border-color: #851313;
+  transform: translateY(1px);
+  box-shadow: 0 1px 3px rgba(133, 19, 19, 0.24);
+}
+
 /* ===== STAT CARD GRID ===== */
 .dashboard-grid {
   display: grid;
@@ -56,6 +79,51 @@
 
 .dashboard-grid > .card {
   margin-top: 0;
+}
+
+/* Organization dashboard quick actions */
+.quick-actions-card {
+  align-self: start;
+}
+
+.quick-actions-card > .card-header {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+}
+
+.quick-actions-card > .card-header h3 {
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+
+.quick-actions-card > .quick-actions-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 10px;
+  padding: 4px 0 0;
+}
+
+.quick-actions-panel > .btn {
+  flex: 1 1 150px;
+  min-width: 0;
+  min-height: 42px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.25;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(127, 29, 29, 0.12);
+}
+
+.quick-actions-panel > .btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(127, 29, 29, 0.16);
+}
+
+.quick-actions-panel > .btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(127, 29, 29, 0.12);
 }
 
 /* Stat Cards */
@@ -526,19 +594,11 @@
   }
 }
 
-/* Organization dashboard: keep quick actions aligned on narrow screens. */
-@media (max-width: 768px) {
-  .quick-actions-panel > .btn {
-    flex: 1 1 calc(50% - 5px);
-    justify-content: center;
-    min-width: 0;
-  }
-}
-
-@media (max-width: 400px) {
+/* Let quick action buttons wrap without forcing a narrow two-column layout. */
+@media (max-width: 480px) {
   .quick-actions-panel > .btn {
     flex-basis: 100%;
-    width: 100%;
+    white-space: normal;
   }
 }
 

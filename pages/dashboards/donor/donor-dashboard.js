@@ -7,7 +7,7 @@ import {
   query,
   where
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
-import { authManager } from '../../../assets/js/auth.js';
+import { authManager, getApprovalStatus, renderApprovalStatusNotice } from '../../../assets/js/auth.js';
 import { bloodRequestManager } from '../../../assets/js/requests.js';
 import { db } from '../../../assets/js/firebase-config.js';
 
@@ -69,6 +69,20 @@ async function checkAuthAndLoadDonor() {
 
   document.getElementById('donorName').textContent = currentDonor.fullName || 'Donor';
   document.getElementById('welcomeName').textContent = currentDonor.fullName || 'Donor';
+  renderApprovalStatusNotice(currentDonor, document.getElementById('approvalStatusNotice'));
+  onSnapshot(doc(db, 'users', currentDonor.uid), (docSnap) => {
+    if (!docSnap.exists()) return;
+    currentDonor = { ...currentDonor, ...docSnap.data() };
+    renderApprovalStatusNotice(currentDonor, document.getElementById('approvalStatusNotice'));
+    const blocked = getApprovalStatus(currentDonor) !== 'Approved';
+    document.querySelectorAll('#donation-historyView button[data-action="donate"], [data-action="donate-blood"]').forEach((button) => { button.disabled = blocked; });
+  });
+  onSnapshot(doc(db, 'donors', currentDonor.uid), (docSnap) => {
+    if (!docSnap.exists()) return;
+    currentDonor = { ...currentDonor, ...docSnap.data() };
+    renderApprovalStatusNotice(currentDonor, document.getElementById('approvalStatusNotice'));
+    updateEligibilityDisplay();
+  });
 
   if (notificationsListener) notificationsListener();
 
@@ -92,6 +106,7 @@ function setupRealtimeListeners() {
     onSnapshot(doc(db, 'donors', donorUid), (docSnap) => {
       if (docSnap.exists()) {
         currentDonor = { ...currentDonor, ...docSnap.data() };
+        renderApprovalStatusNotice(currentDonor, document.getElementById('approvalStatusNotice'));
         updateEligibilityDisplay();
       }
     });
@@ -149,6 +164,7 @@ function matchesCurrentDonor(donation) {
 
 function calculateDonorEligibility(donor, donations) {
   if (!donor) return false;
+  if (getApprovalStatus(donor) !== 'Approved') return false;
   if (donor.isActive === false) return false;
   if (donor.status && ['inactive', 'rejected'].includes(String(donor.status).toLowerCase())) {
     return false;
@@ -571,11 +587,14 @@ function displayNotifications(notifications) {
     const createdAt = notif.createdAt?.seconds ? new Date(notif.createdAt.seconds * 1000) : notif.createdAt ? new Date(notif.createdAt) : new Date();
     const timeAgo = getTimeAgo(createdAt);
     const formattedDateTime = createdAt.toLocaleString();
-    const senderLabel = notif.senderName ? `From: ${notif.senderName}` : 'From: System';
+    const isOutgoing = (notif.senderId || notif.fromUserId) === currentDonor.uid;
+    const senderLabel = isOutgoing
+      ? `To: ${notif.recipientName || notif.targetUserName || notif.recipientRole || 'Recipient'}`
+      : (notif.senderName ? `From: ${notif.senderName}` : 'From: System');
     html += `
       <div class="notification-item ${notif.isRead ? '' : 'unread'}" data-notification-id="${notif.id}">
         <div class="notification-icon">
-          <i class="fas fa-bell"></i>
+          <i class="fas ${isOutgoing ? 'fa-paper-plane' : 'fa-inbox'}" title="${isOutgoing ? 'Sent' : 'Received'}"></i>
         </div>
         <div class="notification-content">
           <div class="notification-title">${notif.title || 'Notification'}</div>
@@ -664,6 +683,9 @@ function showView(view) {
   currentView = view;
   if (view === 'notifications') loadNotifications();
   if (view === 'donation-history') renderDonationHistory();
+  const notice = document.getElementById('approvalStatusNotice');
+  const needsApproval = getApprovalStatus(currentDonor) !== 'Approved';
+  if (notice) notice.classList.toggle('hidden', !needsApproval);
 }
 
 function setupRequestActions() {

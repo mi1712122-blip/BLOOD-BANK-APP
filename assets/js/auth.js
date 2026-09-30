@@ -17,6 +17,41 @@ import {
 import { auth, db } from './firebase-config.js';
 console.log('Auth module loaded with Firebase project:', auth?.app?.options?.projectId || 'unknown');
 
+export function getApprovalStatus(account) {
+  const status = String(account?.status || '').trim().toLowerCase();
+  if (status === 'pending') return 'Pending';
+  if (status === 'approved') return 'Approved';
+  if (status === 'rejected') return 'Rejected';
+  if (typeof account?.isApproved === 'boolean') return account.isApproved ? 'Approved' : 'Pending';
+  // Missing approval data is unverified and must not grant protected access.
+  return 'Pending';
+}
+
+export function isAccountApproved(account) {
+  return getApprovalStatus(account) === 'Approved';
+}
+
+export function renderApprovalStatusNotice(account, element) {
+  if (!element) return;
+  const status = getApprovalStatus(account);
+  element.className = `alert ${status === 'Approved' ? 'alert-success' : status === 'Rejected' ? 'alert-danger' : 'alert-warning'}`;
+  element.textContent = status === 'Approved'
+    ? 'Approved — Your account is approved.'
+    : status === 'Rejected'
+    ? 'Rejected — Your account registration was rejected by the administrator. Please contact the administrator for further information.'
+    : 'Approval Pending — Your account is waiting for administrator approval.';
+}
+
+export function requireApprovedAccount(account, action = 'perform this action') {
+  if (isAccountApproved(account)) return true;
+  const status = getApprovalStatus(account);
+  const message = status === 'Rejected'
+    ? 'Your account was rejected. Please contact the administrator for further information.'
+    : 'Admin approval is required before you can ' + action + '.';
+  if (typeof window !== 'undefined') window.alert(message);
+  return false;
+}
+
 function getGoogleSignInErrorMessage(error) {
   const code = error?.code || '';
   const host = typeof window !== 'undefined' ? window.location.hostname : '';
@@ -85,7 +120,9 @@ class AuthManager {
         email,
         role: userData.role,
         createdAt: new Date(),
-        ...userData
+        ...userData,
+        status: 'Pending',
+        isApproved: false
       };
 
       await setDoc(doc(db, 'users', user.uid), userDocData);
@@ -105,6 +142,8 @@ class AuthManager {
           profilePhoto: userData.profilePhoto || null,
           totalDonations: 0,
           isEligible: true,
+          status: 'Pending',
+          isApproved: false,
           createdAt: new Date()
         });
       } else if (userData.role === 'organization') {
@@ -116,6 +155,7 @@ class AuthManager {
           address: userData.address,
           city: userData.city,
           licenseNumber: userData.licenseNumber,
+          status: 'Pending',
           isApproved: false,
           createdAt: new Date()
         });
@@ -128,6 +168,7 @@ class AuthManager {
           address: userData.address,
           city: userData.city,
           licenseNumber: userData.licenseNumber,
+          status: 'Pending',
           isApproved: false,
           createdAt: new Date()
         });
@@ -200,10 +241,15 @@ class AuthManager {
         displayName: user.displayName || '',
         photoURL: user.photoURL || '',
         authProvider: 'google',
+        role: null,
         profileComplete: false,
+        status: 'Pending',
+        isApproved: false,
         createdAt: new Date()
       });
 
+      const data = (await getDoc(doc(db, 'users', user.uid))).data();
+      this.setSessionUser(user, null, data);
       return { success: true, user, isNewUser: true, profileComplete: false };
     } catch (error) {
       const cancelled = error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request';
@@ -246,7 +292,9 @@ class AuthManager {
         role,
         profileComplete: true,
         completedAt: new Date(),
-        ...profileData
+        ...profileData,
+        status: 'Pending',
+        isApproved: false
       };
       batch.set(userRef, userData, { merge: true });
 
@@ -265,6 +313,8 @@ class AuthManager {
           profilePhoto: user.photoURL || null,
           totalDonations: 0,
           isEligible: true,
+          status: 'Pending',
+          isApproved: false,
           createdAt: new Date()
         }, { merge: true });
       } else {
@@ -278,6 +328,7 @@ class AuthManager {
           address: profileData.address,
           city: profileData.city,
           licenseNumber: profileData.licenseNumber,
+          status: 'Pending',
           isApproved: false,
           createdAt: new Date()
         }, { merge: true });
@@ -356,6 +407,12 @@ class AuthManager {
       await updateDoc(doc(db, 'users', uid), updateData);
 
       const role = this.currentUserRole || this.currentUserData?.role;
+      const userSnapshot = await getDoc(doc(db, 'users', uid));
+      if (userSnapshot.exists()) {
+        const savedData = userSnapshot.data();
+        if (Object.prototype.hasOwnProperty.call(savedData, 'status')) updateData.status = savedData.status;
+        if (Object.prototype.hasOwnProperty.call(savedData, 'isApproved')) updateData.isApproved = savedData.isApproved;
+      }
       if (role === 'donor') {
         await updateDoc(doc(db, 'donors', uid), updateData);
       } else if (role === 'organization') {

@@ -21,57 +21,131 @@ service cloud.firestore {
       return isSignedIn() && getUserRole() == 'organization';
     }
 
-    function isDonor() {
-      return isSignedIn() && getUserRole() == 'donor';
+    function isHospital() {
+      return isSignedIn() && getUserRole() == 'hospital';
+    }
+
+    function hasApprovedAccount() {
+      return isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'Approved'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isApproved == true;
+    }
+
+    function isAdminOrApproved() {
+      return isAdmin() || hasApprovedAccount();
+    }
+
+    function isActiveOrganization() {
+      return isOrganization() && hasApprovedAccount();
+    }
+
+    function isDonorApproved(donorId) {
+      return exists(/databases/$(database)/documents/donors/$(donorId))
+        && get(/databases/$(database)/documents/donors/$(donorId)).data.status == 'Approved'
+        && get(/databases/$(database)/documents/donors/$(donorId)).data.isApproved == true;
+    }
+
+    function isEligibleApprovedDonor(donorId) {
+      return isDonorApproved(donorId)
+        && get(/databases/$(database)/documents/donors/$(donorId)).data.uid == donorId
+        && get(/databases/$(database)/documents/donors/$(donorId)).data.isEligible == true
+        && get(/databases/$(database)/documents/donors/$(donorId)).data.isActive != false
+        && exists(/databases/$(database)/documents/users/$(donorId))
+        && get(/databases/$(database)/documents/users/$(donorId)).data.uid == donorId
+        && get(/databases/$(database)/documents/users/$(donorId)).data.role == 'donor'
+        && get(/databases/$(database)/documents/users/$(donorId)).data.status == 'Approved'
+        && get(/databases/$(database)/documents/users/$(donorId)).data.isApproved == true;
     }
 
     match /users/{userId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin() || hasApprovedAccount());
       allow create: if isSignedIn() && isOwner(userId)
-        && request.resource.data.role in ['donor', 'organization', 'hospital'];
-      allow update: if isSignedIn() && isOwner(userId)
-        && request.resource.data.role == resource.data.role
-        && request.resource.data.uid == resource.data.uid;
-      allow delete: if isSignedIn() && isOwner(userId);
+        && (!('role' in request.resource.data) || request.resource.data.role == null || request.resource.data.role in ['donor', 'organization', 'hospital'])
+        && (!('status' in request.resource.data) || request.resource.data.status == 'Pending')
+        && request.resource.data.isApproved == false;
+      allow update: if isSignedIn() && (
+        (isOwner(userId)
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.isApproved == resource.data.isApproved)
+        || (isAdmin()
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'isApproved', 'updatedAt', 'approvedAt', 'rejectedAt']))
+      );
+      allow delete: if isAdmin();
     }
 
     match /donors/{userId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow read: if isSignedIn() && (isOwner(userId) || isAdminOrApproved());
+      allow create: if isSignedIn() && ((isOwner(userId)
+        && request.resource.data.status == 'Pending'
+        && request.resource.data.isApproved == false) || isAdmin());
       allow update: if isSignedIn()
         && (
-          isOwner(userId)
-          || isAdmin()
-          || (isOrganization() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalDonations', 'lastDonationDate', 'updatedAt']))
+          (isOwner(userId)
+            && hasApprovedAccount()
+            && request.resource.data.status == resource.data.status
+            && request.resource.data.isApproved == resource.data.isApproved)
+          || (isAdmin()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'isApproved', 'updatedAt', 'approvedAt', 'rejectedAt']))
+          || (isActiveOrganization()
+            && isEligibleApprovedDonor(userId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalDonations', 'lastDonationDate', 'lastDonationId', 'updatedAt'])
+            && request.resource.data.diff(resource.data).affectedKeys().hasAll(['totalDonations', 'lastDonationDate', 'lastDonationId'])
+            && request.resource.data.totalDonations == resource.data.totalDonations + 1
+            && request.resource.data.lastDonationDate is timestamp
+            && request.resource.data.lastDonationId is string
+            && existsAfter(/databases/$(database)/documents/donations/$(request.resource.data.lastDonationId))
+            && getAfter(/databases/$(database)/documents/donations/$(request.resource.data.lastDonationId)).data.donorId == userId
+            && getAfter(/databases/$(database)/documents/donations/$(request.resource.data.lastDonationId)).data.organizationId == request.auth.uid
+            && getAfter(/databases/$(database)/documents/donations/$(request.resource.data.lastDonationId)).data.donationDate == request.resource.data.lastDonationDate)
         );
-      allow delete: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow delete: if isAdmin();
     }
 
     match /organizations/{orgId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isOwner(orgId);
-      allow update: if isSignedIn() && (isOwner(orgId) || isAdmin());
-      allow delete: if isSignedIn() && (isOwner(orgId) || isAdmin());
+      allow read: if isSignedIn() && (isOwner(orgId) || isAdminOrApproved());
+      allow create: if isSignedIn() && isOwner(orgId)
+        && request.resource.data.status == 'Pending'
+        && request.resource.data.isApproved == false;
+      allow update: if isSignedIn() && ((isOwner(orgId)
+        && hasApprovedAccount()
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.isApproved == resource.data.isApproved)
+        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'isApproved', 'updatedAt', 'approvedAt', 'rejectedAt'])));
+      allow delete: if isAdmin();
     }
 
     match /hospitals/{hospitalId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isOwner(hospitalId);
-      allow update: if isSignedIn() && (isOwner(hospitalId) || isAdmin());
-      allow delete: if isSignedIn() && (isOwner(hospitalId) || isAdmin());
+      allow read: if isSignedIn() && (isOwner(hospitalId) || isAdminOrApproved());
+      allow create: if isSignedIn() && isOwner(hospitalId)
+        && request.resource.data.status == 'Pending'
+        && request.resource.data.isApproved == false;
+      allow update: if isSignedIn() && ((isOwner(hospitalId)
+        && hasApprovedAccount()
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.isApproved == resource.data.isApproved)
+        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'isApproved', 'updatedAt', 'approvedAt', 'rejectedAt'])));
+      allow delete: if isAdmin();
     }
 
     match /bloodRequests/{requestId} {
-      allow read: if isSignedIn()
+      allow read: if isSignedIn() && (isAdmin() || hasApprovedAccount())
         && (
           (getUserRole() == 'hospital' && resource.data.hospitalId == request.auth.uid)
           || (getUserRole() == 'organization' && resource.data.organizationId == request.auth.uid)
           || isAdmin()
         );
       allow create: if isSignedIn()
-        && getUserRole() == 'hospital'
+        && isHospital()
+        && hasApprovedAccount()
         && request.resource.data.hospitalId == request.auth.uid
         && request.resource.data.status == 'Pending'
+        && request.resource.data.bloodGroup in ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+        && request.resource.data.units is number
+        && request.resource.data.units > 0
         && request.resource.data.keys().hasOnly([
              'hospitalId', 'hospitalName', 'bloodGroup', 'units', 'urgencyLevel',
              'patientName', 'patientAge', 'purpose', 'organizationId', 'organizationName',
@@ -80,151 +154,207 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && (
           // Hospital can cancel their own pending requests
-          (getUserRole() == 'hospital'
+          (isHospital()
+            && hasApprovedAccount()
             && resource.data.hospitalId == request.auth.uid
             && resource.data.status == 'Pending'
             && request.resource.data.status == 'Cancelled'
-            && request.resource.data.keys().hasOnly(['status', 'cancellationReason', 'cancelledAt', 'updatedAt']))
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancellationReason', 'cancelledAt', 'updatedAt'])
+            && request.resource.data.diff(resource.data).affectedKeys().hasAll(['status']))
           ||
           // Organization can approve/reject/issue for their requests
-          (getUserRole() == 'organization'
+          (isActiveOrganization()
             && resource.data.organizationId == request.auth.uid
             && (
               // Approve: Pending -> Processing
               (resource.data.status == 'Pending'
                 && request.resource.data.status == 'Processing'
-                && request.resource.data.keys().hasOnly(['status', 'approvedAt', 'updatedAt', 'organizationId']))
+                && request.resource.data.organizationId == request.auth.uid
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvedAt', 'updatedAt', 'organizationId'])
+                && request.resource.data.diff(resource.data).affectedKeys().hasAll(['status']))
               ||
               // Reject: Pending -> Rejected
               (resource.data.status == 'Pending'
                 && request.resource.data.status == 'Rejected'
-                && request.resource.data.keys().hasOnly(['status', 'rejectionReason', 'rejectedAt']))
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'rejectionReason', 'rejectedAt'])
+                && request.resource.data.diff(resource.data).affectedKeys().hasAll(['status']))
               ||
               // Issue blood: Processing -> Completed
               (resource.data.status == 'Processing'
                 && request.resource.data.status == 'Completed'
-                && request.resource.data.keys().hasOnly(['status', 'issuedAt', 'completedAt', 'updatedAt', 'issueDetails']))
+                && request.resource.data.issueDetails.unitsIssued == resource.data.units
+                && request.resource.data.issueDetails.bloodGroup == resource.data.bloodGroup
+                && request.resource.data.issueDetails.organizationId == request.auth.uid
+                && getAfter(/databases/$(database)/documents/bloodIssues/$(requestId)).data.requestId == requestId
+                && getAfter(/databases/$(database)/documents/bloodIssues/$(requestId)).data.organizationId == request.auth.uid
+                && getAfter(/databases/$(database)/documents/bloodIssues/$(requestId)).data.units == resource.data.units
+                && getAfter(/databases/$(database)/documents/bloodIssues/$(requestId)).data.bloodGroup == resource.data.bloodGroup
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'issuedAt', 'completedAt', 'updatedAt', 'issueDetails'])
+                && request.resource.data.diff(resource.data).affectedKeys().hasAll(['status', 'issueDetails']))
             ))
         );
       allow delete: if false;
     }
 
     match /bloodIssues/{issueId} {
-      allow read: if isSignedIn()
+      allow read: if isSignedIn() && (isAdmin() || hasApprovedAccount())
         && (
-          (isOrganization() && resource.data.organizationId == request.auth.uid)
+          (isActiveOrganization() && resource.data.organizationId == request.auth.uid)
           || (isSignedIn() && resource.data.hospitalId == request.auth.uid)
           || isAdmin()
         );
-      allow create: if isSignedIn()
-        && (
-          (isOrganization() && request.resource.data.organizationId == request.auth.uid)
-          || isAdmin()
-        );
-      allow update: if isSignedIn()
-        && (
-          (isOrganization() && resource.data.organizationId == request.auth.uid && request.resource.data.organizationId == resource.data.organizationId)
-          || isAdmin()
-        );
-      allow delete: if isSignedIn()
-        && (
-          (isOrganization() && resource.data.organizationId == request.auth.uid)
-          || isAdmin()
-        );
+      allow create: if isActiveOrganization()
+        && issueId == request.resource.data.requestId
+        && request.resource.data.organizationId == request.auth.uid
+        && request.resource.data.status == 'Completed'
+        && request.resource.data.requestId is string
+        && exists(/databases/$(database)/documents/bloodRequests/$(request.resource.data.requestId))
+        && get(/databases/$(database)/documents/bloodRequests/$(request.resource.data.requestId)).data.status == 'Processing'
+        && get(/databases/$(database)/documents/bloodRequests/$(request.resource.data.requestId)).data.organizationId == request.auth.uid
+        && request.resource.data.units is number
+        && request.resource.data.units > 0
+        && request.resource.data.units == get(/databases/$(database)/documents/bloodRequests/$(request.resource.data.requestId)).data.units
+        && request.resource.data.bloodGroup == get(/databases/$(database)/documents/bloodRequests/$(request.resource.data.requestId)).data.bloodGroup
+        && getAfter(/databases/$(database)/documents/bloodRequests/$(request.resource.data.requestId)).data.status == 'Completed'
+        && getAfter(/databases/$(database)/documents/bloodRequests/$(request.resource.data.requestId)).data.issueDetails.unitsIssued == request.resource.data.units
+        && getAfter(/databases/$(database)/documents/bloodRequests/$(request.resource.data.requestId)).data.issueDetails.bloodGroup == request.resource.data.bloodGroup
+        && getAfter(/databases/$(database)/documents/bloodRequests/$(request.resource.data.requestId)).data.issueDetails.organizationId == request.auth.uid;
+      allow update, delete: if false;
     }
 
     match /donations/{donationId} {
-      allow read: if isSignedIn()
+      allow read: if isSignedIn() && (isAdmin() || hasApprovedAccount())
         && (
-          isOrganization()
+          isActiveOrganization()
           || resource.data.donorId == request.auth.uid
           || isAdmin()
         );
-      allow create: if isSignedIn()
+      allow create: if isSignedIn() && (isAdmin() || hasApprovedAccount())
         && (
-          (isOrganization() && request.resource.data.organizationId == request.auth.uid)
+          (isActiveOrganization() && request.resource.data.organizationId == request.auth.uid
+            && request.resource.data.donationId == donationId
+            && request.resource.data.donorId is string
+            && isEligibleApprovedDonor(request.resource.data.donorId)
+            && request.resource.data.status == 'Completed'
+            && request.resource.data.bloodGroup in ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+            && request.resource.data.bloodGroup == get(/databases/$(database)/documents/donors/$(request.resource.data.donorId)).data.bloodGroup
+            && request.resource.data.units is number && request.resource.data.units > 0
+            && request.resource.data.donationDate is timestamp
+            && request.resource.data.expiryDate is timestamp
+            && request.resource.data.inventoryId is string
+            && request.resource.data.historyId is string
+            && getAfter(/databases/$(database)/documents/donors/$(request.resource.data.donorId)).data.totalDonations
+              == get(/databases/$(database)/documents/donors/$(request.resource.data.donorId)).data.totalDonations + 1
+            && getAfter(/databases/$(database)/documents/donors/$(request.resource.data.donorId)).data.lastDonationId == donationId
+            && getAfter(/databases/$(database)/documents/donors/$(request.resource.data.donorId)).data.lastDonationDate == request.resource.data.donationDate
+            && request.resource.data.inventoryId is string
+            && existsAfter(/databases/$(database)/documents/bloodInventory/$(request.resource.data.inventoryId))
+            && getAfter(/databases/$(database)/documents/bloodInventory/$(request.resource.data.inventoryId)).data.donationId == donationId
+            && getAfter(/databases/$(database)/documents/bloodInventory/$(request.resource.data.inventoryId)).data.organizationId == request.auth.uid
+            && getAfter(/databases/$(database)/documents/bloodInventory/$(request.resource.data.inventoryId)).data.donorId == request.resource.data.donorId
+            && getAfter(/databases/$(database)/documents/bloodInventory/$(request.resource.data.inventoryId)).data.bloodGroup == request.resource.data.bloodGroup
+            && getAfter(/databases/$(database)/documents/bloodInventory/$(request.resource.data.inventoryId)).data.units == request.resource.data.units
+            && getAfter(/databases/$(database)/documents/bloodInventory/$(request.resource.data.inventoryId)).data.status == 'Available'
+            && getAfter(/databases/$(database)/documents/bloodInventory/$(request.resource.data.inventoryId)).data.expiryDate == request.resource.data.expiryDate
+            && getAfter(/databases/$(database)/documents/bloodInventory/$(request.resource.data.inventoryId)).data.collectionDate == request.resource.data.donationDate
+            && existsAfter(/databases/$(database)/documents/inventoryHistory/$(request.resource.data.historyId))
+            && getAfter(/databases/$(database)/documents/inventoryHistory/$(request.resource.data.historyId)).data.donationId == donationId
+            && getAfter(/databases/$(database)/documents/inventoryHistory/$(request.resource.data.historyId)).data.inventoryId == request.resource.data.inventoryId
+            && getAfter(/databases/$(database)/documents/inventoryHistory/$(request.resource.data.historyId)).data.organizationId == request.auth.uid
+            && getAfter(/databases/$(database)/documents/inventoryHistory/$(request.resource.data.historyId)).data.donorId == request.resource.data.donorId
+            && getAfter(/databases/$(database)/documents/inventoryHistory/$(request.resource.data.historyId)).data.bloodGroup == request.resource.data.bloodGroup
+            && getAfter(/databases/$(database)/documents/inventoryHistory/$(request.resource.data.historyId)).data.units == request.resource.data.units
+            && getAfter(/databases/$(database)/documents/inventoryHistory/$(request.resource.data.historyId)).data.currentUnits == request.resource.data.units
+            && getAfter(/databases/$(database)/documents/inventoryHistory/$(request.resource.data.historyId)).data.difference == request.resource.data.units
+            && getAfter(/databases/$(database)/documents/inventoryHistory/$(request.resource.data.historyId)).data.reason == 'Donation')
           || isAdmin()
         );
-      allow update: if isSignedIn()
-        && (
-          (isOrganization() && resource.data.organizationId == request.auth.uid && request.resource.data.organizationId == resource.data.organizationId)
-          || isAdmin()
-        );
-      allow delete: if isSignedIn()
-        && (
-          (isOrganization() && resource.data.organizationId == request.auth.uid)
-          || isAdmin()
-        );
+      allow update: if isSignedIn() && (
+        (isActiveOrganization()
+          && resource.data.organizationId == request.auth.uid
+          && request.resource.data.organizationId == resource.data.organizationId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+        || isAdmin()
+      );
+      allow delete: if isAdmin();
     }
 
     match /bloodInventory/{inventoryId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn()
+      allow read: if isSignedIn() && (isAdmin() || hasApprovedAccount());
+      allow create: if isSignedIn() && (isAdmin() || hasApprovedAccount())
         && (
-          (isOrganization() && request.resource.data.organizationId == request.auth.uid)
+          (isActiveOrganization() && request.resource.data.organizationId == request.auth.uid
+            && request.resource.data.donorId is string
+            && request.resource.data.donationId is string
+            && request.resource.data.bloodGroup in ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+            && request.resource.data.units is number && request.resource.data.units > 0
+            && request.resource.data.status == 'Available'
+            && request.resource.data.collectionDate is timestamp
+            && request.resource.data.expiryDate is timestamp
+            && request.resource.data.expiryDate > request.resource.data.collectionDate
+            && isEligibleApprovedDonor(request.resource.data.donorId)
+            && existsAfter(/databases/$(database)/documents/donations/$(request.resource.data.donationId))
+            && getAfter(/databases/$(database)/documents/donations/$(request.resource.data.donationId)).data.inventoryId == inventoryId
+            && getAfter(/databases/$(database)/documents/donations/$(request.resource.data.donationId)).data.donationId == request.resource.data.donationId
+            && getAfter(/databases/$(database)/documents/donations/$(request.resource.data.donationId)).data.status == 'Completed'
+            && getAfter(/databases/$(database)/documents/donations/$(request.resource.data.donationId)).data.organizationId == request.auth.uid
+            && getAfter(/databases/$(database)/documents/donations/$(request.resource.data.donationId)).data.donorId == request.resource.data.donorId
+            && getAfter(/databases/$(database)/documents/donations/$(request.resource.data.donationId)).data.bloodGroup == request.resource.data.bloodGroup
+            && getAfter(/databases/$(database)/documents/donations/$(request.resource.data.donationId)).data.units == request.resource.data.units
+            && getAfter(/databases/$(database)/documents/donations/$(request.resource.data.donationId)).data.expiryDate == request.resource.data.expiryDate
+            && getAfter(/databases/$(database)/documents/donations/$(request.resource.data.donationId)).data.donationDate == request.resource.data.collectionDate)
           || isAdmin()
         );
-      allow update: if isSignedIn()
+      allow update: if isSignedIn() && (isAdmin() || hasApprovedAccount())
         && (
-          (isOrganization() && resource.data.organizationId == request.auth.uid && request.resource.data.organizationId == resource.data.organizationId)
-          || isAdmin()
-        );
-      allow delete: if isSignedIn()
-        && (
-          (isOrganization()
-            && resource.data.organizationId == request.auth.uid
-            && resource.data.status == 'Available'
+          (isActiveOrganization() && resource.data.organizationId == request.auth.uid && request.resource.data.organizationId == resource.data.organizationId
+            && request.resource.data.bloodGroup == resource.data.bloodGroup
+            && request.resource.data.expiryDate == resource.data.expiryDate
+            && request.resource.data.units is number && request.resource.data.units >= 0
+            && request.resource.data.units <= resource.data.units
             && resource.data.expiryDate is timestamp
             && resource.data.expiryDate > request.time
-            && resource.data.units is number
-            && resource.data.units > 0)
+            && request.resource.data.status == (request.resource.data.units == 0 ? 'Used' : 'Available')
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['units', 'status', 'updatedAt'])
+            && (!('donorId' in request.resource.data) || request.resource.data.donorId == null
+              || isDonorApproved(request.resource.data.donorId)))
           || isAdmin()
         );
+      allow delete: if isAdmin();
     }
 
     match /inventoryHistory/{historyId} {
-      allow read: if isSignedIn()
+      allow read: if isSignedIn() && (isAdmin() || hasApprovedAccount())
         && (
-          (isOrganization() && resource.data.organizationId == request.auth.uid)
+          (isActiveOrganization() && resource.data.organizationId == request.auth.uid)
           || isAdmin()
         );
-      allow create: if isSignedIn()
+      allow create: if isSignedIn() && (isAdmin() || hasApprovedAccount())
         && (
-          (isOrganization() && request.resource.data.organizationId == request.auth.uid)
+          (isActiveOrganization() && request.resource.data.organizationId == request.auth.uid)
           || isAdmin()
         );
-      allow update: if isSignedIn()
-        && (
-          (isOrganization() && resource.data.organizationId == request.auth.uid && request.resource.data.organizationId == resource.data.organizationId)
-          || isAdmin()
-        );
-      allow delete: if isSignedIn()
-        && (
-          (isOrganization() && resource.data.organizationId == request.auth.uid)
-          || isAdmin()
-        );
+      allow update, delete: if isAdmin();
     }
 
     match /notifications/{notificationId} {
       allow read: if isSignedIn()
-        && (
-          resource.data.recipientId == request.auth.uid
-          || isAdmin()
-        );
+        && (resource.data.recipientId == request.auth.uid || isAdmin());
       allow create: if isSignedIn()
         && request.resource.data.recipientId is string
         && request.resource.data.senderId is string
         && (
-          request.resource.data.senderId == request.auth.uid
+          (request.resource.data.senderId == request.auth.uid && hasApprovedAccount())
           || isAdmin()
         );
       allow update: if isSignedIn()
         && resource.data.recipientId == request.auth.uid
+        && (hasApprovedAccount() || isAdmin())
         && request.resource.data.recipientId == resource.data.recipientId
         && request.resource.data.isRead is bool;
       allow delete: if isSignedIn()
         && (
-          resource.data.recipientId == request.auth.uid
+          resource.data.recipientId == request.auth.uid && hasApprovedAccount()
           || isAdmin()
         );
     }

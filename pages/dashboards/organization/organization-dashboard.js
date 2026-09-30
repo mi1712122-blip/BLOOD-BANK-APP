@@ -1,7 +1,6 @@
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -12,10 +11,10 @@ import {
   updateDoc,
   where
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
-import { authManager } from '../../../assets/js/auth.js';
+import { authManager, getApprovalStatus, renderApprovalStatusNotice, requireApprovedAccount } from '../../../assets/js/auth.js';
 import { bloodInventoryManager, getInventoryExpiryDate, isAvailableInventory } from '../../../assets/js/inventory.js';
 import { bloodRequestManager } from '../../../assets/js/requests.js';
-import { db } from '../../../assets/js/firebase-config.js';
+import { auth, db } from '../../../assets/js/firebase-config.js';
 
 let currentOrganization = null;
 let currentView = 'dashboard';
@@ -93,6 +92,7 @@ async function checkAuthAndLoadOrganization() {
 
   currentOrganization = user.data;
   document.getElementById('orgName').textContent = currentOrganization.organizationName || 'Organization';
+  renderApprovalStatusNotice(currentOrganization, document.getElementById('approvalStatusNotice'));
 
   if (notificationsListener) notificationsListener();
   notificationsListener = bloodRequestManager.listenNotifications(currentOrganization.uid, (result) => {
@@ -105,6 +105,20 @@ async function checkAuthAndLoadOrganization() {
     renderRecentNotificationsPreview();
     renderRecentActivityPreview();
     if (currentView === 'notifications') displayNotifications(notifications);
+  });
+
+  // Keep approval data synchronized on both profile and role documents.
+  onSnapshot(doc(db, 'users', currentOrganization.uid), (docSnap) => {
+    if (!docSnap.exists()) return;
+    currentOrganization = { ...currentOrganization, ...docSnap.data() };
+    renderApprovalStatusNotice(currentOrganization, document.getElementById('approvalStatusNotice'));
+    const blocked = getApprovalStatus(currentOrganization) !== 'Approved';
+    document.querySelectorAll('[data-action="quick-add-blood"], [data-action="quick-issue-blood"], [data-action="quick-notify-donors"], [data-action="open-add-blood-modal"]').forEach((button) => { button.disabled = blocked; });
+  });
+  onSnapshot(doc(db, 'organizations', currentOrganization.uid), (docSnap) => {
+    if (!docSnap.exists()) return;
+    currentOrganization = { ...currentOrganization, ...docSnap.data() };
+    renderApprovalStatusNotice(currentOrganization, document.getElementById('approvalStatusNotice'));
   });
 
   return true;
@@ -280,7 +294,7 @@ function populateDonorOptions(selectedBloodGroup = '') {
     ? donorsList.filter((donor) => (donor.bloodGroup || '').trim().toUpperCase() === group.trim().toUpperCase())
     : [];
 
-  select.innerHTML = '<option value="">Choose donor (optional)</option>' +
+  select.innerHTML = '<option value="">Choose donor</option>' +
     filteredDonors.map((donor) => `<option value="${donor.id || donor.uid}">${donor.fullName || donor.email || donor.id}</option>`).join('');
 
   if (currentSelectedValue && filteredDonors.some((d) => (d.id === currentSelectedValue || d.uid === currentSelectedValue))) {
@@ -303,7 +317,7 @@ function renderDashboardCards() {
   const availableUnits = Object.values(summary).reduce((sum, units) => sum + units, 0);
   const now = new Date();
   
-  const totalUnits = inventoryItems.reduce((sum, item) => sum + (Number(item.units) || 0), 0);
+  const totalUnits = availableUnits;
   const expiredUnits = inventoryItems.reduce((sum, item) => {
     const isExpired = item.status === 'Expired' || (item.expiryDate && new Date(item.expiryDate.seconds ? item.expiryDate.seconds * 1000 : item.expiryDate) < now);
     return isExpired ? sum + (Number(item.units) || 0) : sum;
@@ -562,33 +576,33 @@ async function loadNotifications() {
 }
 
 async function loadInventorySummary() {
-  const inventoryResult = await bloodInventoryManager.getInventoryByOrganization(currentOrganization.uid);
-  if (inventoryResult.success) {
-    currentInventorySummary = inventoryResult.data;
-    displayInventoryOverview(currentInventorySummary);
-    calculateTotalUnits(currentInventorySummary);
-  } else {
-    currentInventorySummary = {};
-  }
-
   const inventoryItemsResult = await bloodInventoryManager.getInventoryItemsByOrganization(currentOrganization.uid);
   inventoryItems = inventoryItemsResult.success ? inventoryItemsResult.data : [];
+  currentInventorySummary = getOrganizationAvailableInventorySummary(inventoryItems, currentOrganization.uid);
+  displayInventoryOverview(currentInventorySummary);
+  calculateTotalUnits(currentInventorySummary);
 
   if (inventoryListener) inventoryListener();
   inventoryListener = bloodInventoryManager.listenOrganizationInventory(currentOrganization.uid, (result) => {
     if (!result.success) return;
     inventoryItems = result.data;
-    currentInventorySummary = inventoryItems.reduce((summary, item) => {
-      if (isAvailableInventory(item)) {
-        summary[item.bloodGroup] = (summary[item.bloodGroup] || 0) + Number(item.units);
-      }
-      return summary;
-    }, bloodGroups.reduce((summary, group) => ({ ...summary, [group]: 0 }), {}));
+    currentInventorySummary = getOrganizationAvailableInventorySummary(inventoryItems, currentOrganization.uid);
     displayInventoryOverview(currentInventorySummary);
     calculateTotalUnits(currentInventorySummary);
     renderDashboardCards();
     renderCurrentView();
   });
+}
+
+function getOrganizationAvailableInventorySummary(items, organizationId) {
+  return items.reduce((summary, item) => {
+    if (item.organizationId !== organizationId || !isAvailableInventory(item)) return summary;
+    const units = Number(item.units);
+    if (Number.isFinite(units) && units > 0) {
+      summary[item.bloodGroup] = (summary[item.bloodGroup] || 0) + units;
+    }
+    return summary;
+  }, bloodGroups.reduce((summary, group) => ({ ...summary, [group]: 0 }), {}));
 }
 
 function displayInventoryOverview(inventory) {
@@ -615,6 +629,7 @@ function calculateTotalUnits(inventory) {
 
 
 async function notifyLowStock(group) {
+  if (!requireApprovedAccount(currentOrganization, 'send operational notifications')) return;
   if (!group) return;
   if (!confirm(`Notify donors that ${group} stock is low?`)) return;
 
@@ -865,6 +880,7 @@ function viewDonationDetails(id) {
 }
 
 async function updateDonationStatus(id, status) {
+  if (!requireApprovedAccount(currentOrganization, 'update donation records')) return;
   try {
     await updateDoc(doc(db, 'donations', id), {
       status,
@@ -967,6 +983,7 @@ function renderRequestsTable() {
 let bloodIssueInProgress = false;
 
 async function issueBlood(requestId, targetButton = null) {
+  if (!requireApprovedAccount(currentOrganization, 'issue blood')) return;
   if (bloodIssueInProgress) return;
 
   if (!currentOrganization?.uid || (currentOrganization.role && currentOrganization.role !== 'organization')) {
@@ -1054,7 +1071,8 @@ async function issueBlood(requestId, targetButton = null) {
         .filter((snap) => {
           if (!snap.exists()) return false;
           const item = snap.data();
-          if (item.status !== 'Available' || item.bloodGroup !== request.bloodGroup) return false;
+          if (item.status !== 'Available' || item.bloodGroup !== request.bloodGroup
+            || item.organizationId !== currentOrganization.uid) return false;
           return isAvailableInventory(item, now);
         })
         .map((snap) => ({ ref: snap.ref, id: snap.id, ...snap.data() }))
@@ -1105,7 +1123,11 @@ async function issueBlood(requestId, targetButton = null) {
         });
       }
 
-      const bloodIssueRef = doc(collection(db, 'bloodIssues'));
+      if (remaining > 0) {
+        throw new Error('Insufficient inventory. The available stock changed while this request was being processed.');
+      }
+
+      const bloodIssueRef = doc(db, 'bloodIssues', requestId);
       transaction.set(bloodIssueRef, {
         issueId: bloodIssueRef.id,
         requestId: requestId,
@@ -1249,16 +1271,36 @@ async function removeInventoryItem(group) {
   if (!confirmed) return;
 
   try {
-    await Promise.all(groupItems.map((item) => deleteDoc(doc(db, 'bloodInventory', item.id))));
-    await addDoc(collection(db, 'inventoryHistory'), {
-      organizationId: currentOrganization.uid,
-      bloodGroup: group,
-      previousUnits: currentInventorySummary?.[group] || 0,
-      currentUnits: 0,
-      difference: -(currentInventorySummary?.[group] || 0),
-      reason: 'Manual removal',
-      userId: currentOrganization.uid,
-      createdAt: new Date()
+    await runTransaction(db, async (transaction) => {
+      const itemSnapshots = await Promise.all(groupItems.map((item) =>
+        transaction.get(doc(db, 'bloodInventory', item.id))
+      ));
+      const currentItems = itemSnapshots
+        .filter((snapshot) => snapshot.exists())
+        .map((snapshot) => ({ id: snapshot.id, ref: snapshot.ref, ...snapshot.data() }))
+        .filter((item) => item.organizationId === currentOrganization.uid
+          && item.bloodGroup === group
+          && isAvailableInventory(item));
+      const unitsRemoved = currentItems.reduce((sum, item) => sum + Number(item.units), 0);
+
+      currentItems.forEach((item) => transaction.update(item.ref, {
+        units: 0,
+        status: 'Used',
+        updatedAt: new Date()
+      }));
+
+      if (unitsRemoved > 0) {
+        transaction.set(doc(collection(db, 'inventoryHistory')), {
+          organizationId: currentOrganization.uid,
+          bloodGroup: group,
+          previousUnits: unitsRemoved,
+          currentUnits: 0,
+          difference: -unitsRemoved,
+          reason: 'Manual removal',
+          userId: currentOrganization.uid,
+          createdAt: new Date()
+        });
+      }
     });
     await refreshAllData();
     alert(`${group} inventory removed successfully.`);
@@ -1269,6 +1311,7 @@ async function removeInventoryItem(group) {
 }
 
 function openAddBloodModal(group = '') {
+  if (!requireApprovedAccount(currentOrganization, 'manage blood inventory')) return;
   const bloodGroupSelect = document.getElementById('bloodGroupSelect');
   if (bloodGroupSelect) {
     bloodGroupSelect.value = group || '';
@@ -1285,6 +1328,7 @@ function closeAddBloodModal() {
 }
 
 function openInventoryActionModal(group = '', action = 'increase') {
+  if (!requireApprovedAccount(currentOrganization, 'manage blood inventory')) return;
   document.getElementById('inventoryActionTitle').textContent = action === 'decrease' ? 'Decrease Inventory' : 'Increase Inventory';
   document.getElementById('inventoryActionGroup').value = group;
   document.getElementById('inventoryActionType').value = action;
@@ -1292,6 +1336,66 @@ function openInventoryActionModal(group = '', action = 'increase') {
   document.getElementById('inventoryActionExpiryDate').value = '';
   document.getElementById('inventoryActionNotes').value = '';
   document.getElementById('inventoryActionModal')?.classList.add('show');
+}
+
+async function deductInventory(group, units) {
+  const requestedUnits = Number(units);
+  if (!group || !Number.isFinite(requestedUnits) || requestedUnits <= 0) return false;
+
+  const candidates = inventoryItems
+    .filter((item) => item.organizationId === currentOrganization?.uid
+      && item.bloodGroup === group
+      && isAvailableInventory(item))
+    .sort((a, b) => getInventoryExpiryDate(a.expiryDate) - getInventoryExpiryDate(b.expiryDate));
+  if (!candidates.length) return false;
+
+  return runTransaction(db, async (transaction) => {
+    const snapshots = await Promise.all(candidates.map((item) =>
+      transaction.get(doc(db, 'bloodInventory', item.id))
+    ));
+    const currentItems = snapshots
+      .filter((snapshot) => snapshot.exists())
+      .map((snapshot) => ({ ref: snapshot.ref, ...snapshot.data() }))
+      .filter((item) => item.organizationId === currentOrganization.uid
+        && item.bloodGroup === group
+        && isAvailableInventory(item))
+      .sort((a, b) => getInventoryExpiryDate(a.expiryDate) - getInventoryExpiryDate(b.expiryDate));
+    const totalAvailable = currentItems.reduce((sum, item) => sum + Number(item.units), 0);
+    if (totalAvailable < requestedUnits) return false;
+
+    let remaining = requestedUnits;
+    const deductions = [];
+    for (const item of currentItems) {
+      if (remaining <= 0) break;
+      const currentUnits = Number(item.units);
+      const deductedUnits = Math.min(currentUnits, remaining);
+      const nextUnits = currentUnits - deductedUnits;
+      remaining -= deductedUnits;
+      deductions.push({ ref: item.ref, units: nextUnits, status: nextUnits === 0 ? 'Used' : 'Available' });
+    }
+
+    if (remaining > 0) return false;
+
+    deductions.forEach((deduction) => {
+      transaction.update(deduction.ref, {
+        units: deduction.units,
+        status: deduction.status,
+        updatedAt: new Date()
+      });
+    });
+
+    transaction.set(doc(collection(db, 'inventoryHistory')), {
+      organizationId: currentOrganization.uid,
+      bloodGroup: group,
+      previousUnits: totalAvailable,
+      currentUnits: totalAvailable - requestedUnits,
+      difference: -requestedUnits,
+      reason: document.getElementById('inventoryActionNotes')?.value.trim() || 'Manual decrease',
+      userId: currentOrganization.uid,
+      createdAt: new Date()
+    });
+    return true;
+  });
 }
 
 function closeInventoryActionModal() {
@@ -1410,6 +1514,7 @@ function populateRecipientSelector(type) {
 }
 
 async function handleSendNotificationSubmit() {
+  if (!requireApprovedAccount(currentOrganization, 'send operational notifications')) return;
   const recipientType = document.getElementById('recipientType')?.value;
   const title = document.getElementById('notificationTitle')?.value.trim();
   const message = document.getElementById('notificationMessage')?.value.trim();
@@ -1489,11 +1594,14 @@ function displayNotifications(notifications) {
     const date = notif.createdAt?.seconds ? new Date(notif.createdAt.seconds * 1000) : notif.createdAt ? new Date(notif.createdAt) : new Date();
     const timeAgo = getTimeAgo(date);
     const formattedDateTime = date.toLocaleString();
-    const senderLabel = notif.senderName ? `From: ${notif.senderName}` : 'From: System';
+    const isOutgoing = (notif.senderId || notif.fromUserId) === currentOrganization.uid;
+    const senderLabel = isOutgoing
+      ? `To: ${notif.recipientName || notif.targetUserName || notif.recipientRole || 'Recipient'}`
+      : (notif.senderName ? `From: ${notif.senderName}` : 'From: System');
     html += `
       <div class="notification-item ${!notif.isRead ? 'unread' : ''}" data-notification-id="${notif.id}">
         <div class="notification-icon">
-          <i class="fas fa-bell"></i>
+          <i class="fas ${isOutgoing ? 'fa-paper-plane' : 'fa-inbox'}" title="${isOutgoing ? 'Sent' : 'Received'}"></i>
         </div>
         <div class="notification-content">
           <div class="notification-title">${notif.title || 'Notification'}</div>
@@ -1558,6 +1666,11 @@ function showView(view) {
   });
 
   currentView = view;
+  const needsApproval = getApprovalStatus(currentOrganization) !== 'Approved';
+  document.querySelectorAll('[data-action="quick-add-blood"], [data-action="quick-issue-blood"], [data-action="quick-notify-donors"], [data-action="open-add-blood-modal"]').forEach((button) => {
+    button.disabled = needsApproval;
+    button.title = needsApproval ? 'Admin approval is required.' : '';
+  });
   if (view === 'notifications') {
     // Render the already-listened data immediately. Marking as read causes a
     // later snapshot, so relying on that snapshot left this page empty.
@@ -1690,8 +1803,112 @@ function setupRequestActions() {
   });
 }
 
+function calculateApprovalInventory(inventoryDocs, organizationId, bloodGroup, now) {
+  const inventoryRecords = inventoryDocs.map((inventoryDoc) => {
+    const item = inventoryDoc.data();
+    const organizationMatches = item.organizationId === organizationId;
+    const bloodGroupMatches = item.bloodGroup === bloodGroup;
+    const statusAvailable = item.status === 'Available';
+    const expiryDate = getInventoryExpiryDate(item.expiryDate);
+    const expiryValid = expiryDate !== null && expiryDate > now;
+    const numericUnits = Number(item.units);
+    const unitsPositive = Number.isFinite(numericUnits) && numericUnits > 0;
+    const eligible = item.organizationId === organizationId
+      && item.status === 'Available'
+      && item.bloodGroup === bloodGroup
+      && isAvailableInventory(item, now);
+    return {
+      id: inventoryDoc.id,
+      organizationId: item.organizationId,
+      bloodGroup: item.bloodGroup,
+      units: Number.isFinite(numericUnits) ? numericUnits : null,
+      rawUnits: item.units,
+      unitsType: typeof item.units,
+      status: item.status,
+      expiryDate: item.expiryDate,
+      expiryDateISO: expiryDate?.toISOString() || null,
+      checks: {
+        organizationMatches,
+        bloodGroupMatches,
+        statusAvailable,
+        expiryValid,
+        unitsPositive
+      },
+      eligible
+    };
+  });
+  const eligibleInventory = inventoryRecords.filter((item) => item.eligible);
+  return {
+    inventoryRecords,
+    countedInventory: eligibleInventory,
+    eligibleRecordCount: eligibleInventory.length,
+    totalAvailable: eligibleInventory.reduce((total, item) => total + item.units, 0)
+  };
+}
+
 async function approveRequest(requestId) {
   try {
+    const requestRef = doc(db, 'bloodRequests', requestId);
+    const requestSnapshot = await getDoc(requestRef);
+    if (!requestSnapshot.exists()) {
+      alert('Blood request not found.');
+      return;
+    }
+
+    const request = requestSnapshot.data();
+    const requestedUnits = Number(request.units);
+    const inventoryQuery = query(
+      collection(db, 'bloodInventory'),
+      where('bloodGroup', '==', request.bloodGroup),
+      where('status', '==', 'Available')
+    );
+    const inventorySnapshot = await getDocs(inventoryQuery);
+    const now = new Date();
+    const availability = calculateApprovalInventory(
+      inventorySnapshot.docs,
+      currentOrganization.uid,
+      request.bloodGroup,
+      now
+    );
+
+    console.groupCollapsed('[request approval inventory check]');
+    console.log('Request', {
+      requestId,
+      bloodGroup: request.bloodGroup,
+      units: request.units,
+      organizationId: request.organizationId
+    });
+    console.log('Current organization', {
+      authenticatedUid: auth.currentUser?.uid || null,
+      organizationUid: currentOrganization.uid,
+      organizationName: currentOrganization.organizationName || currentOrganization.name || null
+    });
+    console.log(`Inventory candidates returned by approval query: ${availability.inventoryRecords.length}`);
+    console.table(availability.inventoryRecords.map((item) => ({
+      documentId: item.id,
+      organizationId: item.organizationId,
+      bloodGroup: item.bloodGroup,
+      units: item.units,
+      rawUnits: item.rawUnits,
+      unitsType: item.unitsType,
+      status: item.status,
+      expiryDate: item.expiryDateISO || item.expiryDate || null,
+      ...item.checks,
+      finalEligible: item.eligible
+    })));
+    console.log('Records counted in available total', availability.countedInventory);
+    console.log('Final calculated available total', availability.totalAvailable);
+    console.groupEnd();
+
+    if (!Number.isFinite(requestedUnits) || requestedUnits <= 0) {
+      alert('This request has an invalid unit count and cannot be approved.');
+      return;
+    }
+    if (requestedUnits > availability.totalAvailable) {
+      alert(`Cannot approve this request. Requested: ${requestedUnits} units, Available: ${availability.totalAvailable} units.`);
+      return;
+    }
+
     const result = await bloodRequestManager.approveRequest(requestId, currentOrganization.uid);
     if (result.success) {
       alert('Request approved!');
@@ -1867,6 +2084,7 @@ function getDonationSaveErrorMessage(error) {
 
 async function saveDonationRecord(event) {
   event.preventDefault();
+  if (!requireApprovedAccount(currentOrganization, 'record donations')) return;
   if (donationSaveInProgress) return;
 
   const donorId = document.getElementById('donationDonorId')?.value;
@@ -1926,6 +2144,10 @@ async function saveDonationRecord(event) {
 
       const donor = donorSnapshot.data();
 
+      if (donor.status && donor.status !== 'Approved' && donor.isApproved !== true) {
+        throw new Error('This donor must be approved before a donation can be recorded.');
+      }
+
       if (donor.isActive === false || ['inactive', 'rejected'].includes(String(donor.status || '').toLowerCase())) {
         throw new Error('This donor account is inactive and cannot donate.');
       }
@@ -1967,6 +2189,8 @@ async function saveDonationRecord(event) {
       // 1. Create Donation Record
       transaction.set(donationRef, {
         donationId: donationRef.id,
+        inventoryId: newInventoryRef.id,
+        historyId: inventoryHistoryRef.id,
         donorId,
         organizationId: currentOrganization.uid,
         organizationName: currentOrganization.organizationName || '',
@@ -1974,6 +2198,7 @@ async function saveDonationRecord(event) {
         bloodGroup: donorBloodGroup,
         units,
         donationDate,
+        expiryDate: batchExpiryDate,
         status: 'Completed',
         remarks,
         createdAt: now
@@ -1983,6 +2208,7 @@ async function saveDonationRecord(event) {
       transaction.update(donorRef, {
         totalDonations: (Number(donor.totalDonations) || 0) + 1,
         lastDonationDate: donationDate,
+        lastDonationId: donationRef.id,
         updatedAt: now
       });
 
@@ -2003,6 +2229,8 @@ async function saveDonationRecord(event) {
 
       // 4. Create Inventory History Record
       transaction.set(inventoryHistoryRef, {
+        inventoryId: newInventoryRef.id,
+        donorId,
         organizationId: currentOrganization.uid,
         organizationName: currentOrganization.organizationName || '',
         bloodGroup: donorBloodGroup,
@@ -2691,6 +2919,7 @@ function loadSettings() {
 
 document.getElementById('settingsForm')?.addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (!requireApprovedAccount(currentOrganization, 'update organization settings')) return;
   const updateData = {
     organizationName: document.getElementById('settingsOrgName').value,
     phone: document.getElementById('settingsPhone').value,
@@ -2768,6 +2997,7 @@ document.getElementById('recordDonationForm')?.addEventListener('submit', saveDo
 
 document.getElementById('inventoryActionForm')?.addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (!requireApprovedAccount(currentOrganization, 'manage blood inventory')) return;
   const group = document.getElementById('inventoryActionGroup').value;
   const type = document.getElementById('inventoryActionType').value;
   const units = parseInt(document.getElementById('inventoryActionUnits').value, 10);
@@ -2801,16 +3031,6 @@ document.getElementById('inventoryActionForm')?.addEventListener('submit', async
         alert('Not enough units available to decrease.');
         return;
       }
-      await addDoc(collection(db, 'inventoryHistory'), {
-        organizationId: currentOrganization.uid,
-        bloodGroup: group,
-        previousUnits: (currentInventorySummary?.[group] || 0) + units,
-        currentUnits: Math.max((currentInventorySummary?.[group] || 0) - units, 0),
-        difference: -units,
-        reason: notes || 'Manual decrease',
-        userId: currentOrganization.uid,
-        createdAt: new Date()
-      });
     }
     closeInventoryActionModal();
     await refreshAllData();
@@ -2825,8 +3045,14 @@ document.getElementById('bloodGroupSelect')?.addEventListener('change', (e) => {
   populateDonorOptions(e.target.value);
 });
 
+document.getElementById('donorSelect')?.addEventListener('invalid', (e) => {
+  e.preventDefault();
+  alert('Please select a donor before adding blood.');
+});
+
 document.getElementById('addBloodForm')?.addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (!requireApprovedAccount(currentOrganization, 'manage blood inventory')) return;
   const bloodGroup = document.getElementById('bloodGroupSelect').value;
   const units = parseInt(document.getElementById('unitsInput').value, 10);
   const collectionDate = document.getElementById('collectionDateInput').value;
@@ -2834,6 +3060,11 @@ document.getElementById('addBloodForm')?.addEventListener('submit', async (e) =>
   const donorId = document.getElementById('donorSelect').value || null;
   const storageLocation = document.getElementById('storageLocationInput').value.trim();
   const notes = document.getElementById('notesInput').value.trim();
+
+  if (!donorId) {
+    alert('Please select a donor before adding blood.');
+    return;
+  }
 
   if (!bloodGroup || !units || units <= 0 || !collectionDate || !expiryDate || !storageLocation) {
     alert('Please fill in all required fields.');
@@ -2868,30 +3099,11 @@ document.getElementById('addBloodForm')?.addEventListener('submit', async (e) =>
     }
   }
 
-  try {
-    const result = await bloodInventoryManager.addBlood(currentOrganization.uid, {
-      bloodGroup,
-      units,
-      collectionDate,
-      expiryDate,
-      donorId,
-      storageLocation,
-      notes,
-      organizationName: currentOrganization.organizationName || ''
-    });
-    if (result.success) {
-      alert('Blood added successfully!');
-      closeAddBloodModal();
-      document.getElementById('addBloodForm').reset();
-      populateDonorOptions('');
-      await refreshAllData();
-    } else {
-      alert(result.error || 'Failed to add blood');
-    }
-  } catch (error) {
-    console.error('Error adding blood:', error);
-    alert('Failed to add blood');
-  }
+  closeAddBloodModal();
+  openRecordDonationModal(donorId);
+  document.getElementById('donationUnits').value = String(units);
+  document.getElementById('donationCollectionDate').value = collectionDate;
+  document.getElementById('donationRemarks').value = notes;
 });
 
 // Initialize Search & Filter Toolbar clear buttons and reset actions

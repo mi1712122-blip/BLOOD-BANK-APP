@@ -1,10 +1,11 @@
 import {
   collection,
+  doc,
   onSnapshot,
   query,
   where
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
-import { authManager } from '../../../assets/js/auth.js';
+import { authManager, getApprovalStatus, renderApprovalStatusNotice, requireApprovedAccount } from '../../../assets/js/auth.js';
 import { bloodInventoryManager, isAvailableInventory } from '../../../assets/js/inventory.js';
 import { bloodRequestManager } from '../../../assets/js/requests.js';
 import { db } from '../../../assets/js/firebase-config.js';
@@ -54,6 +55,19 @@ async function checkAuthAndLoadHospital() {
   
   currentHospital = user.data;
   document.getElementById('hospitalName').textContent = currentHospital.hospitalName || 'Hospital';
+  renderApprovalStatusNotice(currentHospital, document.getElementById('approvalStatusNotice'));
+  onSnapshot(doc(db, 'users', currentHospital.uid), (docSnap) => {
+    if (!docSnap.exists()) return;
+    currentHospital = { ...currentHospital, ...docSnap.data() };
+    renderApprovalStatusNotice(currentHospital, document.getElementById('approvalStatusNotice'));
+    const blocked = getApprovalStatus(currentHospital) !== 'Approved';
+    document.querySelectorAll('#requestBloodForm input, #requestBloodForm select, #requestBloodForm textarea, #requestBloodForm button').forEach((control) => { control.disabled = blocked; });
+  });
+  onSnapshot(doc(db, 'hospitals', currentHospital.uid), (docSnap) => {
+    if (!docSnap.exists()) return;
+    currentHospital = { ...currentHospital, ...docSnap.data() };
+    renderApprovalStatusNotice(currentHospital, document.getElementById('approvalStatusNotice'));
+  });
 
   if (notificationsListener) notificationsListener();
 
@@ -104,7 +118,7 @@ function populateOrganizationSelector(selectedOrganizationId = '') {
   const select = document.getElementById('requestOrganization');
   if (!select) return;
 
-  const organizations = allOrganizations.filter((org) => org.isApproved !== false);
+  const organizations = allOrganizations.filter((org) => getApprovalStatus(org) === 'Approved');
   if (!organizations.length) {
     select.innerHTML = '<option value="">No organization available</option>';
     return;
@@ -431,11 +445,14 @@ function displayNotifications(notifications) {
     const date = notif.createdAt?.seconds ? new Date(notif.createdAt.seconds * 1000) : new Date(notif.createdAt || Date.now());
     const timeAgo = getTimeAgo(date);
     const formattedDateTime = date.toLocaleString();
-    const senderLabel = notif.senderName ? `From: ${notif.senderName}` : 'From: System';
+    const isOutgoing = (notif.senderId || notif.fromUserId) === currentHospital.uid;
+    const senderLabel = isOutgoing
+      ? `To: ${notif.recipientName || notif.targetUserName || notif.recipientRole || 'Recipient'}`
+      : (notif.senderName ? `From: ${notif.senderName}` : 'From: System');
     html += `
       <div class="notification-item ${!notif.isRead ? 'unread' : ''}" data-notification-id="${notif.id}">
         <div class="notification-icon">
-          <i class="fas fa-bell"></i>
+          <i class="fas ${isOutgoing ? 'fa-paper-plane' : 'fa-inbox'}" title="${isOutgoing ? 'Sent' : 'Received'}"></i>
         </div>
         <div class="notification-content">
           <div class="notification-title">${notif.title || 'Notification'}</div>
@@ -536,10 +553,16 @@ function showView(view) {
     markHospitalNotificationsRead();
   }
   if (view === 'blood-availability') renderBloodAvailability();
+  const blocked = getApprovalStatus(currentHospital) !== 'Approved';
+  const requestForm = document.getElementById('requestBloodForm');
+  if (requestForm) {
+    requestForm.querySelectorAll('input, select, textarea, button').forEach((control) => { control.disabled = blocked; });
+  }
 }
 
 document.getElementById('requestBloodForm')?.addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (!requireApprovedAccount(currentHospital, 'request blood')) return;
 
   const organizationId = document.getElementById('requestOrganization')?.value;
   const bloodGroup = document.getElementById('requestBloodGroup').value;
@@ -599,6 +622,7 @@ document.getElementById('settingsForm')?.addEventListener('submit', async (e) =>
     address: document.getElementById('settingsAddress').value,
     city: document.getElementById('settingsCity').value
   };
+  if (!requireApprovedAccount(currentHospital, 'update your settings')) return;
   
   try {
     const result = await authManager.updateProfile(currentHospital.uid, updateData);

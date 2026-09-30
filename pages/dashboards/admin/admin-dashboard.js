@@ -2,13 +2,15 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   query,
   updateDoc,
+  writeBatch,
   where
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
-import { authManager } from '../../../assets/js/auth.js';
+import { authManager, getApprovalStatus } from '../../../assets/js/auth.js';
 import { isAvailableInventory } from '../../../assets/js/inventory.js';
 import { bloodRequestManager } from '../../../assets/js/requests.js';
 import { db } from '../../../assets/js/firebase-config.js';
@@ -43,10 +45,23 @@ const viewSelectors = {
 };
 
 const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-const VALID_USER_ROLES = ['admin', 'donor', 'hospital', 'organization'];
+function countApprovedProfiles(profiles) {
+  return profiles.filter((profile) => getApprovalStatus(profile) === 'Approved').length;
+}
 
-function countRoleBearingUsers(snapshot) {
-  return snapshot.docs.filter((docSnap) => VALID_USER_ROLES.includes(docSnap.data()?.role)).length;
+function updateAdminApprovalTotals() {
+  const approvedDonors = countApprovedProfiles(donorsList);
+  const approvedHospitals = countApprovedProfiles(hospitalsList);
+  const approvedOrganizations = countApprovedProfiles(organizationsList);
+
+  const totalUsers = document.getElementById('totalUsers');
+  const totalDonors = document.getElementById('totalDonors');
+  const totalHospitals = document.getElementById('totalHospitals');
+  const totalOrganizations = document.getElementById('totalOrganizations');
+  if (totalUsers) totalUsers.textContent = approvedDonors + approvedHospitals + approvedOrganizations;
+  if (totalDonors) totalDonors.textContent = approvedDonors;
+  if (totalHospitals) totalHospitals.textContent = approvedHospitals;
+  if (totalOrganizations) totalOrganizations.textContent = approvedOrganizations;
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -87,8 +102,23 @@ function setupRealtimeListeners() {
     snapshot.forEach((docSnap) => {
       usersList.push({ id: docSnap.id, ...docSnap.data() });
     });
-    const totalUsersElem = document.getElementById('totalUsers');
-    if (totalUsersElem) totalUsersElem.textContent = countRoleBearingUsers(snapshot);
+    updateAdminApprovalTotals();
+  });
+
+  onSnapshot(collection(db, 'donors'), (snapshot) => {
+    donorsList = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+    updateAdminApprovalTotals();
+    loadDonorsData(snapshot);
+  });
+  onSnapshot(collection(db, 'hospitals'), (snapshot) => {
+    hospitalsList = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+    updateAdminApprovalTotals();
+    loadHospitalsData(snapshot);
+  });
+  onSnapshot(collection(db, 'organizations'), (snapshot) => {
+    organizationsList = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+    updateAdminApprovalTotals();
+    loadOrganizationsData(snapshot);
   });
 
   // Listen for inventory items
@@ -152,32 +182,29 @@ function setupRealtimeListeners() {
 async function loadDashboardData() {
   try {
     const usersSnapshot = await getDocs(collection(db, 'users'));
-    document.getElementById('totalUsers').textContent = countRoleBearingUsers(usersSnapshot);
     usersList = [];
     usersSnapshot.forEach((docSnap) => {
       usersList.push({ id: docSnap.id, ...docSnap.data() });
     });
 
     const donorsSnapshot = await getDocs(collection(db, 'donors'));
-    document.getElementById('totalDonors').textContent = donorsSnapshot.size;
     donorsList = [];
     donorsSnapshot.forEach((docSnap) => {
       donorsList.push({ id: docSnap.id, ...docSnap.data() });
     });
 
     const hospitalsSnapshot = await getDocs(collection(db, 'hospitals'));
-    document.getElementById('totalHospitals').textContent = hospitalsSnapshot.size;
     hospitalsList = [];
     hospitalsSnapshot.forEach((docSnap) => {
       hospitalsList.push({ id: docSnap.id, ...docSnap.data() });
     });
 
     const orgsSnapshot = await getDocs(collection(db, 'organizations'));
-    document.getElementById('totalOrganizations').textContent = orgsSnapshot.size;
     organizationsList = [];
     orgsSnapshot.forEach((docSnap) => {
       organizationsList.push({ id: docSnap.id, ...docSnap.data() });
     });
+    updateAdminApprovalTotals();
 
     document.getElementById('lastUpdated').textContent = new Date().toLocaleString();
 
@@ -203,7 +230,7 @@ async function loadDonorsData(snapshot) {
     const uid = donor.uid || docSnap.id;
     const donorStatus = getDonorStatus(donor);
     const statusBadgeClass = getStatusBadgeClass(donorStatus);
-    const isApproved = donor.isApproved === true;
+    const needsAction = donorStatus === 'Pending';
 
     html += `
       <tr>
@@ -213,7 +240,7 @@ async function loadDonorsData(snapshot) {
         <td>${donor.city || ''}</td>
         <td><span class="badge ${statusBadgeClass}">${donorStatus}</span></td>
         <td>
-          ${!isApproved ? `<button class="btn btn-sm btn-primary" data-action="approve-donor" data-user-id="${uid}">Approve</button> <button class="btn btn-sm btn-danger" data-action="reject-donor" data-user-id="${uid}">Reject</button>` : ''}
+          ${needsAction ? `<button class="btn btn-sm btn-primary" data-action="approve-donor" data-user-id="${uid}">Approve</button> <button class="btn btn-sm btn-danger" data-action="reject-donor" data-user-id="${uid}">Reject</button>` : ''}
           <button type="button" class="btn btn-sm btn-secondary" data-action="view-donor" data-user-id="${uid}">View</button>
           <button type="button" class="btn btn-sm btn-danger delete-btn" data-action="delete-donor" data-user-id="${uid}" title="Delete Donor"><i class="fas fa-trash-alt"></i> Delete</button>
         </td>
@@ -225,10 +252,7 @@ async function loadDonorsData(snapshot) {
 }
 
 function getDonorStatus(donor) {
-  if (typeof donor.status === 'string' && donor.status.trim()) return normalizeStatus(donor.status);
-  if (typeof donor.isApproved === 'boolean') return donor.isApproved ? 'Approved' : 'Pending';
-  if (typeof donor.isEligible === 'boolean') return donor.isEligible ? 'Pending' : 'Rejected';
-  return 'Pending';
+  return getApprovalStatus(donor);
 }
 
 function normalizeStatus(status) {
@@ -247,9 +271,7 @@ function getStatusBadgeClass(status) {
 }
 
 function getEntityStatus(entity) {
-  if (typeof entity.status === 'string' && entity.status.trim()) return normalizeStatus(entity.status);
-  if (typeof entity.isApproved === 'boolean') return entity.isApproved ? 'Approved' : 'Pending';
-  return 'Pending';
+  return getApprovalStatus(entity);
 }
 
 async function loadOrganizationsData(snapshot) {
@@ -258,7 +280,7 @@ async function loadOrganizationsData(snapshot) {
     const org = docSnap.data();
     const status = getEntityStatus(org);
     const statusBadgeClass = getStatusBadgeClass(status);
-    const needsAction = status !== 'Approved';
+    const needsAction = status === 'Pending';
 
     html += `
       <tr>
@@ -284,7 +306,7 @@ async function loadHospitalsData(snapshot) {
     const hospital = docSnap.data();
     const status = getEntityStatus(hospital);
     const statusBadgeClass = getStatusBadgeClass(status);
-    const needsAction = status !== 'Approved';
+    const needsAction = status === 'Pending';
 
     html += `
       <tr>
@@ -660,9 +682,9 @@ function renderAdminAnalytics() {
   const filteredRequests = allRequests.filter((r) => filterFn(r.createdAt));
 
   // Summary Metrics
-  if (document.getElementById('analyticsTotalDonors')) document.getElementById('analyticsTotalDonors').textContent = donorsList.length;
-  if (document.getElementById('analyticsTotalHospitals')) document.getElementById('analyticsTotalHospitals').textContent = hospitalsList.length;
-  if (document.getElementById('analyticsTotalOrgs')) document.getElementById('analyticsTotalOrgs').textContent = organizationsList.length;
+  if (document.getElementById('analyticsTotalDonors')) document.getElementById('analyticsTotalDonors').textContent = countApprovedProfiles(donorsList);
+  if (document.getElementById('analyticsTotalHospitals')) document.getElementById('analyticsTotalHospitals').textContent = countApprovedProfiles(hospitalsList);
+  if (document.getElementById('analyticsTotalOrgs')) document.getElementById('analyticsTotalOrgs').textContent = countApprovedProfiles(organizationsList);
 
   const totalUnits = allInventoryItems.reduce((sum, i) => sum + (Number(i.units) || 0), 0);
   if (document.getElementById('analyticsTotalUnits')) document.getElementById('analyticsTotalUnits').textContent = totalUnits;
@@ -773,9 +795,9 @@ function renderAnalyticsTimeline() {
 function exportAnalyticsCSV() {
   const headers = ['Metric', 'Value'];
   const rows = [
-    ['Total Donors', donorsList.length],
-    ['Total Hospitals', hospitalsList.length],
-    ['Total Organizations', organizationsList.length],
+    ['Total Donors', countApprovedProfiles(donorsList)],
+    ['Total Hospitals', countApprovedProfiles(hospitalsList)],
+    ['Total Organizations', countApprovedProfiles(organizationsList)],
     ['Total Blood Units', allInventoryItems.reduce((sum, i) => sum + (Number(i.units) || 0), 0)],
     ['Total Requests', allRequests.length],
     ['Completed Requests', allRequests.filter(r => r.status === 'Completed').length],
@@ -1054,9 +1076,8 @@ function setupActionHandlers() {
 
 async function approveDonor(uid) {
   try {
-    await updateDoc(doc(db, 'donors', uid), { isApproved: true, status: 'Approved' });
+    await updateUserApproval(uid, 'donor', 'Approved');
     alert('Donor approved successfully.');
-    await loadDashboardData();
   } catch (err) {
     alert('Failed to approve donor: ' + err.message);
   }
@@ -1064,12 +1085,54 @@ async function approveDonor(uid) {
 
 async function rejectDonor(uid) {
   try {
-    await updateDoc(doc(db, 'donors', uid), { isApproved: false, status: 'Rejected' });
+    await updateUserApproval(uid, 'donor', 'Rejected');
     alert('Donor rejected.');
-    await loadDashboardData();
   } catch (err) {
     alert('Failed to reject donor: ' + err.message);
   }
+}
+
+async function updateUserApproval(uid, role, status) {
+  const profileCollection = role === 'donor' ? 'donors' : role === 'organization' ? 'organizations' : 'hospitals';
+  const userRef = doc(db, 'users', uid);
+  const profileRef = doc(db, profileCollection, uid);
+  const [userSnapshot, profileSnapshot] = await Promise.all([getDoc(userRef), getDoc(profileRef)]);
+  if (!userSnapshot.exists() || !profileSnapshot.exists()) throw new Error('The user and role profile must both exist before approval can be changed.');
+  const previousStatus = getApprovalStatus(userSnapshot.data());
+  const alreadyNotified = previousStatus === status;
+  const batch = writeBatch(db);
+  const updatedAt = new Date();
+  const approvalData = { status, isApproved: status === 'Approved', updatedAt };
+  if (status === 'Approved') approvalData.approvedAt = updatedAt;
+  if (status === 'Rejected') approvalData.rejectedAt = updatedAt;
+  batch.update(userRef, approvalData);
+  batch.update(profileRef, approvalData);
+
+  if (!alreadyNotified) {
+    const notificationRef = doc(collection(db, 'notifications'));
+    batch.set(notificationRef, {
+      recipientId: uid,
+      recipientRole: role,
+      type: status === 'Approved' ? 'account_approved' : 'account_rejected',
+      title: 'Account Registration Update',
+      message: status === 'Approved'
+        ? 'Your account has been approved. You can now access the full Blood Bank Management System.'
+        : 'Your account registration has been rejected by the administrator. Please contact the administrator for further information.',
+      senderId: currentAdmin.uid,
+      senderRole: 'admin',
+      senderName: 'Administration',
+      targetType: 'User',
+      targetRole: role,
+      targetUserId: uid,
+      recipientName: role === 'donor' ? donorsList.find((item) => (item.uid || item.id) === uid)?.fullName
+        : role === 'organization' ? organizationsList.find((item) => (item.uid || item.id) === uid)?.organizationName
+        : hospitalsList.find((item) => (item.uid || item.id) === uid)?.hospitalName,
+      isRead: false,
+      createdAt: updatedAt
+    });
+  }
+
+  await batch.commit();
 }
 
 async function deleteDonor(uid) {
@@ -1086,9 +1149,8 @@ async function deleteDonor(uid) {
 
 async function approveOrg(uid) {
   try {
-    await updateDoc(doc(db, 'organizations', uid), { isApproved: true, status: 'Approved' });
+    await updateUserApproval(uid, 'organization', 'Approved');
     alert('Organization approved.');
-    await loadDashboardData();
   } catch (err) {
     alert('Failed to approve organization: ' + err.message);
   }
@@ -1096,9 +1158,8 @@ async function approveOrg(uid) {
 
 async function rejectOrg(uid) {
   try {
-    await updateDoc(doc(db, 'organizations', uid), { isApproved: false, status: 'Rejected' });
+    await updateUserApproval(uid, 'organization', 'Rejected');
     alert('Organization rejected.');
-    await loadDashboardData();
   } catch (err) {
     alert('Failed to reject organization: ' + err.message);
   }
@@ -1118,9 +1179,8 @@ async function deleteOrg(uid) {
 
 async function approveHospital(uid) {
   try {
-    await updateDoc(doc(db, 'hospitals', uid), { isApproved: true, status: 'Approved' });
+    await updateUserApproval(uid, 'hospital', 'Approved');
     alert('Hospital approved.');
-    await loadDashboardData();
   } catch (err) {
     alert('Failed to approve hospital: ' + err.message);
   }
@@ -1128,9 +1188,8 @@ async function approveHospital(uid) {
 
 async function rejectHospital(uid) {
   try {
-    await updateDoc(doc(db, 'hospitals', uid), { isApproved: false, status: 'Rejected' });
+    await updateUserApproval(uid, 'hospital', 'Rejected');
     alert('Hospital rejected.');
-    await loadDashboardData();
   } catch (err) {
     alert('Failed to reject hospital: ' + err.message);
   }
@@ -1735,12 +1794,15 @@ function displayAdminNotifications(notifications) {
         ? date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
         : '';
       const timeLabel = [clock, timeAgo].filter(Boolean).join(' · ');
-      const senderLabel = notif.senderName ? `From: ${notif.senderName}` : 'From: System';
+      const isOutgoing = (notif.senderId || notif.fromUserId) === currentAdmin.uid;
+      const senderLabel = isOutgoing
+        ? `To: ${notif.recipientName || notif.targetUserName || notif.recipientRole || 'Recipient'}`
+        : (notif.senderName ? `From: ${notif.senderName}` : 'From: System');
 
       html += `
       <div class="notification-item ${!notif.isRead ? 'unread' : ''}" data-notification-id="${notif.id}">
         <div class="notification-icon">
-          <i class="fas fa-bell"></i>
+          <i class="fas ${isOutgoing ? 'fa-paper-plane' : 'fa-inbox'}" title="${isOutgoing ? 'Sent' : 'Received'}"></i>
         </div>
         <div class="notification-content">
           <div class="notification-title">${notif.title || 'Notification'}</div>

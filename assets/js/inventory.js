@@ -11,7 +11,7 @@ import {
   updateDoc,
   where
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
-import { db } from './firebase-config.js';
+import { auth, db } from './firebase-config.js';
 
 export function getInventoryExpiryDate(value) {
   if (!value) return null;
@@ -50,6 +50,20 @@ class BloodInventoryManager {
       const targetOrganizationId = organizationId || bloodData?.organizationId || bloodData?.organization?.uid || bloodData?.organization?.id || null;
       if (!targetOrganizationId) {
         return { success: false, error: 'Organization not found.' };
+      }
+
+      const signedInUser = auth.currentUser;
+      if (signedInUser?.uid) {
+        const userSnapshot = await getDoc(doc(db, 'users', signedInUser.uid));
+        if (userSnapshot.data()?.role === 'organization') {
+          if (!bloodData?.donorId) {
+            return { success: false, error: 'Please select a donor before adding blood.' };
+          }
+          return {
+            success: false,
+            error: 'Please record this donation through the Record Donation workflow.'
+          };
+        }
       }
 
       if (bloodData.donorId) {

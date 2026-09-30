@@ -85,6 +85,7 @@
 
       <div class="dashboard-container">
         <div id="dashboardView" class="dashboard-view">
+          <div id="approvalStatusNotice" class="alert hidden" role="status"></div>
           <div class="dashboard-header">
             <div>
               <h2>Organization Dashboard</h2>
@@ -698,8 +699,8 @@
           </div>
           <div class="form-group">
             <label>Donor</label>
-            <select id="donorSelect">
-              <option value="">Choose donor (optional)</option>
+            <select id="donorSelect" required>
+              <option value="">Choose donor</option>
             </select>
           </div>
           <div class="form-group">
