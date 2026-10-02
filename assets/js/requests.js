@@ -8,8 +8,10 @@ import {
   limit,
   onSnapshot,
   query,
+  setDoc,
   updateDoc,
-  where
+  where,
+  writeBatch
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
 import { db } from './firebase-config.js';
 
@@ -118,6 +120,7 @@ class BloodRequestManager {
       const organizationId = requestData.organizationId || requestData.organizationUid || requestData.organization?.uid || requestData.organization?.id || null;
       const organizationName = requestData.organizationName || requestData.organization?.organizationName || requestData.organization?.hospitalName || null;
 
+      const now = new Date();
       const request = {
         hospitalId: requestData.hospitalId,
         hospitalName: requestData.hospitalName,
@@ -130,12 +133,28 @@ class BloodRequestManager {
         organizationId,
         organizationName,
         status: this.requestStatus.PENDING,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        createdAt: now,
+        updatedAt: now
       };
 
-      const docRef = await addDoc(collection(db, 'bloodRequests'), request);
-      const createdRequest = { ...request, id: docRef.id };
+      const requestRef = doc(collection(db, 'bloodRequests'));
+      const donorSafeRef = doc(db, 'donorBloodRequests', requestRef.id);
+
+      const donorProjection = {
+        bloodGroup: requestData.bloodGroup,
+        units: requestData.units,
+        urgency: requestData.urgencyLevel || 'Normal',
+        status: this.requestStatus.PENDING,
+        createdAt: now,
+        updatedAt: now
+      };
+
+      const batch = writeBatch(db);
+      batch.set(requestRef, request);
+      batch.set(donorSafeRef, donorProjection);
+      await batch.commit();
+
+      const createdRequest = { ...request, id: requestRef.id };
 
       await this.broadcastRequestNotification({
         request: createdRequest,
@@ -157,7 +176,7 @@ class BloodRequestManager {
         senderName: requestData.hospitalName
       });
 
-      return { success: true, id: docRef.id };
+      return { success: true, id: requestRef.id };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -234,12 +253,22 @@ class BloodRequestManager {
         return { success: false, error: 'This request can no longer be updated.' };
       }
 
-      await updateDoc(doc(db, 'bloodRequests', requestId), {
+      const now = new Date();
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'bloodRequests', requestId), {
         status: this.requestStatus.PROCESSING,
         organizationId: organizationId || request.organizationId || null,
-        approvedAt: new Date(),
-        updatedAt: new Date()
+        approvedAt: now,
+        updatedAt: now
       });
+
+      const donorSafeRef = doc(db, 'donorBloodRequests', requestId);
+      batch.update(donorSafeRef, {
+        status: this.requestStatus.PROCESSING,
+        updatedAt: now
+      });
+
+      await batch.commit();
 
       await this.broadcastRequestNotification({
         request: { ...request, id: requestId, organizationId: organizationId || request.organizationId || null },
@@ -275,11 +304,13 @@ class BloodRequestManager {
       }
 
       const request = requestDoc.data();
-      await updateDoc(doc(db, 'bloodRequests', requestId), {
+      const now = new Date();
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'bloodRequests', requestId), {
         status: this.requestStatus.COMPLETED,
-        issuedAt: new Date(),
-        completedAt: new Date(),
-        updatedAt: new Date(),
+        issuedAt: now,
+        completedAt: now,
+        updatedAt: now,
         issueDetails: {
           organizationId: details.organizationId || request.organizationId || null,
           organizationName: details.organizationName || request.organizationName || null,
@@ -288,6 +319,14 @@ class BloodRequestManager {
           issuedBy: details.issuedBy || null
         }
       });
+
+      const donorSafeRef = doc(db, 'donorBloodRequests', requestId);
+      batch.update(donorSafeRef, {
+        status: this.requestStatus.COMPLETED,
+        updatedAt: now
+      });
+
+      await batch.commit();
 
       await this.broadcastRequestNotification({
         request: { ...request, id: requestId },
@@ -309,12 +348,22 @@ class BloodRequestManager {
     try {
       const requestDoc = await getDoc(doc(db, 'bloodRequests', requestId));
       const request = requestDoc.data();
+      const now = new Date();
 
-      await updateDoc(doc(db, 'bloodRequests', requestId), {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'bloodRequests', requestId), {
         status: this.requestStatus.REJECTED,
         rejectionReason: reason,
-        rejectedAt: new Date()
+        rejectedAt: now
       });
+
+      const donorSafeRef = doc(db, 'donorBloodRequests', requestId);
+      batch.update(donorSafeRef, {
+        status: this.requestStatus.REJECTED,
+        updatedAt: now
+      });
+
+      await batch.commit();
 
       await this.broadcastRequestNotification({
         request: { ...request, id: requestId },
@@ -340,12 +389,23 @@ class BloodRequestManager {
       }
 
       const request = requestDoc.data();
-      await updateDoc(doc(db, 'bloodRequests', requestId), {
+      const now = new Date();
+
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'bloodRequests', requestId), {
         status: this.requestStatus.CANCELLED,
         cancellationReason: reason,
-        cancelledAt: new Date(),
-        updatedAt: new Date()
+        cancelledAt: now,
+        updatedAt: now
       });
+
+      const donorSafeRef = doc(db, 'donorBloodRequests', requestId);
+      batch.update(donorSafeRef, {
+        status: this.requestStatus.CANCELLED,
+        updatedAt: now
+      });
+
+      await batch.commit();
 
       await this.broadcastRequestNotification({
         request: { ...request, id: requestId },
@@ -360,6 +420,79 @@ class BloodRequestManager {
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
+    }
+  }
+
+  async getDonorBloodRequests() {
+    try {
+      const q = query(
+        collection(db, 'donorBloodRequests'),
+        where('status', 'in', ['Pending', 'Processing'])
+      );
+      const snapshot = await getDocs(q);
+
+      const requests = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        requests.push({
+          id: docSnap.id,
+          bloodGroup: data.bloodGroup || '',
+          units: Number(data.units) || 0,
+          urgency: data.urgency || 'Normal',
+          status: data.status || 'Pending',
+          createdAt: data.createdAt
+        });
+      });
+
+      requests.sort((a, b) => {
+        const aTime = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : new Date(a.createdAt || 0).getTime();
+        const bTime = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : new Date(b.createdAt || 0).getTime();
+        return bTime - aTime;
+      });
+
+      return { success: true, data: requests };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  listenDonorBloodRequests(callback) {
+    try {
+      const q = query(
+        collection(db, 'donorBloodRequests'),
+        where('status', 'in', ['Pending', 'Processing'])
+      );
+      return onSnapshot(
+        q,
+        (snapshot) => {
+          const requests = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            requests.push({
+              id: docSnap.id,
+              bloodGroup: data.bloodGroup || '',
+              units: Number(data.units) || 0,
+              urgency: data.urgency || 'Normal',
+              status: data.status || 'Pending',
+              createdAt: data.createdAt
+            });
+          });
+
+          requests.sort((a, b) => {
+            const aTime = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : new Date(a.createdAt || 0).getTime();
+            const bTime = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : new Date(b.createdAt || 0).getTime();
+            return bTime - aTime;
+          });
+
+          callback({ success: true, data: requests });
+        },
+        (error) => {
+          callback({ success: false, error: error.message });
+        }
+      );
+    } catch (error) {
+      callback({ success: false, error: error.message });
+      return () => {};
     }
   }
 

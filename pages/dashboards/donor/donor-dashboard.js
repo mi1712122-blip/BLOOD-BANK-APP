@@ -15,6 +15,7 @@ let currentDonor = null;
 let currentView = 'dashboard';
 let notificationsListener = null;
 let donationsListener = null;
+let requestsListener = null;
 let donorDonations = [];
 let donationTablePage = 1;
 const donationPageSize = 8;
@@ -123,6 +124,20 @@ function setupRealtimeListeners() {
     donorDonations.sort((a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt));
     renderDonationHistory();
     updateEligibilityDisplay();
+  });
+
+  if (requestsListener) requestsListener();
+  requestsListener = bloodRequestManager.listenDonorBloodRequests((result) => {
+    if (!result.success) return;
+    const requests = result.data || [];
+    const recentRequests = requests.slice(0, 3);
+    displayRecentRequests(recentRequests);
+    displayAllBloodRequests(requests);
+
+    const pendingCount = requests.filter((r) => r.status === 'Pending').length;
+    if (document.getElementById('pendingRequests')) {
+      document.getElementById('pendingRequests').textContent = pendingCount;
+    }
   });
 }
 
@@ -452,7 +467,7 @@ async function deleteDonation(donationId) {
 
 async function loadBloodRequests() {
   try {
-    const result = await bloodRequestManager.getHospitalRequests(currentDonor.uid);
+    const result = await bloodRequestManager.getDonorBloodRequests();
     if (!result.success) {
       document.getElementById('recentRequestsTable').innerHTML = '<p class="text-center">Unable to load requests</p>';
       document.getElementById('bloodRequestsList').innerHTML = '<p class="text-center">Unable to load requests</p>';
@@ -465,7 +480,9 @@ async function loadBloodRequests() {
     displayAllBloodRequests(requests);
 
     const pendingCount = requests.filter((r) => r.status === 'Pending').length;
-    document.getElementById('pendingRequests').textContent = pendingCount;
+    if (document.getElementById('pendingRequests')) {
+      document.getElementById('pendingRequests').textContent = pendingCount;
+    }
   } catch (error) {
     console.error('Error loading blood requests:', error);
   }
@@ -480,14 +497,15 @@ function displayRecentRequests(requests) {
     return;
   }
 
-  let html = '<table><thead><tr><th>Blood Group</th><th>Hospital</th><th>Urgency</th><th>Status</th></tr></thead><tbody>';
+  let html = '<table><thead><tr><th>Blood Group</th><th>Units Needed</th><th>Urgency</th><th>Status</th></tr></thead><tbody>';
   requests.forEach((req) => {
+    const badgeClass = req.status === 'Processing' ? 'badge-primary' : 'badge-warning';
     html += `
       <tr>
         <td><strong>${req.bloodGroup}</strong></td>
-        <td>${req.hospitalName || 'Hospital'}</td>
-        <td>${req.urgencyLevel || 'Normal'}</td>
-        <td><span class="badge badge-warning">${req.status}</span></td>
+        <td>${req.units} Units</td>
+        <td>${req.urgency || 'Normal'}</td>
+        <td><span class="badge ${badgeClass}">${req.status}</span></td>
       </tr>
     `;
   });
@@ -507,6 +525,13 @@ function displayAllBloodRequests(requests) {
   let html = '';
   requests.forEach((req) => {
     const statusClass = (req.status || 'pending').toLowerCase();
+    const createdDate = req.createdAt?.seconds
+      ? new Date(req.createdAt.seconds * 1000)
+      : (req.createdAt ? new Date(req.createdAt) : null);
+    const dateStr = createdDate && !Number.isNaN(createdDate.getTime())
+      ? createdDate.toLocaleDateString()
+      : 'Recently';
+
     html += `
       <div class="request-card ${statusClass}">
         <div class="request-header">
@@ -515,16 +540,20 @@ function displayAllBloodRequests(requests) {
         </div>
         <div class="request-details">
           <div class="request-detail">
-            <span class="request-detail-label">Hospital</span>
-            <span class="request-detail-value">${req.hospitalName || 'N/A'}</span>
+            <span class="request-detail-label">Blood Group</span>
+            <span class="request-detail-value">${req.bloodGroup}</span>
+          </div>
+          <div class="request-detail">
+            <span class="request-detail-label">Units Needed</span>
+            <span class="request-detail-value">${req.units} Units</span>
           </div>
           <div class="request-detail">
             <span class="request-detail-label">Urgency</span>
-            <span class="request-detail-value">${req.urgencyLevel || 'Normal'}</span>
+            <span class="request-detail-value">${req.urgency || 'Normal'}</span>
           </div>
           <div class="request-detail">
-            <span class="request-detail-label">Purpose</span>
-            <span class="request-detail-value">${req.purpose || 'N/A'}</span>
+            <span class="request-detail-label">Posted</span>
+            <span class="request-detail-value">${dateStr}</span>
           </div>
         </div>
       </div>

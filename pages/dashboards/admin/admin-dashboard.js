@@ -33,6 +33,8 @@ const chartInstances = {};
 
 const viewSelectors = {
   dashboard: 'dashboardView',
+  organizationInventoryDetail: 'organizationInventoryDetailView',
+  adminProfileDetail: 'adminProfileDetailView',
   donors: 'donorsView',
   organizations: 'organizationsView',
   hospitals: 'hospitalsView',
@@ -72,7 +74,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupInventoryControls();
   setupAnalyticsControls();
   setupRealtimeListeners();
-  showView('dashboard');
+  setupAdminHistory();
+  restoreAdminHistoryState(history.state);
   await loadDashboardData();
 });
 
@@ -109,16 +112,21 @@ function setupRealtimeListeners() {
     donorsList = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
     updateAdminApprovalTotals();
     loadDonorsData(snapshot);
+    renderCurrentAdminProfileDetails();
   });
   onSnapshot(collection(db, 'hospitals'), (snapshot) => {
     hospitalsList = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
     updateAdminApprovalTotals();
     loadHospitalsData(snapshot);
+    renderCurrentAdminProfileDetails();
   });
   onSnapshot(collection(db, 'organizations'), (snapshot) => {
     organizationsList = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
     updateAdminApprovalTotals();
+    renderAdminOrganizationInventory();
+    renderCurrentOrganizationInventoryDetail();
     loadOrganizationsData(snapshot);
+    renderCurrentAdminProfileDetails();
   });
 
   // Listen for inventory items
@@ -129,6 +137,9 @@ function setupRealtimeListeners() {
     });
     renderAdminInventory();
     renderAdminAnalytics();
+    renderAdminOrganizationInventory();
+    renderCurrentOrganizationInventoryDetail();
+    renderCurrentAdminProfileDetails();
   });
 
   // Listen for inventory history logs
@@ -138,6 +149,7 @@ function setupRealtimeListeners() {
       allInventoryLogs.push({ id: docSnap.id, ...docSnap.data() });
     });
     renderAdminInventoryLogs();
+    renderCurrentAdminProfileDetails();
   });
 
   // Listen for blood requests
@@ -150,6 +162,7 @@ function setupRealtimeListeners() {
     if (pendingElem) pendingElem.textContent = allRequests.filter(r => r.status === 'Pending').length;
     renderAdminInventory();
     renderAdminAnalytics();
+    renderCurrentAdminProfileDetails();
   });
 
   // Listen for donations
@@ -159,6 +172,7 @@ function setupRealtimeListeners() {
       allDonations.push({ id: docSnap.id, ...docSnap.data() });
     });
     renderAdminAnalytics();
+    renderCurrentAdminProfileDetails();
   });
 
   // Listen for contact messages
@@ -828,16 +842,67 @@ function setupNavigation() {
   });
 }
 
-function showView(view) {
+function setupAdminHistory() {
+  const currentState = history.state;
+  if (!currentState?.adminDashboard) {
+    history.replaceState({ adminDashboard: true, screen: 'view', view: 'dashboard' }, '', window.location.href);
+    history.pushState({ adminDashboard: true, screen: 'guard', view: 'dashboard' }, '', window.location.href);
+  }
+  window.addEventListener('popstate', (event) => {
+    if (!event.state?.adminDashboard) {
+      const fallbackState = { adminDashboard: true, screen: 'guard', view: 'dashboard' };
+      history.pushState(fallbackState, '', window.location.href);
+      restoreAdminHistoryState(fallbackState);
+      return;
+    }
+    if (event.state.screen === 'view' && event.state.view === 'dashboard') {
+      history.pushState({ adminDashboard: true, screen: 'guard', view: 'dashboard' }, '', window.location.href);
+    }
+    restoreAdminHistoryState(event.state);
+  });
+}
+
+function restoreAdminHistoryState(state) {
+  const safeView = state?.view && viewSelectors[state.view] ? state.view : 'dashboard';
+  showView(safeView, 'none');
+  if (state?.screen === 'organizationInventory') {
+    requestAnimationFrame(() => document.getElementById('adminOrganizationInventoryList')?.scrollIntoView({ block: 'start' }));
+  } else if (safeView === 'organizationInventoryDetail') {
+    renderOrganizationInventoryDetail(state.organizationId);
+    window.scrollTo(0, 0);
+  } else if (safeView === 'adminProfileDetail') {
+    renderAdminProfileDetails(state.profileType, state.recordId);
+    window.scrollTo(0, 0);
+  } else if (safeView === 'dashboard') {
+    window.scrollTo(0, 0);
+  }
+}
+
+function showView(view, historyMode = 'push', stateOverrides = {}) {
   const viewId = viewSelectors[view];
   if (!viewId) return;
+
+  if (historyMode !== 'none') {
+    const nextState = { adminDashboard: true, screen: 'view', view, ...stateOverrides };
+    const sameState = history.state?.adminDashboard
+      && history.state.screen === nextState.screen
+      && history.state.view === nextState.view
+      && history.state.organizationId === nextState.organizationId
+      && history.state.recordId === nextState.recordId;
+    if (!sameState) {
+      history[historyMode === 'replace' ? 'replaceState' : 'pushState'](nextState, '', window.location.href);
+    }
+  }
 
   document.querySelectorAll('.dashboard-view').forEach((section) => section.classList.add('hidden'));
   const target = document.getElementById(viewId);
   if (target) target.classList.remove('hidden');
 
   document.querySelectorAll('.nav-item').forEach((item) => {
-    item.classList.toggle('active', item.dataset.view === view);
+    const detailListView = view === 'organizationInventoryDetail'
+      ? 'dashboard'
+      : view === 'adminProfileDetail' ? history.state?.profileType : view;
+    item.classList.toggle('active', item.dataset.view === detailListView);
   });
 
   if (view === 'inventory') renderAdminInventory();
@@ -1048,6 +1113,18 @@ function setupActionHandlers() {
       event.preventDefault();
 
       const action = button.dataset.action;
+      if (action === 'view-organization-inventory') {
+        viewOrganizationInventory(button.dataset.organizationId);
+        return;
+      }
+      if (action === 'back-to-organization-inventory') {
+        history.back();
+        return;
+      }
+      if (action === 'back-to-admin-profiles') {
+        history.back();
+        return;
+      }
       if (action === 'clear-notifications') {
         if (confirm('Are you sure you want to clear all notifications?')) {
           await bloodRequestManager.clearAllNotifications(currentAdmin.uid);
@@ -1072,6 +1149,94 @@ function setupActionHandlers() {
       else if (action === 'view-hospital') viewHospital(uid);
     });
   });
+}
+
+function getAdminOrganizationInventory(organization) {
+  const organizationId = organization.uid || organization.id;
+  const inventoryBloodGroups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
+  const totalsByGroup = Object.fromEntries(inventoryBloodGroups.map((group) => [group, 0]));
+
+  allInventoryItems.forEach((item) => {
+    if ((item.organizationId === organizationId || item.organizationId === organization.id)
+      && isAvailableInventory(item)) {
+      const units = Number(item.units);
+      if (Object.hasOwn(totalsByGroup, item.bloodGroup)) {
+        totalsByGroup[item.bloodGroup] += units;
+      }
+    }
+  });
+
+  return {
+    totalsByGroup,
+    total: Object.values(totalsByGroup).reduce((sum, units) => sum + units, 0)
+  };
+}
+
+function renderAdminOrganizationInventory() {
+  const container = document.getElementById('adminOrganizationInventoryList');
+  if (!container) return;
+
+  if (!organizationsList.length) {
+    container.innerHTML = '<p>No organizations are registered yet.</p>';
+    return;
+  }
+
+  const rows = organizationsList.map((organization) => {
+    const organizationId = organization.uid || organization.id;
+    const inventory = getAdminOrganizationInventory(organization);
+    return `<tr>
+      <td>${escapeAdminDetail(organization.organizationName || 'Organization')}</td>
+      <td>${inventory.total} units</td>
+      <td><button type="button" class="btn btn-sm btn-secondary" data-action="view-organization-inventory" data-organization-id="${escapeAdminDetail(organizationId)}">View Details &rarr;</button></td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `<table><thead><tr><th>Organization Name</th><th>Total Available Units</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function viewOrganizationInventory(organizationId) {
+  const organization = organizationsList.find((item) => (item.uid || item.id) === organizationId || item.id === organizationId);
+  if (!organization) {
+    return;
+  }
+
+  if (history.state?.screen !== 'organizationInventory') {
+    history.pushState({ adminDashboard: true, screen: 'organizationInventory', view: 'dashboard' }, '', window.location.href);
+  }
+  showView('organizationInventoryDetail', 'push', {
+    screen: 'organizationInventoryDetail',
+    organizationId
+  });
+  renderOrganizationInventoryDetail(organizationId);
+  window.scrollTo(0, 0);
+}
+
+function renderCurrentOrganizationInventoryDetail() {
+  if (history.state?.screen === 'organizationInventoryDetail') {
+    renderOrganizationInventoryDetail(history.state.organizationId);
+  }
+}
+
+function renderOrganizationInventoryDetail(organizationId) {
+  const organization = organizationsList.find((item) => (item.uid || item.id) === organizationId || item.id === organizationId);
+  if (!organization) return;
+
+  const inventory = getAdminOrganizationInventory(organization);
+  const status = organization.status
+    || (typeof organization.isApproved === 'boolean' ? (organization.isApproved ? 'Approved' : 'Pending') : '');
+  const meta = [status, organization.city].filter(Boolean);
+  const nameElement = document.getElementById('adminOrganizationInventoryName');
+  const metaElement = document.getElementById('adminOrganizationInventoryMeta');
+  const gridElement = document.getElementById('adminOrganizationBloodGroupGrid');
+  const totalElement = document.getElementById('adminOrganizationInventoryTotal');
+  if (!nameElement || !metaElement || !gridElement || !totalElement) return;
+
+  nameElement.textContent = organization.organizationName || 'Organization';
+  metaElement.innerHTML = meta.map((value) => `<span class="admin-inventory-meta-item">${escapeAdminDetail(value)}</span>`).join('');
+  gridElement.innerHTML = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']
+    .map((group) => `<article class="card admin-blood-group-card"><span class="admin-blood-group-label">${group}</span><strong>${inventory.totalsByGroup[group]}</strong><span>units available</span></article>`)
+    .join('');
+  totalElement.textContent = inventory.total;
 }
 
 async function approveDonor(uid) {
@@ -1207,12 +1372,14 @@ async function deleteHospital(uid) {
   }
 }
 
-function viewDonor(uid) {
+function viewDonor(uid, navigate = true) {
   const donor = donorsList.find((item) => (item.uid || item.id) === uid || item.id === uid);
   if (!donor) {
+    if (navigate) return;
     showAdminRecordDetails('Donor Details', '<p>Record not found.</p>');
     return;
   }
+  if (navigate) openAdminProfileDetails('donors', donor.uid || donor.id);
 
   const donorId = donor.uid || donor.id;
   const donations = allDonations
@@ -1224,35 +1391,31 @@ function viewDonor(uid) {
   const status = donor.status || getDonorStatus(donor);
   const eligibility = typeof donor.isEligible === 'boolean' ? (donor.isEligible ? 'Eligible' : 'Not eligible') : 'Not available';
   const accountStatus = typeof donor.isActive === 'boolean' ? (donor.isActive ? 'Active' : 'Inactive') : 'Not available';
+  const photoUrl = getAdminProfileImageUrl(donor.profilePhoto || donor.photoURL || donor.photoUrl || donor.profileImage || donor.avatarUrl);
+  const lastDonation = donor.lastDonationDate || donations[0]?.donationDate || donations[0]?.createdAt;
 
-  showAdminRecordDetails('Donor Details', `
-    <div class="details-grid">
-      ${adminDetailField('Name', donor.fullName)}
-      ${adminDetailField('Blood Group', donor.bloodGroup)}
-      ${adminDetailField('Email', donor.email)}
-      ${adminDetailField('Phone', donor.phone)}
-      ${adminDetailField('City', donor.city)}
-      ${adminDetailField('Address', donor.address)}
-      ${adminDetailField('Age', donor.age)}
-      ${adminDetailField('Gender', donor.gender)}
-      ${adminDetailField('Total Donations', donor.totalDonations)}
-      ${adminDetailField('Last Donation', donor.lastDonationDate ? formatDate(donor.lastDonationDate) : null)}
-      ${adminDetailField('Eligibility', eligibility)}
-      ${adminDetailField('Status', status)}
-      ${adminDetailField('Account Status', accountStatus)}
-      ${adminDetailField('Registration Date', donor.createdAt ? formatDate(donor.createdAt) : null)}
-      ${adminDetailField('Donor ID', donorId)}
-    </div>
-    <section class="admin-record-activity" style="margin-top: 18px;"><h3>Donation History</h3>${history}</section>
-  `);
+  showAdminProfilePage({
+    title: 'Donor Profile', name: donor.fullName || 'Donor', backLabel: 'Back to Donors',
+    status, subtitle: donor.bloodGroup ? `Blood Group ${donor.bloodGroup}` : 'Donor account', imageUrl: photoUrl,
+    details: [
+      ['Blood Group', donor.bloodGroup], ['Email', donor.email], ['Phone', donor.phone],
+      ['City', donor.city], ['Address', donor.address], ['Age', donor.age], ['Gender', donor.gender],
+      ['Total Donations', donor.totalDonations ?? donations.length],
+      ['Last Donation', lastDonation ? formatDate(lastDonation) : null],
+      ['Eligibility', eligibility], ['Approval Status', status], ['Account Status', accountStatus],
+      ['Registration Date', donor.createdAt ? formatDate(donor.createdAt) : null], ['Donor ID', donorId]
+    ],
+    sections: [{ title: 'Donation History', content: history }]
+  });
 }
 
-function viewOrg(uid) {
+function viewOrg(uid, navigate = true) {
   const organization = organizationsList.find((item) => (item.uid || item.id) === uid || item.id === uid);
   if (!organization) {
     showAdminRecordDetails('Organization Details', '<p>Record not found.</p>');
     return;
   }
+  if (navigate) openAdminProfileDetails('organizations', organization.uid || organization.id);
 
   const organizationId = organization.uid || organization.id;
   const belongsToOrganization = (item) => item.organizationId === organizationId || item.organizationId === organization.id;
@@ -1284,12 +1447,13 @@ function viewOrg(uid) {
   `);
 }
 
-function viewHospital(uid) {
+function viewHospital(uid, navigate = true) {
   const hospital = hospitalsList.find((item) => (item.uid || item.id) === uid || item.id === uid);
   if (!hospital) {
     showAdminRecordDetails('Hospital Details', '<p>Record not found.</p>');
     return;
   }
+  if (navigate) openAdminProfileDetails('hospitals', hospital.uid || hospital.id);
 
   const hospitalId = hospital.uid || hospital.id;
   const requests = allRequests
@@ -1331,7 +1495,98 @@ function escapeAdminDetail(value) {
   })[character]);
 }
 
+function openAdminProfileDetails(profileType, recordId) {
+  showView('adminProfileDetail', 'push', { screen: 'profileDetail', profileType, recordId });
+  window.scrollTo(0, 0);
+}
+
+function renderCurrentAdminProfileDetails() {
+  if (history.state?.screen === 'profileDetail') {
+    renderAdminProfileDetails(history.state.profileType, history.state.recordId);
+  }
+}
+
+function renderAdminProfileDetails(profileType, recordId) {
+  if (!recordId) return;
+  if (profileType === 'donors') viewDonor(recordId, false);
+  else if (profileType === 'organizations') viewOrg(recordId, false);
+  else if (profileType === 'hospitals') viewHospital(recordId, false);
+}
+
+function showAdminProfilePage({ title, name, backLabel, status, subtitle, imageUrl, details = [], sections = [] }) {
+  const content = document.getElementById('adminProfileDetailContent');
+  const backButton = document.getElementById('adminProfileBackButton');
+  if (!content || !backButton) return;
+  backButton.querySelector('span').textContent = backLabel || 'Back';
+  const image = imageUrl
+    ? `<img class="admin-profile-avatar" src="${escapeAdminDetail(imageUrl)}" alt="${escapeAdminDetail(name)} profile image">`
+    : '<div class="admin-profile-avatar admin-profile-avatar-placeholder" aria-hidden="true"><i class="fas fa-user"></i></div>';
+  const detailFields = details.map(([label, value]) => adminDetailField(label, value)).join('');
+  const sectionMarkup = sections.map((section) => `
+    <section class="card admin-profile-section">
+      <div class="card-header"><h2>${escapeAdminDetail(section.title)}</h2></div>
+      <div class="admin-profile-section-content">${section.content}</div>
+    </section>`).join('');
+  content.innerHTML = `
+    <header class="card admin-profile-hero">
+      ${image}
+      <div class="admin-profile-hero-copy">
+        <p class="dashboard-subtitle">${escapeAdminDetail(title)}</p>
+        <h1>${escapeAdminDetail(name)}</h1>
+        ${subtitle ? `<p class="admin-profile-subtitle">${escapeAdminDetail(subtitle)}</p>` : ''}
+      </div>
+      ${status ? `<span class="badge ${getStatusBadgeClass(status)}">${escapeAdminDetail(status)}</span>` : ''}
+    </header>
+    ${detailFields ? `<section class="card admin-profile-section"><div class="card-header"><h2>Profile Details</h2></div><div class="details-grid admin-profile-details-grid">${detailFields}</div></section>` : ''}
+    ${sectionMarkup}`;
+}
+
+function getAdminProfileImageUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) return '';
+  try {
+    const imageUrl = new URL(value, window.location.href);
+    return ['https:', 'http:'].includes(imageUrl.protocol) ? imageUrl.href : '';
+  } catch {
+    return '';
+  }
+}
+
+function renderAdminBloodGroupSummary(inventory) {
+  const groups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
+  const cards = groups.map((group) => `
+    <div class="admin-profile-stock-item"><span>${group}</span><strong>${inventory.totalsByGroup[group]}</strong><small>units</small></div>`).join('');
+  return `<div class="admin-profile-stock-grid">${cards}</div><p class="admin-profile-stock-total"><strong>Total Available Units</strong><span>${inventory.total} units</span></p>`;
+}
+
 function showAdminRecordDetails(title, content) {
+  const profileState = history.state;
+  if (profileState?.screen === 'profileDetail') {
+    const profileType = profileState.profileType;
+    const lists = { donors: donorsList, organizations: organizationsList, hospitals: hospitalsList };
+    const profile = lists[profileType]?.find((item) => (item.uid || item.id) === profileState.recordId || item.id === profileState.recordId);
+    if (profile) {
+      const isDonor = profileType === 'donors';
+      const isOrganization = profileType === 'organizations';
+      const name = isDonor ? profile.fullName : isOrganization ? profile.organizationName : profile.hospitalName;
+      const status = profile.status || (typeof profile.isApproved === 'boolean' ? (profile.isApproved ? 'Approved' : 'Pending') : 'Not available');
+      const donorPhoto = isDonor ? getAdminProfileImageUrl(profile.profilePhoto || profile.photoURL || profile.photoUrl || profile.profileImage || profile.avatarUrl) : '';
+      const sections = [];
+      if (isOrganization) {
+        sections.push({ title: 'Available Blood Inventory', content: renderAdminBloodGroupSummary(getAdminOrganizationInventory(profile)) });
+      }
+      sections.push({ title: title.replace(/ Details$/, ''), content });
+      showAdminProfilePage({
+        title: `${isDonor ? 'Donor' : isOrganization ? 'Organization' : 'Hospital'} Profile`,
+        name: name || (isDonor ? 'Donor' : isOrganization ? 'Organization' : 'Hospital'),
+        backLabel: `Back to ${isDonor ? 'Donors' : isOrganization ? 'Organizations' : 'Hospitals'}`,
+        status,
+        subtitle: profile.city || profile.address || (isDonor && profile.bloodGroup ? `Blood Group ${profile.bloodGroup}` : ''),
+        imageUrl: donorPhoto,
+        sections
+      });
+      return;
+    }
+  }
   const modal = document.getElementById('adminRecordDetailsModal');
   const titleElement = document.getElementById('adminRecordDetailsTitle');
   const contentElement = document.getElementById('adminRecordDetailsContent');

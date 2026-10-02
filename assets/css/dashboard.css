@@ -41,6 +41,309 @@ button.btn.btn-sm.btn-danger[data-action^="reject-"]:active {
   margin-bottom: 24px;
 }
 
+/* Admin organization inventory detail screen */
+.admin-inventory-detail-view {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-bottom: 32px;
+}
+
+.admin-profile-detail-view {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-bottom: 32px;
+}
+
+.admin-profile-hero {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 22px;
+  padding: 28px 32px;
+  border: 1px solid var(--border-color);
+}
+
+.admin-profile-avatar {
+  width: 92px;
+  height: 92px;
+  flex: 0 0 92px;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.admin-profile-avatar-placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--text-light);
+  background: var(--bg-color);
+  font-size: 2rem;
+}
+
+.admin-profile-hero-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.admin-profile-hero-copy h1 {
+  margin: 2px 0 0;
+  color: var(--primary-color);
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  overflow-wrap: anywhere;
+}
+
+.admin-profile-subtitle {
+  margin: 5px 0 0;
+  color: var(--text-light);
+}
+
+.admin-profile-section {
+  margin-top: 20px;
+  padding: 22px 26px;
+  border: 1px solid var(--border-color);
+}
+
+.admin-profile-section .card-header {
+  margin-bottom: 16px;
+}
+
+.admin-profile-section .card-header h2 {
+  margin: 0;
+  color: var(--text-color);
+  font-size: 1.15rem;
+}
+
+.admin-profile-section .admin-record-activity {
+  margin-top: 18px !important;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.admin-profile-section .admin-record-activity h3 {
+  margin-bottom: 10px;
+  color: var(--text-color);
+  font-size: 1rem;
+}
+
+.admin-profile-section .admin-record-activity ul {
+  padding-left: 20px;
+  color: var(--text-light);
+  line-height: 1.8;
+}
+
+.admin-profile-stock-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-profile-stock-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 3px 10px;
+  padding: 14px 16px;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.admin-profile-stock-item > span {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.admin-profile-stock-item strong {
+  grid-row: span 2;
+  color: var(--text-color);
+  font-size: 1.35rem;
+}
+
+.admin-profile-stock-item small {
+  color: var(--text-light);
+}
+
+.admin-profile-stock-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 16px 0 0;
+  padding: 16px 18px;
+  background: var(--secondary-color);
+  border-left: 3px solid var(--primary-color);
+  border-radius: 6px;
+}
+
+.admin-profile-stock-total span {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.admin-inventory-back {
+  margin-bottom: 24px;
+}
+
+.admin-inventory-detail-header {
+  margin-bottom: 32px;
+  padding: 28px 32px;
+  background: var(--secondary-color);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-inventory-detail-header .dashboard-subtitle {
+  margin: 0 0 6px;
+}
+
+.admin-inventory-detail-header h1 {
+  margin: 0;
+  color: var(--primary-color);
+  font-size: clamp(1.6rem, 3vw, 2.1rem);
+}
+
+.admin-inventory-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.admin-inventory-meta-item {
+  padding: 5px 11px;
+  color: var(--text-light);
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  font-size: var(--font-size-sm);
+}
+
+.admin-inventory-section-heading {
+  margin-bottom: 18px;
+}
+
+.admin-inventory-section-heading h2 {
+  margin: 0 0 4px;
+  color: var(--text-color);
+}
+
+.admin-blood-group-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.admin-blood-group-card {
+  display: flex;
+  min-height: 150px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 5px;
+  padding: 22px;
+  border: 1px solid var(--border-color);
+}
+
+.admin-blood-group-label {
+  color: var(--primary-color);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.admin-blood-group-card strong {
+  color: var(--text-color);
+  font-size: 1.8rem;
+  line-height: 1.2;
+}
+
+.admin-blood-group-card > span:last-child {
+  color: var(--text-light);
+  font-size: var(--font-size-sm);
+}
+
+.admin-inventory-total-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 24px;
+  padding: 24px 30px;
+  color: var(--primary-color);
+  border-left: 4px solid var(--primary-color);
+}
+
+.admin-inventory-total-card p {
+  margin: 0;
+  color: var(--text-light);
+}
+
+.admin-inventory-total-card h2 {
+  margin: 4px 0 0;
+  color: var(--text-color);
+  font-size: 2rem;
+}
+
+.admin-inventory-total-card > i {
+  font-size: 1.8rem;
+  opacity: 0.75;
+}
+
+@media (max-width: 900px) {
+  .admin-blood-group-grid,
+  .admin-profile-stock-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .admin-inventory-detail-header {
+    padding: 22px 20px;
+  }
+
+  .admin-blood-group-grid {
+    gap: 12px;
+  }
+
+  .admin-blood-group-card {
+    min-height: 128px;
+    padding: 16px;
+  }
+
+  .admin-inventory-total-card {
+    padding: 20px;
+  }
+
+  .admin-profile-hero {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 22px 20px;
+  }
+
+  .admin-profile-avatar {
+    width: 72px;
+    height: 72px;
+    flex-basis: 72px;
+  }
+
+  .admin-profile-section {
+    padding: 18px 16px;
+  }
+
+  .admin-profile-stock-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .admin-profile-stock-item {
+    padding: 11px;
+  }
+
+  .admin-profile-section .details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .dashboard-analytics-grid {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }

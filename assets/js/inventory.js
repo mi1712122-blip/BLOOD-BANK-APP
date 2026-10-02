@@ -195,49 +195,6 @@ class BloodInventoryManager {
     }
   }
 
-  async searchBloodAvailability(bloodGroup, city) {
-    try {
-      const organizationQuery = query(
-        collection(db, 'organizations'),
-        where('city', '==', city),
-        where('isApproved', '==', true)
-      );
-      const snapshot = await getDocs(organizationQuery);
-
-      const availability = [];
-      for (const org of snapshot.docs) {
-        const inventoryQuery = query(
-          collection(db, 'bloodInventory'),
-          where('organizationId', '==', org.id),
-          where('bloodGroup', '==', bloodGroup),
-          where('status', '==', 'Available')
-        );
-        const inventorySnapshot = await getDocs(inventoryQuery);
-
-        let totalUnits = 0;
-        inventorySnapshot.forEach((docSnap) => {
-          const item = docSnap.data();
-          if (isAvailableInventory(item)) totalUnits += Number(item.units);
-        });
-
-        if (totalUnits > 0) {
-          availability.push({
-            organizationId: org.id,
-            organizationName: org.data().organizationName,
-            bloodGroup,
-            units: totalUnits,
-            phone: org.data().phone,
-            address: org.data().address
-          });
-        }
-      }
-
-      return { success: true, data: availability };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  }
-
   getBloodGroupColor(bloodGroup) {
     return this.bloodGroupColors[bloodGroup] || '#333333';
   }

@@ -1158,6 +1158,12 @@ async function issueBlood(requestId, targetButton = null) {
         }
       });
 
+      const donorSafeRef = doc(db, 'donorBloodRequests', requestId);
+      transaction.set(donorSafeRef, {
+        status: 'Completed',
+        updatedAt: now
+      }, { merge: true });
+
       return { request, reqUnits };
     });
 
@@ -1871,34 +1877,26 @@ async function approveRequest(requestId) {
       now
     );
 
-    console.groupCollapsed('[request approval inventory check]');
-    console.log('Request', {
-      requestId,
-      bloodGroup: request.bloodGroup,
-      units: request.units,
-      organizationId: request.organizationId
+    console.log('=== APPROVAL INVENTORY DEBUG START ===');
+    console.log(`Request ID: ${requestId}`);
+    console.log(`Requested Blood Group: ${request.bloodGroup}`);
+    console.log(`Requested Units: ${request.units}`);
+    console.log(`Request Organization ID: ${request.organizationId}`);
+    console.log(`Current Auth UID: ${auth.currentUser?.uid || null}`);
+    console.log(`Current Organization UID: ${currentOrganization.uid}`);
+    console.log('=== INVENTORY CANDIDATES ===');
+    availability.inventoryRecords.forEach((item) => {
+      console.log(`${item.id} | ${item.organizationId} | ${item.bloodGroup} | ${item.rawUnits} | ${item.status} | ${item.expiryDateISO || item.expiryDate || null}`);
     });
-    console.log('Current organization', {
-      authenticatedUid: auth.currentUser?.uid || null,
-      organizationUid: currentOrganization.uid,
-      organizationName: currentOrganization.organizationName || currentOrganization.name || null
+    availability.inventoryRecords.forEach((item) => {
+      console.log(`${item.id} | organizationMatch=${item.checks.organizationMatches ? 'YES' : 'NO'} | bloodGroupMatch=${item.checks.bloodGroupMatches ? 'YES' : 'NO'} | statusMatch=${item.checks.statusAvailable ? 'YES' : 'NO'} | expiryValid=${item.checks.expiryValid ? 'YES' : 'NO'} | unitsValid=${item.checks.unitsPositive ? 'YES' : 'NO'} | eligible=${item.eligible ? 'YES' : 'NO'}`);
     });
-    console.log(`Inventory candidates returned by approval query: ${availability.inventoryRecords.length}`);
-    console.table(availability.inventoryRecords.map((item) => ({
-      documentId: item.id,
-      organizationId: item.organizationId,
-      bloodGroup: item.bloodGroup,
-      units: item.units,
-      rawUnits: item.rawUnits,
-      unitsType: item.unitsType,
-      status: item.status,
-      expiryDate: item.expiryDateISO || item.expiryDate || null,
-      ...item.checks,
-      finalEligible: item.eligible
-    })));
-    console.log('Records counted in available total', availability.countedInventory);
-    console.log('Final calculated available total', availability.totalAvailable);
-    console.groupEnd();
+    console.log('=== COUNTED INVENTORY ===');
+    availability.countedInventory.forEach((item) => {
+      console.log(`${item.id} | ${item.organizationId} | ${item.bloodGroup} | ${item.rawUnits} | ${item.status} | ${item.expiryDateISO || item.expiryDate || null}`);
+    });
+    console.log(`FINAL AVAILABLE UNITS: ${availability.totalAvailable}`);
+    console.log('=== APPROVAL INVENTORY DEBUG END ===');
 
     if (!Number.isFinite(requestedUnits) || requestedUnits <= 0) {
       alert('This request has an invalid unit count and cannot be approved.');

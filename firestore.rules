@@ -196,6 +196,52 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /donorBloodRequests/{requestId} {
+      allow read: if isSignedIn() && (
+        isAdmin()
+        || (getUserRole() == 'donor' && isDonorApproved(request.auth.uid))
+        || hasApprovedAccount()
+      );
+
+      allow create: if isSignedIn()
+        && (
+          (isHospital()
+            && hasApprovedAccount()
+            && request.resource.data.status == 'Pending'
+            && request.resource.data.bloodGroup in ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+            && request.resource.data.units is number
+            && request.resource.data.units > 0
+            && request.resource.data.keys().hasOnly(['bloodGroup', 'units', 'urgency', 'status', 'createdAt', 'updatedAt'])
+            && existsAfter(/databases/$(database)/documents/bloodRequests/$(requestId))
+            && getAfter(/databases/$(database)/documents/bloodRequests/$(requestId)).data.hospitalId == request.auth.uid
+            && getAfter(/databases/$(database)/documents/bloodRequests/$(requestId)).data.bloodGroup == request.resource.data.bloodGroup
+            && getAfter(/databases/$(database)/documents/bloodRequests/$(requestId)).data.units == request.resource.data.units
+            && getAfter(/databases/$(database)/documents/bloodRequests/$(requestId)).data.status == 'Pending')
+          || isAdmin()
+        );
+
+      allow update: if isSignedIn()
+        && (
+          // Hospital cancels matching request
+          (isHospital()
+            && hasApprovedAccount()
+            && exists(/databases/$(database)/documents/bloodRequests/$(requestId))
+            && get(/databases/$(database)/documents/bloodRequests/$(requestId)).data.hospitalId == request.auth.uid
+            && request.resource.data.status == 'Cancelled'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+          ||
+          // Organization processes, completes, or rejects matching request
+          (isActiveOrganization()
+            && exists(/databases/$(database)/documents/bloodRequests/$(requestId))
+            && get(/databases/$(database)/documents/bloodRequests/$(requestId)).data.organizationId == request.auth.uid
+            && request.resource.data.status in ['Processing', 'Completed', 'Rejected']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+          || isAdmin()
+        );
+
+      allow delete: if isAdmin();
+    }
+
     match /bloodIssues/{issueId} {
       allow read: if isSignedIn() && (isAdmin() || hasApprovedAccount())
         && (
@@ -360,18 +406,31 @@ service cloud.firestore {
     }
 
     match /contactMessages/{messageId} {
-      allow create: if isSignedIn()
-        && request.resource.data.senderId == request.auth.uid
-        && request.resource.data.keys().hasAll([
+      allow create: if request.resource.data.keys().hasAll([
+          'name', 'email', 'subject', 'message', 'status', 'source', 'createdAt'
+        ])
+        && request.resource.data.keys().hasOnly([
           'name', 'email', 'subject', 'message', 'senderId', 'status', 'source', 'createdAt'
         ])
         && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 100
         && request.resource.data.email is string
+        && request.resource.data.email.size() > 0
+        && request.resource.data.email.size() <= 254
         && request.resource.data.subject is string
+        && request.resource.data.subject.size() > 0
+        && request.resource.data.subject.size() <= 150
         && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 2000
         && request.resource.data.status == 'new'
         && request.resource.data.source == 'landing-page'
-        && request.resource.data.createdAt == request.time;
+        && request.resource.data.createdAt == request.time
+        && (
+          (isSignedIn() && request.resource.data.senderId == request.auth.uid)
+          || (!isSignedIn() && !request.resource.data.keys().hasAny(['senderId']))
+        );
       allow read, update, delete: if isAdmin();
     }
 

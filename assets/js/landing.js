@@ -1,5 +1,4 @@
 // Landing Page Script
-import { bloodInventoryManager } from './inventory.js';
 import {
   addDoc,
   collection,
@@ -38,7 +37,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  const savedTheme = localStorage.getItem('theme');
+  let savedTheme = null;
+  try {
+    savedTheme = localStorage.getItem('theme');
+  } catch (err) {
+    console.warn('Could not read saved theme preference:', err);
+  }
   const isDarkMode = savedTheme === 'dark';
   updateThemeUI(isDarkMode);
 
@@ -55,155 +59,138 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Smooth scrolling for navigation links
-  const navLinks = document.querySelectorAll('a[href^="#"]');
-  
-  navLinks.forEach(link => {
-    link.addEventListener('click', function(e) {
-      e.preventDefault();
-      const targetId = this.getAttribute('href');
-      if (targetId === '#') return;
-      
-      const targetElement = document.querySelector(targetId);
-      if (targetElement) {
-        targetElement.scrollIntoView({ behavior: 'smooth' });
+  // Accessible compact navigation and in-page scrolling.
+  const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+  const mobileNavigation = document.getElementById('landingNavigation');
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function closeMobileNavigation() {
+    if (!mobileMenuToggle || !mobileNavigation) return;
+    mobileNavigation.classList.remove('is-open');
+    mobileMenuToggle.setAttribute('aria-expanded', 'false');
+    mobileMenuToggle.setAttribute('aria-label', 'Open navigation menu');
+  }
+
+  mobileMenuToggle?.addEventListener('click', () => {
+    const isOpen = mobileMenuToggle.getAttribute('aria-expanded') === 'true';
+    mobileMenuToggle.setAttribute('aria-expanded', String(!isOpen));
+    mobileMenuToggle.setAttribute('aria-label', isOpen ? 'Open navigation menu' : 'Close navigation menu');
+    mobileNavigation?.classList.toggle('is-open', !isOpen);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && mobileMenuToggle?.getAttribute('aria-expanded') === 'true') {
+      closeMobileNavigation();
+      mobileMenuToggle.focus();
+    }
+  });
+
+  document.querySelectorAll('a[href^="#"]').forEach((link) => {
+    const href = link.getAttribute('href');
+    if (!href || href === '#') return;
+    const targetElement = document.getElementById(decodeURIComponent(href.slice(1)));
+    if (!targetElement) return;
+
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      targetElement.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth' });
+      closeMobileNavigation();
+    });
+  });
+
+  document.getElementById('currentYear')?.replaceChildren(String(new Date().getFullYear()));
+
+  const heroVideo = document.querySelector('.hero-video');
+  if (heroVideo) {
+    if (prefersReducedMotion) {
+      heroVideo.pause();
+    } else {
+      // Alternate between the still poster and each complete video playback.
+      let videoStarted = false;
+      const startHeroVideo = () => {
+        if (videoStarted) return;
+        videoStarted = true;
+        window.setTimeout(async () => {
+          try {
+            await heroVideo.play();
+            heroVideo.classList.add('is-visible');
+          } catch (err) {
+            // Keep the poster visible when autoplay is blocked by the browser.
+          }
+        }, 4000);
+      };
+
+      heroVideo.addEventListener('ended', () => {
+        heroVideo.classList.remove('is-visible');
+        window.setTimeout(() => {
+          heroVideo.currentTime = 0;
+          heroVideo.play().then(() => {
+            heroVideo.classList.add('is-visible');
+          }).catch(() => {
+            // Keep the poster visible if playback cannot resume.
+          });
+        }, 4000);
+      });
+
+      if (heroVideo.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+        startHeroVideo();
+      } else {
+        heroVideo.addEventListener('canplay', startHeroVideo, { once: true });
+      }
+    }
+  }
+
+  // ==========================================
+  // ROLES TABS LOGIC
+  // ==========================================
+  const roleTabs = document.querySelectorAll('.role-tab');
+  const rolePanels = document.querySelectorAll('.role-panel');
+
+  roleTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      // Deactivate all
+      roleTabs.forEach(t => {
+        t.classList.remove('active');
+        t.setAttribute('aria-selected', 'false');
+      });
+      rolePanels.forEach(p => {
+        p.classList.remove('active');
+        p.hidden = true;
+      });
+
+      // Activate clicked
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+      const panelId = tab.getAttribute('aria-controls');
+      const targetPanel = document.getElementById(panelId);
+      if (targetPanel) {
+        targetPanel.classList.add('active');
+        targetPanel.hidden = false;
       }
     });
   });
 
-  // Add animation to cards on scroll
+  // ==========================================
+  // SCROLL ANIMATIONS
+  // ==========================================
   const observerOptions = {
     threshold: 0.1,
-    rootMargin: '0px 0px -100px 0px'
+    rootMargin: '0px 0px -50px 0px'
   };
 
-  const observer = new IntersectionObserver(function(entries) {
+  const observer = 'IntersectionObserver' in window ? new IntersectionObserver(function(entries) {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
-        entry.target.style.animation = 'slideIn 0.6s ease forwards';
+        entry.target.classList.add('in-view');
         observer.unobserve(entry.target);
       }
     });
-  }, observerOptions);
+  }, observerOptions) : null;
 
-  // Observe feature cards
-  document.querySelectorAll('.feature-card').forEach(card => {
-    observer.observe(card);
+  document.querySelectorAll('.slide-up-anim').forEach(el => {
+      observer?.observe(el);
   });
 
-  // Observe role cards
-  document.querySelectorAll('.role-card').forEach(card => {
-    observer.observe(card);
-  });
-
-  // Observe contact items
-  document.querySelectorAll('.contact-item').forEach(item => {
-    observer.observe(item);
-  });
-
-  // Observe FAQ Accordion items
-  document.querySelectorAll('.faq-item').forEach(item => {
-    observer.observe(item);
-  });
-
-  // ==========================================
-  // QUICK BLOOD SEARCH LOGIC
-  // ==========================================
-  const searchForm = document.getElementById('quick-search-form');
-  const resultsContainer = document.getElementById('search-results');
-
-  if (searchForm && resultsContainer) {
-    searchForm.addEventListener('submit', async function(e) {
-      e.preventDefault();
-      
-      const bloodGroup = document.getElementById('search-blood-group').value;
-      const city = document.getElementById('search-city').value.trim();
-      
-      if (!bloodGroup || !city) return;
-
-      // Show skeleton loader
-      resultsContainer.innerHTML = `
-        <div class="skeleton-loader">
-          <div class="skeleton-item"></div>
-          <div class="skeleton-item"></div>
-        </div>
-      `;
-
-      // Small artificial delay for visual feedback
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      try {
-        const result = await bloodInventoryManager.searchBloodAvailability(bloodGroup, city);
-        if (result.success && result.data && result.data.length > 0) {
-          renderSearchResults(result.data);
-        } else {
-          renderEmptyState(bloodGroup, city, false);
-        }
-      } catch (error) {
-        console.error("Search error, falling back:", error);
-        renderEmptyState(bloodGroup, city, true);
-      }
-    });
-  }
-
-  function renderSearchResults(items) {
-    let html = '<div class="result-list">';
-    items.forEach(item => {
-      html += `
-        <div class="result-item animate__animated animate__fadeInUp">
-          <div class="result-item-header">
-            <span class="result-org-name">${escapeHTML(item.organizationName)}</span>
-            <span class="result-badge">
-              <i class="fas fa-droplet"></i> ${escapeHTML(item.bloodGroup)}: ${item.units} Units
-            </span>
-          </div>
-          <div class="result-details">
-            <div><i class="fas fa-map-marker-alt"></i> <span>${escapeHTML(item.address)}</span></div>
-            <div><i class="fas fa-phone"></i> <span>${escapeHTML(item.phone)}</span></div>
-          </div>
-          <div class="result-action">
-            <a href="pages/auth/login.html" class="btn btn-secondary btn-sm">Request Blood</a>
-          </div>
-        </div>
-      `;
-    });
-    html += '</div>';
-    resultsContainer.innerHTML = html;
-  }
-
-  function renderEmptyState(bloodGroup, city, isError) {
-    resultsContainer.innerHTML = `
-      <div class="search-empty animate__animated animate__fadeIn">
-        <i class="fas fa-circle-info"></i>
-        <h4>No Results Found</h4>
-        <p>No active units of <strong>${escapeHTML(bloodGroup)}</strong> were found in <strong>${escapeHTML(city)}</strong>.</p>
-        <button id="show-demo-btn" class="btn btn-primary btn-sm">Show Demo Results</button>
-      </div>
-    `;
-
-    const demoBtn = document.getElementById('show-demo-btn');
-    if (demoBtn) {
-      demoBtn.addEventListener('click', function() {
-        const mockData = [
-          {
-            organizationName: "City Blood Bank",
-            bloodGroup: bloodGroup,
-            units: 18,
-            phone: "+1 (555) 019-2834",
-            address: `456 Healthcare Blvd, ${city}`
-          },
-          {
-            organizationName: "Mercy General Blood Depot",
-            bloodGroup: bloodGroup,
-            units: 8,
-            phone: "+1 (555) 014-9988",
-            address: `789 Hospital Lane, ${city}`
-          }
-        ];
-        renderSearchResults(mockData);
-      });
-    }
-  }
 
   // ==========================================
   // FAQ ACCORDION LOGIC
@@ -211,9 +198,11 @@ document.addEventListener('DOMContentLoaded', function() {
   const faqQuestions = document.querySelectorAll('.faq-question');
   
   faqQuestions.forEach(question => {
+    const answerId = question.getAttribute('aria-controls');
+    const controlledAnswer = answerId ? document.getElementById(answerId) : null;
     question.addEventListener('click', function() {
       const faqItem = this.parentElement;
-      const faqContent = faqItem.querySelector('.faq-content');
+      const faqContent = controlledAnswer || faqItem.querySelector('.faq-content');
       const isActive = faqItem.classList.contains('active');
       
       // Close all other active FAQ items
@@ -222,6 +211,7 @@ document.addEventListener('DOMContentLoaded', function() {
           item.classList.remove('active');
           const content = item.querySelector('.faq-content');
           if (content) content.style.maxHeight = null;
+          item.querySelector('.faq-question')?.setAttribute('aria-expanded', 'false');
         }
       });
       
@@ -229,9 +219,11 @@ document.addEventListener('DOMContentLoaded', function() {
       if (isActive) {
         faqItem.classList.remove('active');
         faqContent.style.maxHeight = null;
+        this.setAttribute('aria-expanded', 'false');
       } else {
         faqItem.classList.add('active');
         faqContent.style.maxHeight = faqContent.scrollHeight + "px";
+        this.setAttribute('aria-expanded', 'true');
       }
     });
   });
@@ -240,7 +232,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // CONTACT FORM VALIDATION & SUBMISSION
   // ==========================================
   const contactForm = document.getElementById('landing-contact-form');
-  const contactContainer = document.querySelector('.contact-form-container');
+  const contactContainer = contactForm?.closest('.contact-form-container');
 
   if (contactForm && contactContainer) {
     contactForm.addEventListener('submit', async function(e) {
@@ -267,46 +259,42 @@ document.addEventListener('DOMContentLoaded', function() {
       const originalButtonContent = submitButton.innerHTML;
 
       const currentUser = auth.currentUser;
-      if (!currentUser) {
-        alert('Please sign in before sending a message.');
-        return;
-      }
 
       submitButton.disabled = true;
+      submitButton.setAttribute('aria-busy', 'true');
       submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
 
       try {
-        await addDoc(collection(db, 'contactMessages'), {
+        const contactMessage = {
           name,
           email,
           subject,
           message,
-          senderId: currentUser.uid,
           status: 'new',
           source: 'landing-page',
           createdAt: serverTimestamp()
-        });
+        };
+        if (currentUser?.uid) contactMessage.senderId = currentUser.uid;
+        await addDoc(collection(db, 'contactMessages'), contactMessage);
 
         contactContainer.style.transition = 'opacity 0.3s ease';
         contactContainer.style.opacity = 0;
 
         setTimeout(() => {
         contactContainer.innerHTML = `
-          <div class="contact-success-card animate__animated animate__fadeIn">
+          <div class="contact-success-card animate__animated animate__fadeIn" role="status" aria-live="polite">
             <i class="fas fa-circle-check"></i>
             <h3>Message Sent!</h3>
-            <p>Thank you, <strong>${escapeHTML(name)}</strong>. Your message has been sent to our admin team. We will get back to you at <strong>${escapeHTML(email)}</strong> shortly.</p>
+            <p>Thank you, <strong>${escapeHTML(name)}</strong>. Your message has been submitted.</p>
           </div>
         `;
         contactContainer.style.opacity = 1;
       }, 300);
       } catch (error) {
         console.error('Error sending contact message:', error);
-        const errorMessage = error?.code === 'permission-denied'
-          ? 'Message sending is not authorized by Firestore rules. Please contact the administrator.'
-          : `Your message could not be sent: ${error?.message || 'Unknown error'}`;
-        alert(errorMessage);
+        alert('Your message could not be sent. Please try again later.');
         submitButton.disabled = false;
+        submitButton.removeAttribute('aria-busy');
         submitButton.innerHTML = originalButtonContent;
       }
     });

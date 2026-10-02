@@ -112,6 +112,13 @@
             </div>
           </div>
 
+          <section class="card admin-organization-inventory">
+            <div class="card-header">
+              <h3>Organization Inventory</h3>
+            </div>
+            <div class="table-container" id="adminOrganizationInventoryList" aria-live="polite"></div>
+          </section>
+
           <!-- Recent Activity -->
           <div class="card">
             <div class="card-header">
@@ -123,6 +130,40 @@
               <p><strong>Blood Requests (Pending):</strong> <span id="totalPendingRequests">0</span></p>
             </div>
           </div>
+        </div>
+
+        <div id="organizationInventoryDetailView" class="dashboard-view hidden admin-inventory-detail-view">
+          <button type="button" class="btn btn-secondary admin-inventory-back" data-action="back-to-organization-inventory">
+            <i class="fas fa-arrow-left" aria-hidden="true"></i> Back to Organization Inventory
+          </button>
+          <header class="admin-inventory-detail-header">
+            <p class="dashboard-subtitle">Organization Inventory</p>
+            <h1 id="adminOrganizationInventoryName">Organization</h1>
+            <div id="adminOrganizationInventoryMeta" class="admin-inventory-detail-meta"></div>
+          </header>
+          <section aria-labelledby="adminAvailableBloodHeading">
+            <div class="admin-inventory-section-heading">
+              <div>
+                <h2 id="adminAvailableBloodHeading">Available Blood Stock</h2>
+                <p class="dashboard-subtitle">Current unexpired available units by blood group</p>
+              </div>
+            </div>
+            <div id="adminOrganizationBloodGroupGrid" class="admin-blood-group-grid"></div>
+          </section>
+          <section class="card admin-inventory-total-card" aria-label="Total available units">
+            <div>
+              <p>Total Available Units</p>
+              <h2 id="adminOrganizationInventoryTotal">0</h2>
+            </div>
+            <i class="fas fa-tint" aria-hidden="true"></i>
+          </section>
+        </div>
+
+        <div id="adminProfileDetailView" class="dashboard-view hidden admin-profile-detail-view">
+          <button type="button" id="adminProfileBackButton" class="btn btn-secondary admin-inventory-back" data-action="back-to-admin-profiles">
+            <i class="fas fa-arrow-left" aria-hidden="true"></i> <span>Back</span>
+          </button>
+          <div id="adminProfileDetailContent"></div>
         </div>
 
         <!-- Donors Management View -->
