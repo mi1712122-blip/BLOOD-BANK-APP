@@ -12,7 +12,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
 import { authManager, getApprovalStatus } from '../../../assets/js/auth.js';
 import { isAvailableInventory } from '../../../assets/js/inventory.js';
-import { bloodRequestManager } from '../../../assets/js/requests.js';
+import { bloodRequestManager, compareRequestsByUrgency } from '../../../assets/js/requests.js';
 import { db } from '../../../assets/js/firebase-config.js';
 
 let currentAdmin = null;
@@ -25,6 +25,7 @@ let allInventoryItems = [];
 let allInventoryLogs = [];
 let allRequests = [];
 let allDonations = [];
+let allBloodIssues = [];
 let adminNotifications = [];
 let contactMessagesList = [];
 let adminInventoryPage = 1;
@@ -123,6 +124,7 @@ function setupRealtimeListeners() {
   onSnapshot(collection(db, 'organizations'), (snapshot) => {
     organizationsList = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
     updateAdminApprovalTotals();
+    updateAdminAvailableInventoryTotals();
     renderAdminOrganizationInventory();
     renderCurrentOrganizationInventoryDetail();
     loadOrganizationsData(snapshot);
@@ -162,6 +164,11 @@ function setupRealtimeListeners() {
     if (pendingElem) pendingElem.textContent = allRequests.filter(r => r.status === 'Pending').length;
     renderAdminInventory();
     renderAdminAnalytics();
+    renderCurrentAdminProfileDetails();
+  });
+
+  onSnapshot(collection(db, 'bloodIssues'), (snapshot) => {
+    allBloodIssues = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
     renderCurrentAdminProfileDetails();
   });
 
@@ -391,7 +398,7 @@ function renderAdminInventory() {
   });
 
   // Summary Metrics
-  const totalUnitsSum = Object.values(groupStats).reduce((sum, g) => sum + g.total, 0);
+  const totalUnitsSum = getAdminAvailableInventoryTotal();
   const activeGroupsCount = Object.values(groupStats).filter((g) => g.available > 0).length;
   const lowStockCount = Object.values(groupStats).filter((g) => g.available > 0 && g.available < 10).length;
   const expiredUnitsSum = Object.values(groupStats).reduce((sum, g) => sum + g.expired, 0);
@@ -700,7 +707,7 @@ function renderAdminAnalytics() {
   if (document.getElementById('analyticsTotalHospitals')) document.getElementById('analyticsTotalHospitals').textContent = countApprovedProfiles(hospitalsList);
   if (document.getElementById('analyticsTotalOrgs')) document.getElementById('analyticsTotalOrgs').textContent = countApprovedProfiles(organizationsList);
 
-  const totalUnits = allInventoryItems.reduce((sum, i) => sum + (Number(i.units) || 0), 0);
+  const totalUnits = getAdminAvailableInventoryTotal();
   if (document.getElementById('analyticsTotalUnits')) document.getElementById('analyticsTotalUnits').textContent = totalUnits;
   if (document.getElementById('analyticsTotalRequests')) document.getElementById('analyticsTotalRequests').textContent = filteredRequests.length;
 
@@ -812,7 +819,7 @@ function exportAnalyticsCSV() {
     ['Total Donors', countApprovedProfiles(donorsList)],
     ['Total Hospitals', countApprovedProfiles(hospitalsList)],
     ['Total Organizations', countApprovedProfiles(organizationsList)],
-    ['Total Blood Units', allInventoryItems.reduce((sum, i) => sum + (Number(i.units) || 0), 0)],
+    ['Total Blood Units', getAdminAvailableInventoryTotal()],
     ['Total Requests', allRequests.length],
     ['Completed Requests', allRequests.filter(r => r.status === 'Completed').length],
     ['Pending Requests', allRequests.filter(r => r.status === 'Pending').length],
@@ -1151,6 +1158,21 @@ function setupActionHandlers() {
   });
 }
 
+function getAdminAvailableInventoryTotal() {
+  const organizationIds = new Set(organizationsList.flatMap((organization) => [organization.uid, organization.id].filter(Boolean)));
+  return allInventoryItems.reduce((sum, item) => {
+    if (!organizationIds.has(item.organizationId) || !isAvailableInventory(item)) return sum;
+    const units = Number(item.units);
+    return Number.isFinite(units) && units > 0 ? sum + units : sum;
+  }, 0);
+}
+
+function updateAdminAvailableInventoryTotals() {
+  const total = getAdminAvailableInventoryTotal();
+  if (document.getElementById('adminTotalUnits')) document.getElementById('adminTotalUnits').textContent = total;
+  if (document.getElementById('analyticsTotalUnits')) document.getElementById('analyticsTotalUnits').textContent = total;
+}
+
 function getAdminOrganizationInventory(organization) {
   const organizationId = organization.uid || organization.id;
   const inventoryBloodGroups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
@@ -1250,14 +1272,27 @@ async function approveDonor(uid) {
 
 async function rejectDonor(uid) {
   try {
-    await updateUserApproval(uid, 'donor', 'Rejected');
+    const rejectionReason = getAccountRejectionReason();
+    if (!rejectionReason) return;
+    await updateUserApproval(uid, 'donor', 'Rejected', rejectionReason);
     alert('Donor rejected.');
   } catch (err) {
     alert('Failed to reject donor: ' + err.message);
   }
 }
 
-async function updateUserApproval(uid, role, status) {
+function getAccountRejectionReason() {
+  const reason = prompt('Please enter a reason for rejecting this account:');
+  const trimmedReason = reason?.trim();
+  return trimmedReason || null;
+}
+
+async function updateUserApproval(uid, role, status, rejectionReason = '') {
+  const normalizedRejectionReason = typeof rejectionReason === 'string' ? rejectionReason.trim() : '';
+  if (status === 'Rejected' && !normalizedRejectionReason) {
+    throw new Error('A rejection reason is required.');
+  }
+
   const profileCollection = role === 'donor' ? 'donors' : role === 'organization' ? 'organizations' : 'hospitals';
   const userRef = doc(db, 'users', uid);
   const profileRef = doc(db, profileCollection, uid);
@@ -1269,7 +1304,10 @@ async function updateUserApproval(uid, role, status) {
   const updatedAt = new Date();
   const approvalData = { status, isApproved: status === 'Approved', updatedAt };
   if (status === 'Approved') approvalData.approvedAt = updatedAt;
-  if (status === 'Rejected') approvalData.rejectedAt = updatedAt;
+  if (status === 'Rejected') {
+    approvalData.rejectedAt = updatedAt;
+    approvalData.rejectionReason = normalizedRejectionReason;
+  }
   batch.update(userRef, approvalData);
   batch.update(profileRef, approvalData);
 
@@ -1282,7 +1320,7 @@ async function updateUserApproval(uid, role, status) {
       title: 'Account Registration Update',
       message: status === 'Approved'
         ? 'Your account has been approved. You can now access the full Blood Bank Management System.'
-        : 'Your account registration has been rejected by the administrator. Please contact the administrator for further information.',
+        : `Your account registration has been rejected by the administrator.\n\nReason: ${normalizedRejectionReason}`,
       senderId: currentAdmin.uid,
       senderRole: 'admin',
       senderName: 'Administration',
@@ -1323,7 +1361,9 @@ async function approveOrg(uid) {
 
 async function rejectOrg(uid) {
   try {
-    await updateUserApproval(uid, 'organization', 'Rejected');
+    const rejectionReason = getAccountRejectionReason();
+    if (!rejectionReason) return;
+    await updateUserApproval(uid, 'organization', 'Rejected', rejectionReason);
     alert('Organization rejected.');
   } catch (err) {
     alert('Failed to reject organization: ' + err.message);
@@ -1353,7 +1393,9 @@ async function approveHospital(uid) {
 
 async function rejectHospital(uid) {
   try {
-    await updateUserApproval(uid, 'hospital', 'Rejected');
+    const rejectionReason = getAccountRejectionReason();
+    if (!rejectionReason) return;
+    await updateUserApproval(uid, 'hospital', 'Rejected', rejectionReason);
     alert('Hospital rejected.');
   } catch (err) {
     alert('Failed to reject hospital: ' + err.message);
@@ -1385,17 +1427,46 @@ function viewDonor(uid, navigate = true) {
   const donations = allDonations
     .filter((donation) => donation.donorId === donorId || donation.donorId === donor.id)
     .sort((a, b) => getTimestamp(b.donationDate || b.createdAt) - getTimestamp(a.donationDate || a.createdAt));
-  const history = donations.length
-    ? `<ul>${donations.map((donation) => `<li><strong>Date:</strong> ${escapeAdminDetail(formatDate(donation.donationDate || donation.createdAt))} &nbsp; <strong>Blood Group:</strong> ${escapeAdminDetail(donation.bloodGroup || 'Not available')} &nbsp; <strong>Units:</strong> ${escapeAdminDetail(donation.units ?? 'Not available')}</li>`).join('')}</ul>`
-    : '<p>No matching donation history found.</p>';
+  const totalDonationUnits = donations.reduce((sum, donation) => sum + (Number(donation.units) || 0), 0);
   const status = donor.status || getDonorStatus(donor);
   const eligibility = typeof donor.isEligible === 'boolean' ? (donor.isEligible ? 'Eligible' : 'Not eligible') : 'Not available';
   const accountStatus = typeof donor.isActive === 'boolean' ? (donor.isActive ? 'Active' : 'Inactive') : 'Not available';
   const photoUrl = getAdminProfileImageUrl(donor.profilePhoto || donor.photoURL || donor.photoUrl || donor.profileImage || donor.avatarUrl);
   const lastDonation = donor.lastDonationDate || donations[0]?.donationDate || donations[0]?.createdAt;
+  const organizationGroups = new Map();
+  donations.forEach((donation) => {
+    const organizationId = donation.organizationId;
+    if (!organizationId) return;
+    const key = String(organizationId);
+    const organization = organizationsList.find((item) => (item.uid || item.id) === key || item.id === key);
+    const group = organizationGroups.get(key) || {
+      name: organization?.organizationName || donation.organizationName || 'Organization',
+      count: 0,
+      units: 0,
+      latest: null
+    };
+    group.count += 1;
+    group.units += Number(donation.units) || 0;
+    const donationTime = getTimestamp(donation.donationDate || donation.createdAt);
+    if (donationTime > getTimestamp(group.latest)) group.latest = donation.donationDate || donation.createdAt;
+    organizationGroups.set(key, group);
+  });
+  const organizationRows = [...organizationGroups.entries()]
+    .sort((a, b) => getTimestamp(b[1].latest) - getTimestamp(a[1].latest))
+    .map(([organizationId, organization]) => `<tr><td>${escapeAdminDetail(organization.name)}</td><td>${escapeAdminDetail(organizationId)}</td><td>${organization.count}</td><td>${organization.units}</td><td>${escapeAdminDetail(formatDate(organization.latest, true))}</td></tr>`)
+    .join('');
+  const monthlyDonations = getMonthlyProfileSeries(donations, (donation) => donation.donationDate || donation.createdAt);
+  const donationHistory = donations.length
+    ? `<div class="admin-profile-table-wrap"><table class="admin-profile-table"><thead><tr><th>Date</th><th>Blood Group</th><th>Units</th><th>Organization</th><th>Status</th><th>Donation / Inventory Reference</th></tr></thead><tbody>${donations.map((donation) => `<tr><td>${escapeAdminDetail(formatDate(donation.donationDate || donation.createdAt, true))}</td><td>${escapeAdminDetail(donation.bloodGroup || 'Not available')}</td><td>${escapeAdminDetail(donation.units ?? 'Not available')}</td><td>${escapeAdminDetail(donation.organizationName || organizationsList.find((item) => (item.uid || item.id) === donation.organizationId || item.id === donation.organizationId)?.organizationName || 'Not available')}</td><td>${escapeAdminDetail(donation.status || 'Not available')}</td><td>${escapeAdminDetail(donation.donationId || donation.id || donation.inventoryId || 'Not available')}</td></tr>`).join('')}</tbody></table></div>`
+    : '<p class="admin-profile-empty-state">No donation history available yet.</p>';
+  const activity = donations
+    .filter((donation) => getTimestamp(donation.donationDate || donation.createdAt))
+    .slice(0, 10)
+    .map((donation) => `<li><strong>${escapeAdminDetail(formatDate(donation.donationDate || donation.createdAt, true))}</strong> — Donation recorded: ${escapeAdminDetail(donation.bloodGroup || 'Blood group unavailable')}, ${Number(donation.units) || 0} units${donation.organizationName ? ` at ${escapeAdminDetail(donation.organizationName)}` : ''}${donation.status ? ` (${escapeAdminDetail(donation.status)})` : ''}</li>`)
+    .join('');
 
   showAdminProfilePage({
-    title: 'Donor Profile', name: donor.fullName || 'Donor', backLabel: 'Back to Donors',
+    title: 'Donor Profile & Performance', name: donor.fullName || 'Donor', backLabel: 'Back to Donors',
     status, subtitle: donor.bloodGroup ? `Blood Group ${donor.bloodGroup}` : 'Donor account', imageUrl: photoUrl,
     details: [
       ['Blood Group', donor.bloodGroup], ['Email', donor.email], ['Phone', donor.phone],
@@ -1405,8 +1476,17 @@ function viewDonor(uid, navigate = true) {
       ['Eligibility', eligibility], ['Approval Status', status], ['Account Status', accountStatus],
       ['Registration Date', donor.createdAt ? formatDate(donor.createdAt) : null], ['Donor ID', donorId]
     ],
-    sections: [{ title: 'Donation History', content: history }]
+    sections: [
+      { title: 'Donation Performance', content: `<div class="admin-profile-metric-grid">${renderAdminProfileMetric('Total donations', donations.length)}${renderAdminProfileMetric('Units donated', totalDonationUnits)}${renderAdminProfileMetric('Organizations donated to', organizationGroups.size)}${renderAdminProfileMetric('Current eligibility', eligibility)}</div><p class="admin-profile-supporting-stat">Last donation: ${escapeAdminDetail(lastDonation ? formatDate(lastDonation, true) : 'Not available')}</p>` },
+      { title: 'Monthly Donation Activity', content: monthlyDonations ? '<div class="admin-org-chart-wrap"><canvas id="adminDonorDonationTrend" role="img" aria-label="Monthly donor donation activity"></canvas></div>' : '<p class="admin-org-empty-state">No historical data available yet.</p>' },
+      { title: 'Organizations Donated To', content: organizationRows ? `<div class="admin-profile-table-wrap"><table class="admin-profile-table"><thead><tr><th>Organization</th><th>Organization ID</th><th>Donations</th><th>Units</th><th>Most Recent Donation</th></tr></thead><tbody>${organizationRows}</tbody></table></div>` : '<p class="admin-org-empty-state">No linked organization donation records available.</p>' },
+      { title: 'Donation History', content: donationHistory },
+      { title: 'Recent Donor Activity', content: activity ? `<ul>${activity}</ul>` : '<p class="admin-org-empty-state">No timestamped donor activity available yet.</p>' }
+    ]
   });
+
+  resetAdminProfileCharts(['adminDonorDonationTrend']);
+  if (monthlyDonations) renderChart('adminDonorDonationTrend', 'Donations', monthlyDonations.labels, monthlyDonations.values, '#C1121F');
 }
 
 function viewOrg(uid, navigate = true) {
@@ -1423,28 +1503,147 @@ function viewOrg(uid, navigate = true) {
   const requests = allRequests.filter(belongsToOrganization).sort((a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt));
   const inventory = allInventoryItems.filter(belongsToOrganization);
   const inventoryHistory = allInventoryLogs.filter(belongsToOrganization).sort((a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt));
+  const bloodIssues = allBloodIssues.filter(belongsToOrganization).sort((a, b) => getTimestamp(b.issueDate || b.createdAt) - getTimestamp(a.issueDate || a.createdAt));
+  const now = Date.now();
+  const dayMilliseconds = 24 * 60 * 60 * 1000;
+  const availableInventory = inventory.filter((item) => isAvailableInventory(item));
+  const availableByGroup = Object.fromEntries(bloodGroups.map((group) => [group, 0]));
+  availableInventory.forEach((item) => {
+    if (Object.hasOwn(availableByGroup, item.bloodGroup)) availableByGroup[item.bloodGroup] += Number(item.units) || 0;
+  });
+  const expiringSoonUnits = availableInventory.reduce((sum, item) => {
+    const expiry = getTimestamp(item.expiryDate);
+    return expiry > now && expiry <= now + 30 * dayMilliseconds ? sum + (Number(item.units) || 0) : sum;
+  }, 0);
+  const expiredUnits = inventory.reduce((sum, item) => {
+    const expiry = getTimestamp(item.expiryDate);
+    return item.status === 'Available' && expiry && expiry <= now ? sum + Math.max(0, Number(item.units) || 0) : sum;
+  }, 0);
+  const usedBatches = inventory
+    .filter((item) => item.status === 'Used')
+    .length;
+  const totalDonations = donations.length;
+  const totalDonationUnits = donations.reduce((sum, item) => sum + (Number(item.units) || 0), 0);
+  const totalRequests = requests.length;
+  const totalRequestedUnits = requests.reduce((sum, item) => sum + (Number(item.units) || 0), 0);
+  const totalIssuedUnits = bloodIssues.reduce((sum, item) => sum + (Number(item.units) || 0), 0);
+  const requestStatusCounts = {
+    pending: requests.filter((item) => item.status === 'Pending').length,
+    processing: requests.filter((item) => item.status === 'Processing').length,
+    approved: requests.filter((item) => item.status === 'Approved').length,
+    rejected: requests.filter((item) => item.status === 'Rejected').length,
+    completed: requests.filter((item) => item.status === 'Completed').length,
+    cancelled: requests.filter((item) => item.status === 'Cancelled').length
+  };
   const status = organization.status || (typeof organization.isApproved === 'boolean' ? (organization.isApproved ? 'Approved' : 'Pending') : 'Not available');
+  const activity = [
+    ...donations.map((item) => ({ time: item.donationDate || item.createdAt, label: `Donation recorded: ${item.donorName || 'Donor'} — ${item.bloodGroup || 'Blood group unavailable'}, ${Number(item.units) || 0} units` })),
+    ...requests.map((item) => ({ time: item.createdAt, label: `Request received: ${item.hospitalName || 'Hospital'} — ${item.bloodGroup || 'Blood group unavailable'}, ${Number(item.units) || 0} units (${item.status || 'Status unavailable'})` })),
+    ...requests.filter((item) => item.approvedAt).map((item) => ({ time: item.approvedAt, label: `Request approved: ${item.hospitalName || 'Hospital'} — ${item.bloodGroup || 'Blood group unavailable'}` })),
+    ...requests.filter((item) => item.rejectedAt).map((item) => ({ time: item.rejectedAt, label: `Request rejected: ${item.hospitalName || 'Hospital'} — ${item.bloodGroup || 'Blood group unavailable'}` })),
+    ...requests.filter((item) => item.cancelledAt).map((item) => ({ time: item.cancelledAt, label: `Request cancelled: ${item.hospitalName || 'Hospital'} — ${item.bloodGroup || 'Blood group unavailable'}` })),
+    ...bloodIssues.map((item) => ({ time: item.issueDate || item.createdAt, label: `Blood issued: ${item.hospitalName || 'Hospital'} — ${item.bloodGroup || 'Blood group unavailable'}, ${Number(item.units) || 0} units` })),
+    ...inventoryHistory.map((item) => ({ time: item.date || item.createdAt, label: `Inventory ${item.reason || 'updated'}: ${item.bloodGroup || 'Blood group unavailable'}, ${Number(item.difference ?? item.units) || 0} units` }))
+  ].filter((item) => getTimestamp(item.time)).sort((a, b) => getTimestamp(b.time) - getTimestamp(a.time)).slice(0, 12);
+  const monthlySeries = (records, dateSelector, metric = () => 1) => {
+    const buckets = new Map();
+    records.forEach((record) => {
+      const timestamp = getTimestamp(dateSelector(record));
+      if (!timestamp) return;
+      const date = new Date(timestamp);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      buckets.set(key, (buckets.get(key) || 0) + metric(record));
+    });
+    const keys = [...buckets.keys()].sort();
+    if (keys.length < 2) return null;
+    return { labels: keys.map((key) => new Date(`${key}-01T00:00:00`).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })), values: keys.map((key) => buckets.get(key)) };
+  };
+  const donationTrend = monthlySeries(donations, (item) => item.donationDate || item.createdAt);
+  const requestTrend = monthlySeries(requests, (item) => item.createdAt);
+  const issueTrend = monthlySeries(bloodIssues, (item) => item.issueDate || item.createdAt, (item) => Number(item.units) || 0);
+  const inventoryTrend = monthlySeries(inventoryHistory, (item) => item.date || item.createdAt, (item) => Number(item.difference ?? item.units) || 0);
   const activityList = (items, renderItem, emptyMessage) => items.length
     ? `<ul>${items.slice(0, 10).map(renderItem).join('')}</ul>`
     : `<p>${emptyMessage}</p>`;
+  const renderTrend = (trend, canvasId, title) => trend
+    ? `<div class="admin-org-chart-wrap"><canvas id="${canvasId}" aria-label="${title}" role="img"></canvas></div>`
+    : `<p class="admin-org-empty-state">No historical data available yet.</p>`;
+  const metricCard = (label, value) => `<article class="admin-org-metric"><span>${escapeAdminDetail(label)}</span><strong>${escapeAdminDetail(value)}</strong></article>`;
+
+  const availableInventorySummary = { totalsByGroup: availableByGroup, total: Object.values(availableByGroup).reduce((sum, units) => sum + units, 0) };
 
   showAdminRecordDetails('Organization Details', `
-    <div class="details-grid">
-      ${adminDetailField('Name', organization.organizationName)}
-      ${adminDetailField('Email', organization.email)}
-      ${adminDetailField('Phone', organization.phone)}
-      ${adminDetailField('Address', organization.address)}
-      ${adminDetailField('City', organization.city)}
-      ${adminDetailField('License Number', organization.licenseNumber)}
-      ${adminDetailField('Status', status)}
-      ${adminDetailField('Registration Date', organization.createdAt ? formatDate(organization.createdAt) : null)}
-      ${adminDetailField('Organization ID', organizationId)}
-    </div>
-    <section class="admin-record-activity" style="margin-top: 18px;"><h3>Donation Activity</h3>${activityList(donations, (item) => `<li>${escapeAdminDetail(item.donorName || 'Donor')} — ${escapeAdminDetail(item.bloodGroup || 'Not available')}, ${escapeAdminDetail(item.units ?? 'Not available')} units, ${escapeAdminDetail(formatDate(item.donationDate || item.createdAt))}</li>`, 'No matching donation activity found.')}</section>
-    <section class="admin-record-activity" style="margin-top: 18px;"><h3>Requests</h3>${activityList(requests, (item) => `<li>${escapeAdminDetail(item.hospitalName || 'Hospital')} — ${escapeAdminDetail(item.bloodGroup || 'Not available')}, ${escapeAdminDetail(item.units ?? 'Not available')} units, ${escapeAdminDetail(item.status || 'Status not available')}, ${escapeAdminDetail(formatDate(item.createdAt))}</li>`, 'No matching requests found.')}</section>
-    <section class="admin-record-activity" style="margin-top: 18px;"><h3>Current Inventory</h3>${activityList(inventory, (item) => `<li>${escapeAdminDetail(item.bloodGroup || 'Blood group not available')} — ${escapeAdminDetail(item.units ?? 'Not available')} units, ${escapeAdminDetail(item.status || 'Status not available')}</li>`, 'No matching inventory found.')}</section>
-    <section class="admin-record-activity" style="margin-top: 18px;"><h3>Inventory History</h3>${activityList(inventoryHistory, (item) => `<li>${escapeAdminDetail(item.bloodGroup || 'Blood group not available')} — ${escapeAdminDetail(item.reason || 'Inventory update')}, ${escapeAdminDetail(item.difference ?? 'Not available')} units, ${escapeAdminDetail(formatDate(item.createdAt))}</li>`, 'No matching inventory history found.')}</section>
+    <section class="admin-org-summary-grid">
+      ${metricCard('Available blood units', availableInventorySummary.total)}
+      ${metricCard('Total donations', totalDonations)}
+      ${metricCard('Total blood requests', totalRequests)}
+      ${metricCard('Units requested', totalRequestedUnits)}
+      ${metricCard('Units issued', totalIssuedUnits)}
+      ${metricCard('Approval status', status)}
+    </section>
+    <section class="card admin-profile-section"><div class="card-header"><h2>Inventory Performance</h2></div>
+      ${renderAdminBloodGroupSummary(availableInventorySummary)}
+      <div class="admin-org-summary-grid admin-org-summary-grid-compact">
+        ${metricCard('Expiring within 30 days', `${expiringSoonUnits} units`)}
+        ${metricCard('Expired inventory units', `${expiredUnits} units`)}
+        ${metricCard('Used inventory batches', usedBatches)}
+      </div>
+      <div class="admin-record-activity"><h3>Inventory History</h3>${activityList(inventoryHistory, (item) => `<li>${escapeAdminDetail(item.bloodGroup || 'Blood group unavailable')} — ${escapeAdminDetail(item.reason || 'Inventory update')}, ${escapeAdminDetail(item.difference ?? item.units ?? 'Not available')} units, ${escapeAdminDetail(formatDate(item.date || item.createdAt, true))}</li>`, 'No matching inventory history found.')}</div>
+    </section>
+    <section class="card admin-profile-section"><div class="card-header"><h2>Performance Analytics</h2></div>
+      <div class="admin-org-analytics-grid">
+        <article class="admin-org-chart-card"><h3>Donations over time</h3>${renderTrend(donationTrend, 'adminOrgDonationTrend', 'Donations over time')}</article>
+        <article class="admin-org-chart-card"><h3>Requests over time</h3>${renderTrend(requestTrend, 'adminOrgRequestTrend', 'Requests over time')}</article>
+        <article class="admin-org-chart-card"><h3>Blood issued over time (units)</h3>${renderTrend(issueTrend, 'adminOrgIssueTrend', 'Blood issued over time')}</article>
+        <article class="admin-org-chart-card"><h3>Inventory changes over time (units)</h3>${renderTrend(inventoryTrend, 'adminOrgInventoryTrend', 'Inventory changes over time')}</article>
+      </div>
+    </section>
+    <section class="card admin-profile-section"><div class="card-header"><h2>Donation Performance</h2></div>
+      <div class="admin-org-summary-grid admin-org-summary-grid-compact">${metricCard('Donations received', totalDonations)}${metricCard('Units received', totalDonationUnits)}</div>
+      <div class="admin-record-activity"><h3>Recent Donations</h3>${activityList(donations, (item) => `<li>${escapeAdminDetail(item.donorName || 'Donor')} — ${escapeAdminDetail(item.bloodGroup || 'Blood group unavailable')}, ${Number(item.units) || 0} units, ${escapeAdminDetail(formatDate(item.donationDate || item.createdAt, true))}</li>`, 'No donation activity available yet.')}</div>
+    </section>
+    <section class="card admin-profile-section"><div class="card-header"><h2>Blood Requests &amp; Issues</h2></div>
+      <div class="admin-org-summary-grid admin-org-summary-grid-compact">
+        ${metricCard('Pending / processing', `${requestStatusCounts.pending} / ${requestStatusCounts.processing}`)}
+        ${metricCard('Approved', requestStatusCounts.approved)}
+        ${metricCard('Rejected', requestStatusCounts.rejected)}
+        ${metricCard('Completed / issued', requestStatusCounts.completed)}
+        ${metricCard('Cancelled', requestStatusCounts.cancelled)}
+        ${metricCard('Issue records', bloodIssues.length)}
+      </div>
+      <div class="admin-record-activity"><h3>Recent Requests</h3>${activityList(requests, (item) => `<li>${escapeAdminDetail(item.hospitalName || 'Hospital')} — ${escapeAdminDetail(item.bloodGroup || 'Blood group unavailable')}, ${Number(item.units) || 0} requested units, ${escapeAdminDetail(item.status || 'Status unavailable')}, ${escapeAdminDetail(formatDate(item.createdAt, true))}${item.issueDetails?.unitsIssued !== undefined ? `, ${Number(item.issueDetails.unitsIssued) || 0} issued units` : ''}</li>`, 'No matching requests found.')}</div>
+    </section>
+    <section class="card admin-profile-section"><div class="card-header"><h2>Recent Organization Activity</h2></div>
+      ${activityList(activity, (item) => `<li><strong>${escapeAdminDetail(formatDate(item.time, true))}</strong> — ${escapeAdminDetail(item.label)}</li>`, 'No historical data available yet.')}
+    </section>
+    <section class="card admin-profile-section"><div class="card-header"><h2>Organization Details</h2></div>
+      <div class="details-grid admin-profile-details-grid">
+        ${adminDetailField('Name', organization.organizationName)}
+        ${adminDetailField('Organization ID', organizationId)}
+        ${adminDetailField('Email', organization.email)}
+        ${adminDetailField('Phone', organization.phone)}
+        ${adminDetailField('Address', organization.address)}
+        ${adminDetailField('City', organization.city)}
+        ${adminDetailField('License Number', organization.licenseNumber)}
+        ${adminDetailField('Status', status)}
+        ${adminDetailField('Registration Date', organization.createdAt ? formatDate(organization.createdAt) : null)}
+      </div>
+      <div class="admin-record-activity"><h3>Current Inventory Records</h3>${activityList(inventory, (item) => `<li>${escapeAdminDetail(item.bloodGroup || 'Blood group unavailable')} — ${Number(item.units) || 0} units, ${escapeAdminDetail(item.status || 'Status unavailable')}, expiry ${escapeAdminDetail(formatDate(item.expiryDate))}</li>`, 'No matching inventory found.')}</div>
+      <div class="admin-record-activity"><h3>Recent Blood Issues</h3>${activityList(bloodIssues, (item) => `<li>${escapeAdminDetail(item.hospitalName || 'Hospital')} — ${escapeAdminDetail(item.bloodGroup || 'Blood group unavailable')}, ${Number(item.units) || 0} units, ${escapeAdminDetail(formatDate(item.issueDate || item.createdAt, true))}</li>`, 'No blood issue records available yet.')}</div>
+    </section>
   `);
+
+  const organizationChartIds = ['adminOrgDonationTrend', 'adminOrgRequestTrend', 'adminOrgIssueTrend', 'adminOrgInventoryTrend'];
+  organizationChartIds.forEach((id) => {
+    if (chartInstances[id]) {
+      chartInstances[id].destroy();
+      delete chartInstances[id];
+    }
+  });
+  if (donationTrend) renderChart('adminOrgDonationTrend', 'Donations', donationTrend.labels, donationTrend.values, '#C1121F');
+  if (requestTrend) renderChart('adminOrgRequestTrend', 'Requests', requestTrend.labels, requestTrend.values, '#0077B6');
+  if (issueTrend) renderChart('adminOrgIssueTrend', 'Units issued', issueTrend.labels, issueTrend.values, '#2A9D8F');
+  if (inventoryTrend) renderChart('adminOrgInventoryTrend', 'Inventory unit change', inventoryTrend.labels, inventoryTrend.values, '#7209B7');
 }
 
 function viewHospital(uid, navigate = true) {
@@ -1458,31 +1657,156 @@ function viewHospital(uid, navigate = true) {
   const hospitalId = hospital.uid || hospital.id;
   const requests = allRequests
     .filter((request) => request.hospitalId === hospitalId || request.hospitalId === hospital.id)
-    .sort((a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt));
+    .sort(compareRequestsByUrgency);
+  const requestIds = new Set(requests.map((request) => String(request.id)));
+  const hospitalIssues = allBloodIssues
+    .filter((issue) => issue.requestId && requestIds.has(String(issue.requestId)))
+    .sort((a, b) => getTimestamp(b.issueDate || b.createdAt) - getTimestamp(a.issueDate || a.createdAt));
+  const issueByRequestId = new Map();
+  hospitalIssues.forEach((issue) => {
+    if (!issueByRequestId.has(String(issue.requestId))) issueByRequestId.set(String(issue.requestId), issue);
+  });
+  const issuedUnitsForRequest = (request) => {
+    const issue = issueByRequestId.get(String(request.id));
+    if (issue && issue.units !== null && issue.units !== undefined && Number.isFinite(Number(issue.units))) return Number(issue.units);
+    const fallbackUnits = Number(request.issueDetails?.unitsIssued);
+    return Number.isFinite(fallbackUnits) ? fallbackUnits : 0;
+  };
+  const totalRequestedUnits = requests.reduce((sum, request) => sum + (Number(request.units) || 0), 0);
+  const totalIssuedUnits = requests.reduce((sum, request) => sum + issuedUnitsForRequest(request), 0);
+  const requestStatusCounts = {
+    pending: requests.filter((request) => request.status === 'Pending').length,
+    processing: requests.filter((request) => request.status === 'Processing').length,
+    approved: requests.filter((request) => request.status === 'Approved').length,
+    completed: requests.filter((request) => request.status === 'Completed').length,
+    rejected: requests.filter((request) => request.status === 'Rejected').length,
+    cancelled: requests.filter((request) => request.status === 'Cancelled').length
+  };
+  const monthlyRequests = getMonthlyProfileSeries(requests, (request) => request.createdAt);
+  const monthlyIssues = getMonthlyProfileSeries(
+    requests.filter((request) => issuedUnitsForRequest(request) > 0),
+    (request) => issueByRequestId.get(String(request.id))?.issueDate || issueByRequestId.get(String(request.id))?.createdAt || request.issuedAt || request.completedAt || request.updatedAt,
+    issuedUnitsForRequest
+  );
+  const organizationGroups = new Map();
+  requests.forEach((request) => {
+    const issue = issueByRequestId.get(String(request.id));
+    const organizationId = issue?.organizationId || request.organizationId;
+    if (!organizationId) return;
+    const key = String(organizationId);
+    const organization = organizationsList.find((item) => (item.uid || item.id) === key || item.id === key);
+    const group = organizationGroups.get(key) || {
+      name: organization?.organizationName || issue?.organizationName || request.organizationName || 'Organization',
+      requests: 0,
+      issuedUnits: 0,
+      latest: null
+    };
+    group.requests += 1;
+    group.issuedUnits += issuedUnitsForRequest(request);
+    const interactionTime = issue?.issueDate || issue?.createdAt || request.createdAt;
+    if (getTimestamp(interactionTime) > getTimestamp(group.latest)) group.latest = interactionTime;
+    organizationGroups.set(key, group);
+  });
+  const organizationRows = [...organizationGroups.entries()]
+    .sort((a, b) => getTimestamp(b[1].latest) - getTimestamp(a[1].latest))
+    .map(([organizationId, organization]) => `<tr><td>${escapeAdminDetail(organization.name)}</td><td>${escapeAdminDetail(organizationId)}</td><td>${organization.requests}</td><td>${organization.issuedUnits}</td><td>${escapeAdminDetail(formatDate(organization.latest, true))}</td></tr>`)
+    .join('');
   const requestHistory = requests.length
-    ? `<ul>${requests.slice(0, 10).map((request) => `<li>${escapeAdminDetail(request.bloodGroup || 'Blood group not available')} — ${escapeAdminDetail(request.units ?? 'Not available')} units, ${escapeAdminDetail(request.status || 'Status not available')}, ${escapeAdminDetail(formatDate(request.createdAt))}${request.organizationName ? `, ${escapeAdminDetail(request.organizationName)}` : ''}</li>`).join('')}</ul>`
-    : '<p>No matching request activity found.</p>';
+    ? `<div class="admin-profile-table-wrap"><table class="admin-profile-table"><thead><tr><th>Request Date</th><th>Blood Group</th><th>Units Requested</th><th>Status</th><th>Organization</th><th>Units Issued</th><th>Issue Date</th></tr></thead><tbody>${requests.slice(0, 50).map((request) => {
+      const issue = issueByRequestId.get(String(request.id));
+      const issueDate = issue?.issueDate || issue?.createdAt || request.issuedAt || request.completedAt;
+      return `<tr><td>${escapeAdminDetail(formatDate(request.createdAt, true))}</td><td>${escapeAdminDetail(request.bloodGroup || 'Not available')}</td><td>${escapeAdminDetail(request.units ?? 'Not available')}</td><td>${escapeAdminDetail(request.status || 'Not available')}</td><td>${escapeAdminDetail(request.organizationName || issue?.organizationName || 'Not available')}</td><td>${issuedUnitsForRequest(request)}</td><td>${escapeAdminDetail(issueDate ? formatDate(issueDate, true) : 'Not available')}</td></tr>`;
+    }).join('')}</tbody></table></div>${requests.length > 50 ? `<p class="admin-profile-supporting-stat">Showing 50 of ${requests.length} requests.</p>` : ''}`
+    : '<p class="admin-profile-empty-state">No request history available yet.</p>';
+  const activity = [
+    ...requests.filter((request) => getTimestamp(request.createdAt)).map((request) => ({ time: request.createdAt, label: `Blood request created: ${request.bloodGroup || 'Blood group unavailable'}, ${Number(request.units) || 0} units (${request.status || 'Status unavailable'})` })),
+    ...requests.filter((request) => request.approvedAt).map((request) => ({ time: request.approvedAt, label: `Request approved: ${request.bloodGroup || 'Blood group unavailable'}` })),
+    ...requests.filter((request) => request.rejectedAt).map((request) => ({ time: request.rejectedAt, label: `Request rejected: ${request.bloodGroup || 'Blood group unavailable'}` })),
+    ...requests.filter((request) => request.cancelledAt).map((request) => ({ time: request.cancelledAt, label: `Request cancelled: ${request.bloodGroup || 'Blood group unavailable'}` })),
+    ...requests.filter((request) => request.completedAt).map((request) => ({ time: request.completedAt, label: `Request completed: ${request.bloodGroup || 'Blood group unavailable'}` })),
+    ...requests.filter((request) => !issueByRequestId.has(String(request.id)) && Number(request.issueDetails?.unitsIssued) > 0)
+      .map((request) => ({ time: request.issuedAt || request.completedAt, label: `Blood issued: ${request.bloodGroup || 'Blood group unavailable'}, ${Number(request.issueDetails.unitsIssued)} units` })),
+    ...hospitalIssues.map((issue) => ({ time: issue.issueDate || issue.createdAt, label: `Blood issued: ${issue.bloodGroup || 'Blood group unavailable'}, ${Number(issue.units) || 0} units` }))
+  ].filter((event) => getTimestamp(event.time)).sort((a, b) => getTimestamp(b.time) - getTimestamp(a.time)).slice(0, 15)
+    .map((event) => `<li><strong>${escapeAdminDetail(formatDate(event.time, true))}</strong> — ${escapeAdminDetail(event.label)}</li>`).join('');
   const status = hospital.status || (typeof hospital.isApproved === 'boolean' ? (hospital.isApproved ? 'Approved' : 'Pending') : 'Not available');
 
   showAdminRecordDetails('Hospital Details', `
-    <div class="details-grid">
-      ${adminDetailField('Name', hospital.hospitalName)}
-      ${adminDetailField('Email', hospital.email)}
-      ${adminDetailField('Phone', hospital.phone)}
-      ${adminDetailField('Address', hospital.address)}
-      ${adminDetailField('City', hospital.city)}
-      ${adminDetailField('License Number', hospital.licenseNumber)}
-      ${adminDetailField('Status', status)}
-      ${adminDetailField('Registration Date', hospital.createdAt ? formatDate(hospital.createdAt) : null)}
-      ${adminDetailField('Hospital ID', hospitalId)}
-    </div>
-    <section class="admin-record-activity" style="margin-top: 18px;"><h3>Request Activity</h3>${requestHistory}</section>
+    <section class="admin-org-summary-grid">
+      ${renderAdminProfileMetric('Total requests', requests.length)}
+      ${renderAdminProfileMetric('Units requested', totalRequestedUnits)}
+      ${renderAdminProfileMetric('Units issued / received', totalIssuedUnits)}
+      ${renderAdminProfileMetric('Pending requests', requestStatusCounts.pending)}
+      ${renderAdminProfileMetric('Processing requests', requestStatusCounts.processing)}
+      ${renderAdminProfileMetric('Approved requests', requestStatusCounts.approved)}
+      ${renderAdminProfileMetric('Completed requests', requestStatusCounts.completed)}
+      ${renderAdminProfileMetric('Rejected requests', requestStatusCounts.rejected)}
+      ${renderAdminProfileMetric('Cancelled requests', requestStatusCounts.cancelled)}
+    </section>
+    <section class="card admin-profile-section"><div class="card-header"><h2>Request Performance</h2></div>
+      <div class="admin-org-analytics-grid">
+        <article class="admin-org-chart-card"><h3>Monthly Blood Request Activity</h3>${monthlyRequests ? '<div class="admin-org-chart-wrap"><canvas id="adminHospitalRequestTrend" role="img" aria-label="Monthly blood request activity"></canvas></div>' : '<p class="admin-org-empty-state">No historical data available yet.</p>'}</article>
+        <article class="admin-org-chart-card"><h3>Blood Issued Activity (units)</h3>${monthlyIssues ? '<div class="admin-org-chart-wrap"><canvas id="adminHospitalIssueTrend" role="img" aria-label="Monthly blood issued activity"></canvas></div>' : '<p class="admin-org-empty-state">No historical data available yet.</p>'}</article>
+      </div>
+    </section>
+    <section class="card admin-profile-section"><div class="card-header"><h2>Organizations Worked With</h2></div>
+      ${organizationRows ? `<div class="admin-profile-table-wrap"><table class="admin-profile-table"><thead><tr><th>Organization</th><th>Organization ID</th><th>Requests</th><th>Units Issued</th><th>Most Recent Interaction</th></tr></thead><tbody>${organizationRows}</tbody></table></div>` : '<p class="admin-org-empty-state">No linked organization request or issue records available.</p>'}
+    </section>
+    <section class="card admin-profile-section"><div class="card-header"><h2>Request History</h2></div>${requestHistory}</section>
+    <section class="card admin-profile-section"><div class="card-header"><h2>Recent Hospital Activity</h2></div>${activity ? `<ul>${activity}</ul>` : '<p class="admin-org-empty-state">No timestamped hospital activity available yet.</p>'}</section>
+    <section class="card admin-profile-section"><div class="card-header"><h2>Hospital Details</h2></div>
+      <div class="details-grid admin-profile-details-grid">
+        ${adminDetailField('Name', hospital.hospitalName)}
+        ${adminDetailField('Hospital ID', hospitalId)}
+        ${adminDetailField('Email', hospital.email)}
+        ${adminDetailField('Phone', hospital.phone)}
+        ${adminDetailField('Address', hospital.address)}
+        ${adminDetailField('City', hospital.city)}
+        ${adminDetailField('License Number', hospital.licenseNumber)}
+        ${adminDetailField('Status', status)}
+        ${adminDetailField('Registration Date', hospital.createdAt ? formatDate(hospital.createdAt) : null)}
+      </div>
+    </section>
   `);
+
+  resetAdminProfileCharts(['adminHospitalRequestTrend', 'adminHospitalIssueTrend']);
+  if (monthlyRequests) renderChart('adminHospitalRequestTrend', 'Requests', monthlyRequests.labels, monthlyRequests.values, '#0077B6');
+  if (monthlyIssues) renderChart('adminHospitalIssueTrend', 'Units issued', monthlyIssues.labels, monthlyIssues.values, '#2A9D8F');
 }
 
 function adminDetailField(label, value) {
   const displayValue = value === null || value === undefined || value === '' ? 'Not available' : value;
   return `<div><strong>${escapeAdminDetail(label)}:</strong> ${escapeAdminDetail(displayValue)}</div>`;
+}
+
+function renderAdminProfileMetric(label, value) {
+  return `<article class="admin-org-metric"><span>${escapeAdminDetail(label)}</span><strong>${escapeAdminDetail(value)}</strong></article>`;
+}
+
+function getMonthlyProfileSeries(records, dateSelector, valueSelector = () => 1) {
+  const totals = new Map();
+  records.forEach((record) => {
+    const timestamp = getTimestamp(dateSelector(record));
+    if (!timestamp) return;
+    const date = new Date(timestamp);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    totals.set(key, (totals.get(key) || 0) + valueSelector(record));
+  });
+  const months = [...totals.keys()].sort();
+  if (months.length < 2) return null;
+  return {
+    labels: months.map((month) => new Date(`${month}-01T00:00:00`).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })),
+    values: months.map((month) => totals.get(month))
+  };
+}
+
+function resetAdminProfileCharts(chartIds) {
+  chartIds.forEach((id) => {
+    if (chartInstances[id]) {
+      chartInstances[id].destroy();
+      delete chartInstances[id];
+    }
+  });
 }
 
 function escapeAdminDetail(value) {
@@ -1517,6 +1841,10 @@ function showAdminProfilePage({ title, name, backLabel, status, subtitle, imageU
   const content = document.getElementById('adminProfileDetailContent');
   const backButton = document.getElementById('adminProfileBackButton');
   if (!content || !backButton) return;
+  resetAdminProfileCharts([
+    'adminOrgDonationTrend', 'adminOrgRequestTrend', 'adminOrgIssueTrend', 'adminOrgInventoryTrend',
+    'adminDonorDonationTrend', 'adminHospitalRequestTrend', 'adminHospitalIssueTrend'
+  ]);
   backButton.querySelector('span').textContent = backLabel || 'Back';
   const image = imageUrl
     ? `<img class="admin-profile-avatar" src="${escapeAdminDetail(imageUrl)}" alt="${escapeAdminDetail(name)} profile image">`
@@ -1576,7 +1904,7 @@ function showAdminRecordDetails(title, content) {
       }
       sections.push({ title: title.replace(/ Details$/, ''), content });
       showAdminProfilePage({
-        title: `${isDonor ? 'Donor' : isOrganization ? 'Organization' : 'Hospital'} Profile`,
+        title: isOrganization ? 'Organization Profile & Performance' : `${isDonor ? 'Donor' : 'Hospital'} Profile`,
         name: name || (isDonor ? 'Donor' : isOrganization ? 'Organization' : 'Hospital'),
         backLabel: `Back to ${isDonor ? 'Donors' : isOrganization ? 'Organizations' : 'Hospitals'}`,
         status,

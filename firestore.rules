@@ -68,11 +68,12 @@ service cloud.firestore {
           && request.resource.data.role == resource.data.role
           && request.resource.data.uid == resource.data.uid
           && request.resource.data.status == resource.data.status
-          && request.resource.data.isApproved == resource.data.isApproved)
+          && request.resource.data.isApproved == resource.data.isApproved
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rejectionReason']))
         || (isAdmin()
           && request.resource.data.role == resource.data.role
           && request.resource.data.uid == resource.data.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'isApproved', 'updatedAt', 'approvedAt', 'rejectedAt']))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'isApproved', 'updatedAt', 'approvedAt', 'rejectedAt', 'rejectionReason']))
       );
       allow delete: if isAdmin();
     }
@@ -87,9 +88,10 @@ service cloud.firestore {
           (isOwner(userId)
             && hasApprovedAccount()
             && request.resource.data.status == resource.data.status
-            && request.resource.data.isApproved == resource.data.isApproved)
+            && request.resource.data.isApproved == resource.data.isApproved
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rejectionReason']))
           || (isAdmin()
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'isApproved', 'updatedAt', 'approvedAt', 'rejectedAt']))
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'isApproved', 'updatedAt', 'approvedAt', 'rejectedAt', 'rejectionReason']))
           || (isActiveOrganization()
             && isEligibleApprovedDonor(userId)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalDonations', 'lastDonationDate', 'lastDonationId', 'updatedAt'])
@@ -113,8 +115,9 @@ service cloud.firestore {
       allow update: if isSignedIn() && ((isOwner(orgId)
         && hasApprovedAccount()
         && request.resource.data.status == resource.data.status
-        && request.resource.data.isApproved == resource.data.isApproved)
-        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'isApproved', 'updatedAt', 'approvedAt', 'rejectedAt'])));
+        && request.resource.data.isApproved == resource.data.isApproved
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rejectionReason']))
+        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'isApproved', 'updatedAt', 'approvedAt', 'rejectedAt', 'rejectionReason'])));
       allow delete: if isAdmin();
     }
 
@@ -126,8 +129,9 @@ service cloud.firestore {
       allow update: if isSignedIn() && ((isOwner(hospitalId)
         && hasApprovedAccount()
         && request.resource.data.status == resource.data.status
-        && request.resource.data.isApproved == resource.data.isApproved)
-        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'isApproved', 'updatedAt', 'approvedAt', 'rejectedAt'])));
+        && request.resource.data.isApproved == resource.data.isApproved
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rejectionReason']))
+        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'isApproved', 'updatedAt', 'approvedAt', 'rejectedAt', 'rejectionReason'])));
       allow delete: if isAdmin();
     }
 

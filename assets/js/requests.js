@@ -15,6 +15,31 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
 import { db } from './firebase-config.js';
 
+const REQUEST_URGENCY_PRIORITY = { emergency: 3, urgent: 2, normal: 1 };
+
+function getRequestTimestamp(value) {
+  try {
+    if (value == null) return 0;
+    if (typeof value.toMillis === 'function') {
+      const milliseconds = value.toMillis();
+      return Number.isFinite(milliseconds) ? milliseconds : 0;
+    }
+    if (typeof value.seconds === 'number') return value.seconds * 1000;
+    if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : 0;
+    const milliseconds = new Date(value).getTime();
+    return Number.isFinite(milliseconds) ? milliseconds : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function compareRequestsByUrgency(a, b) {
+  const urgencyValue = (request) => String(request?.urgencyLevel ?? request?.urgency ?? 'Normal').trim().toLowerCase();
+  const aPriority = REQUEST_URGENCY_PRIORITY[urgencyValue(a)] || REQUEST_URGENCY_PRIORITY.normal;
+  const bPriority = REQUEST_URGENCY_PRIORITY[urgencyValue(b)] || REQUEST_URGENCY_PRIORITY.normal;
+  if (aPriority !== bPriority) return bPriority - aPriority;
+  return getRequestTimestamp(b?.createdAt) - getRequestTimestamp(a?.createdAt);
+}
 class BloodRequestManager {
   constructor() {
     this.requestStatus = {
@@ -195,11 +220,7 @@ class BloodRequestManager {
         requests.push({ id: docSnap.id, ...docSnap.data() });
       });
 
-      requests.sort((a, b) => {
-        const aTime = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : new Date(a.createdAt || 0).getTime();
-        const bTime = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : new Date(b.createdAt || 0).getTime();
-        return bTime - aTime;
-      });
+      requests.sort(compareRequestsByUrgency)
 
       return { success: true, data: requests };
     } catch (error) {
@@ -229,11 +250,7 @@ class BloodRequestManager {
         });
       });
 
-      const requests = [...requestMap.values()].sort((a, b) => {
-        const aTime = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : new Date(a.createdAt || 0).getTime();
-        const bTime = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : new Date(b.createdAt || 0).getTime();
-        return bTime - aTime;
-      });
+      const requests = [...requestMap.values()].sort(compareRequestsByUrgency)
 
       return { success: true, data: requests };
     } catch (error) {
@@ -444,11 +461,7 @@ class BloodRequestManager {
         });
       });
 
-      requests.sort((a, b) => {
-        const aTime = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : new Date(a.createdAt || 0).getTime();
-        const bTime = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : new Date(b.createdAt || 0).getTime();
-        return bTime - aTime;
-      });
+      requests.sort(compareRequestsByUrgency)
 
       return { success: true, data: requests };
     } catch (error) {
@@ -478,11 +491,7 @@ class BloodRequestManager {
             });
           });
 
-          requests.sort((a, b) => {
-            const aTime = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : new Date(a.createdAt || 0).getTime();
-            const bTime = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : new Date(b.createdAt || 0).getTime();
-            return bTime - aTime;
-          });
+          requests.sort(compareRequestsByUrgency)
 
           callback({ success: true, data: requests });
         },

@@ -79,36 +79,142 @@
             <h2>Hospital Dashboard</h2>
           </div>
 
-          <!-- Stats Cards -->
-          <div class="dashboard-grid">
-            <div class="card stat-card">
-              <h3 id="activeRequests">0</h3>
-              <p>Active Requests</p>
+          <section class="hospital-overview-section" aria-labelledby="hospitalRequestOverviewHeading">
+            <div class="hospital-overview-section-heading">
+              <div>
+                <h3 id="hospitalRequestOverviewHeading">Request Overview</h3>
+                <p>Track requests by their current status.</p>
+              </div>
             </div>
-            <div class="card stat-card">
-              <h3 id="approvedRequests">0</h3>
-              <p>Approved Requests</p>
+            <div class="dashboard-grid hospital-request-metrics">
+              <div class="card hospital-request-metric">
+                <span class="hospital-request-metric-icon"><i class="fas fa-hourglass-half" aria-hidden="true"></i></span>
+                <div><h3 id="pendingRequests">—</h3><p>Pending</p></div>
+              </div>
+              <div class="card hospital-request-metric">
+                <span class="hospital-request-metric-icon"><i class="fas fa-arrows-rotate" aria-hidden="true"></i></span>
+                <div><h3 id="processingRequests">—</h3><p>Processing</p></div>
+              </div>
+              <div class="card hospital-request-metric">
+                <span class="hospital-request-metric-icon"><i class="fas fa-circle-check" aria-hidden="true"></i></span>
+                <div><h3 id="completedRequests">—</h3><p>Completed</p></div>
+              </div>
+              <div class="card hospital-request-metric">
+                <span class="hospital-request-metric-icon"><i class="fas fa-circle-xmark" aria-hidden="true"></i></span>
+                <div><h3 id="rejectedRequests">—</h3><p>Rejected</p></div>
+              </div>
+              <div class="card hospital-request-metric">
+                <span class="hospital-request-metric-icon"><i class="fas fa-ban" aria-hidden="true"></i></span>
+                <div><h3 id="cancelledRequests">—</h3><p>Cancelled</p></div>
+              </div>
             </div>
-            <div class="card stat-card">
-              <h3 id="pendingRequests">0</h3>
-              <p>Pending Requests</p>
-            </div>
-            <div class="card stat-card">
-              <h3 id="rejectedRequests">0</h3>
-              <p>Rejected Requests</p>
-            </div>
+          </section>
+
+          <div class="hospital-overview-grid">
+            <section class="card hospital-overview-card" aria-labelledby="hospitalAvailabilitySnapshotHeading">
+              <div class="card-header">
+                <div>
+                  <h3 id="hospitalAvailabilitySnapshotHeading">Blood Availability Snapshot</h3>
+                  <p>Usable stock across approved organizations</p>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" data-view="blood-availability">View Full Availability</button>
+              </div>
+              <div class="card-body">
+                <div id="hospitalAvailabilitySnapshot" class="hospital-availability-snapshot" aria-live="polite">
+                  <div class="hospital-overview-state" role="status">
+                    <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                    <span>Loading approved organization inventory…</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="card hospital-overview-card" aria-labelledby="requestsAttentionHeading">
+              <div class="card-header">
+                <div>
+                  <h3 id="requestsAttentionHeading">Requests Requiring Attention</h3>
+                  <p>Pending decisions and requests in processing</p>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" data-view="request-history">View Requests</button>
+              </div>
+              <div class="card-body">
+                <div id="requestsRequiringAttention" aria-live="polite">
+                  <div class="hospital-overview-state" role="status">
+                    <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                    <span>Loading hospital requests…</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="card hospital-overview-card" aria-labelledby="requestActivityHeading">
+              <div class="card-header">
+                <div>
+                  <h3 id="requestActivityHeading">Request Activity</h3>
+                  <p>Requests created by month</p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div id="requestActivityChart" class="hospital-request-activity" aria-live="polite">
+                  <div class="hospital-overview-state" role="status">
+                    <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                    <span>Loading request activity…</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="card hospital-overview-card hospital-quick-actions" aria-labelledby="hospitalQuickActionsHeading">
+              <div class="card-header">
+                <div>
+                  <h3 id="hospitalQuickActionsHeading">Quick Actions</h3>
+                  <p>Go directly to common tasks</p>
+                </div>
+              </div>
+              <div class="card-body hospital-quick-actions-list">
+                <button type="button" class="btn btn-primary" data-view="request-blood"><i class="fas fa-hand-holding-medical" aria-hidden="true"></i> Request Blood</button>
+                <button type="button" class="btn btn-secondary" data-view="blood-availability"><i class="fas fa-droplet" aria-hidden="true"></i> Find Blood</button>
+                <button type="button" class="btn btn-secondary" data-view="request-history"><i class="fas fa-list-check" aria-hidden="true"></i> Request History</button>
+                <button type="button" class="btn btn-secondary" data-view="notifications"><i class="fas fa-bell" aria-hidden="true"></i> Notifications</button>
+              </div>
+            </section>
           </div>
 
-          <!-- Recent Requests -->
-          <div class="card">
+          <section class="card hospital-overview-card hospital-recent-requests" aria-labelledby="hospitalRecentRequestsHeading">
             <div class="card-header">
-              <h3>Recent Requests</h3>
-              <button class="btn btn-primary btn-sm" data-view="request-history">View All</button>
+              <div>
+                <h3 id="hospitalRecentRequestsHeading">Recent Requests</h3>
+                <p>Latest requests, newest first</p>
+              </div>
+              <button type="button" class="btn btn-primary btn-sm" data-view="request-history">View All</button>
             </div>
             <div class="card-body">
-              <div id="recentRequestsList"></div>
+              <div id="recentRequestsList" aria-live="polite">
+                <div class="hospital-overview-state" role="status">
+                  <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                  <span>Loading recent requests…</span>
+                </div>
+              </div>
             </div>
-          </div>
+          </section>
+
+          <section class="card hospital-overview-card hospital-recent-activity" aria-labelledby="hospitalRecentActivityHeading">
+            <div class="card-header">
+              <div>
+                <h3 id="hospitalRecentActivityHeading">Recent Activity</h3>
+                <p>Updates from your request notifications</p>
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm" data-view="notifications">View Notifications</button>
+            </div>
+            <div class="card-body">
+              <div id="hospitalRecentActivity" aria-live="polite">
+                <div class="hospital-overview-state" role="status">
+                  <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                  <span>Loading recent activity…</span>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
 
         <!-- Request Blood View -->
@@ -182,7 +288,7 @@
           <div class="dashboard-header">
             <div>
               <h2>Real-Time Blood Availability</h2>
-              <p class="dashboard-subtitle">Monitor available stock across all registered organizations and blood banks.</p>
+              <p class="dashboard-subtitle">View currently usable blood held by approved organizations and choose a source when requesting.</p>
             </div>
             <div class="dashboard-actions">
               <button type="button" class="btn btn-secondary btn-sm" id="hospAvailRefreshBtn">
@@ -198,27 +304,39 @@
           </div>
 
           <!-- Summary Cards -->
-          <div class="dashboard-grid dashboard-cards-grid">
-            <div class="card stat-card">
-              <h3 id="availTotalUnits">0</h3>
-              <p>Total Available Blood Units</p>
+          <div class="dashboard-grid dashboard-cards-grid hospital-availability-summary">
+            <div class="card hospital-availability-summary-card">
+              <span class="hospital-availability-summary-icon"><i class="fas fa-droplet" aria-hidden="true"></i></span>
+              <div>
+                <h3 id="availTotalUnits">—</h3>
+                <p>Total Available Units</p>
+                <small>Usable stock across approved organizations</small>
+              </div>
             </div>
-            <div class="card stat-card">
-              <h3 id="availRareGroups">0</h3>
-              <p>Rare Blood Units (AB-, O-, B-, A-)</p>
+            <div class="card hospital-availability-summary-card">
+              <span class="hospital-availability-summary-icon"><i class="fas fa-hospital" aria-hidden="true"></i></span>
+              <div>
+                <h3 id="availOrganizationsCount">—</h3>
+                <p>Organizations Available</p>
+                <small>Approved organizations with usable stock</small>
+              </div>
             </div>
-            <div class="card stat-card">
-              <h3 id="availLowStockGroups">0</h3>
-              <p>Low Stock Blood Groups</p>
+            <div class="card hospital-availability-summary-card">
+              <span class="hospital-availability-summary-icon"><i class="fas fa-layer-group" aria-hidden="true"></i></span>
+              <div>
+                <h3 id="availBloodGroupsCount">—</h3>
+                <p>Blood Groups Available</p>
+                <small>Groups with currently usable stock</small>
+              </div>
             </div>
           </div>
 
           <!-- Modern Search & Filter Toolbar -->
           <div class="filter-toolbar-card">
-            <div class="filter-toolbar-wrapper">
+            <div class="filter-toolbar-wrapper hospital-availability-filter-grid">
               <div class="filter-search-input-group">
                 <i class="fas fa-search search-icon"></i>
-                <input type="text" id="hospAvailSearch" class="table-search" placeholder="Search Blood Group, City, Organization...">
+                <input type="text" id="hospAvailSearch" class="table-search" placeholder="Search group, organization, or city..." aria-label="Search blood availability">
                 <button type="button" class="filter-clear-btn" data-clear-target="hospAvailSearch" title="Clear search" style="display:none;"><i class="fas fa-times"></i></button>
               </div>
 
@@ -239,8 +357,16 @@
               </div>
 
               <div class="filter-select-wrapper">
+                <i class="fas fa-hospital select-icon"></i>
+                <select id="hospAvailOrganizationFilter" class="filter-select" aria-label="Filter by organization">
+                  <option value="">All Organizations</option>
+                </select>
+                <i class="fas fa-chevron-down select-arrow"></i>
+              </div>
+
+              <div class="filter-select-wrapper">
                 <i class="fas fa-map-marker-alt select-icon"></i>
-                <select id="hospAvailCityFilter" class="filter-select">
+                <select id="hospAvailCityFilter" class="filter-select" aria-label="Filter by city">
                   <option value="">All Cities</option>
                 </select>
                 <i class="fas fa-chevron-down select-arrow"></i>
@@ -268,10 +394,18 @@
           <!-- Availability Table Container -->
           <div class="card">
             <div class="card-header">
-              <h3>Available Blood Inventory Across Organizations</h3>
+              <h3>Available Blood by Organization</h3>
             </div>
             <div class="card-body">
-              <div id="availabilityResults" class="table-container"></div>
+              <div id="availabilityResults" class="table-container" aria-live="polite">
+                <div class="hospital-availability-state" role="status">
+                  <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                  <div>
+                    <strong>Loading blood availability</strong>
+                    <p>Checking approved organizations and current inventory.</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

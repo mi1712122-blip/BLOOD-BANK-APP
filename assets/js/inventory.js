@@ -118,10 +118,9 @@ class BloodInventoryManager {
 
   async getInventoryByOrganization(organizationId) {
     try {
-      const inventoryQuery = query(
-        collection(db, 'bloodInventory'),
-        where('status', '==', 'Available')
-      );
+      const inventoryConstraints = [where('status', '==', 'Available')];
+      if (organizationId) inventoryConstraints.unshift(where('organizationId', '==', organizationId));
+      const inventoryQuery = query(collection(db, 'bloodInventory'), ...inventoryConstraints);
       const snapshot = await getDocs(inventoryQuery);
 
       const inventory = {};
@@ -140,7 +139,8 @@ class BloodInventoryManager {
 
   async getInventoryItemsByOrganization(organizationId) {
     try {
-      const inventoryQuery = query(collection(db, 'bloodInventory'));
+      const inventoryConstraints = organizationId ? [where('organizationId', '==', organizationId)] : [];
+      const inventoryQuery = query(collection(db, 'bloodInventory'), ...inventoryConstraints);
       const snapshot = await getDocs(inventoryQuery);
       const items = [];
       snapshot.forEach((docSnap) => {
@@ -154,7 +154,8 @@ class BloodInventoryManager {
 
   listenOrganizationInventory(organizationId, callback) {
     try {
-      const inventoryQuery = query(collection(db, 'bloodInventory'));
+      const inventoryConstraints = organizationId ? [where('organizationId', '==', organizationId)] : [];
+      const inventoryQuery = query(collection(db, 'bloodInventory'), ...inventoryConstraints);
       return onSnapshot(
         inventoryQuery,
         (snapshot) => {

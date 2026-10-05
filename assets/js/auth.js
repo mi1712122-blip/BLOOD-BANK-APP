@@ -34,19 +34,25 @@ export function isAccountApproved(account) {
 export function renderApprovalStatusNotice(account, element) {
   if (!element) return;
   const status = getApprovalStatus(account);
+  const rejectionReason = typeof account?.rejectionReason === 'string' ? account.rejectionReason.trim() : '';
   element.className = `alert ${status === 'Approved' ? 'alert-success' : status === 'Rejected' ? 'alert-danger' : 'alert-warning'}`;
   element.textContent = status === 'Approved'
     ? 'Approved — Your account is approved.'
     : status === 'Rejected'
-    ? 'Rejected — Your account registration was rejected by the administrator. Please contact the administrator for further information.'
+    ? rejectionReason
+      ? `Rejected — Your account registration has been rejected.\n\nReason: ${rejectionReason}`
+      : 'Rejected — Your account registration was rejected by the administrator. Please contact the administrator for further information.'
     : 'Approval Pending — Your account is waiting for administrator approval.';
 }
 
 export function requireApprovedAccount(account, action = 'perform this action') {
   if (isAccountApproved(account)) return true;
   const status = getApprovalStatus(account);
+  const rejectionReason = typeof account?.rejectionReason === 'string' ? account.rejectionReason.trim() : '';
   const message = status === 'Rejected'
-    ? 'Your account was rejected. Please contact the administrator for further information.'
+    ? rejectionReason
+      ? `Your account was rejected. Reason: ${rejectionReason}`
+      : 'Your account was rejected. Please contact the administrator for further information.'
     : 'Admin approval is required before you can ' + action + '.';
   if (typeof window !== 'undefined') window.alert(message);
   return false;

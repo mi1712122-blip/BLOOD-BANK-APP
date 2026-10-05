@@ -54,6 +54,115 @@ button.btn.btn-sm.btn-danger[data-action^="reject-"]:active {
   padding-bottom: 32px;
 }
 
+.admin-org-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.admin-org-summary-grid-compact {
+  margin: 14px 0;
+}
+
+.admin-org-metric {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 18px;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.admin-org-metric span {
+  color: var(--text-light);
+  font-size: var(--font-size-sm);
+}
+
+.admin-org-metric strong {
+  color: var(--primary-color);
+  font-size: 1.35rem;
+  overflow-wrap: anywhere;
+}
+
+.admin-org-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 16px;
+}
+
+.admin-org-chart-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.admin-org-chart-card h3 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+}
+
+.admin-org-chart-wrap {
+  position: relative;
+  min-height: 220px;
+}
+
+.admin-org-empty-state {
+  display: grid;
+  min-height: 150px;
+  place-items: center;
+  padding: 18px;
+  color: var(--text-light);
+  text-align: center;
+  background: var(--bg-color);
+  border-radius: 8px;
+}
+
+.admin-profile-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.admin-profile-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.admin-profile-table th,
+.admin-profile-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-profile-table th {
+  color: var(--text-color);
+  background: var(--bg-color);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-profile-table td {
+  color: var(--text-light);
+}
+
+.admin-profile-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.admin-profile-supporting-stat {
+  margin: 12px 0 0;
+  color: var(--text-light);
+}
+
 .admin-profile-hero {
   display: flex;
   align-items: center;
@@ -342,6 +451,455 @@ button.btn.btn-sm.btn-danger[data-action^="reject-"]:active {
   .admin-profile-section .details-grid {
     grid-template-columns: 1fr;
   }
+
+  .admin-org-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .admin-org-metric {
+    padding: 12px;
+  }
+
+  .admin-org-metric strong {
+    font-size: 1.15rem;
+  }
+}
+
+/* Hospital Dashboard overview */
+#dashboardView .hospital-overview-section {
+margin-bottom: 24px;
+}
+
+#dashboardView .hospital-overview-section-heading {
+margin-bottom: 12px;
+}
+
+#dashboardView .hospital-overview-section-heading h3 {
+margin: 0;
+color: var(--text-color);
+font-size: var(--font-size-xl);
+}
+
+#dashboardView .hospital-overview-section-heading p,
+#dashboardView .hospital-overview-card > .card-header p {
+margin: 4px 0 0;
+color: var(--text-light);
+font-size: var(--font-size-sm);
+}
+
+#dashboardView .hospital-request-metrics {
+grid-template-columns: repeat(5, minmax(0, 1fr));
+gap: 14px;
+margin-bottom: 0;
+}
+
+#dashboardView .hospital-request-metric {
+display: flex;
+min-width: 0;
+min-height: 98px;
+align-items: center;
+gap: 12px;
+padding: 16px;
+border: 1px solid var(--border-color);
+border-radius: var(--radius-lg);
+background: #ffffff;
+box-shadow: var(--shadow);
+}
+
+#dashboardView .hospital-request-metric-icon {
+display: grid;
+width: 40px;
+height: 40px;
+flex: 0 0 40px;
+place-items: center;
+border-radius: 50%;
+color: var(--primary-color);
+background: rgba(211, 47, 47, 0.09);
+}
+
+#dashboardView .hospital-request-metric h3 {
+margin: 0;
+color: var(--text-color);
+font-size: var(--font-size-2xl);
+}
+
+#dashboardView .hospital-request-metric p {
+margin: 2px 0 0;
+color: var(--text-light);
+font-size: var(--font-size-sm);
+}
+
+#dashboardView .status-processing {
+color: #1565c0;
+background: rgba(21, 101, 192, 0.1);
+}
+
+#dashboardView .status-completed {
+color: var(--success-color);
+background: rgba(46, 125, 50, 0.1);
+}
+
+#dashboardView .status-cancelled {
+color: var(--text-light);
+background: rgba(96, 96, 96, 0.1);
+}
+
+#dashboardView .hospital-overview-grid {
+display: grid;
+grid-template-columns: repeat(2, minmax(0, 1fr));
+gap: 20px;
+margin-bottom: 24px;
+}
+
+#dashboardView .hospital-overview-card {
+min-width: 0;
+margin: 0 0 20px;
+}
+
+#dashboardView .hospital-overview-grid .hospital-overview-card {
+margin-bottom: 0;
+}
+
+#dashboardView .hospital-overview-card > .card-header {
+display: flex;
+min-width: 0;
+align-items: center;
+justify-content: space-between;
+gap: 12px;
+}
+
+#dashboardView .hospital-overview-card > .card-header h3 {
+margin: 0;
+color: var(--text-color);
+font-size: var(--font-size-lg);
+}
+
+#dashboardView .hospital-overview-card > .card-header .btn {
+flex: 0 0 auto;
+}
+
+#dashboardView .hospital-availability-group-grid {
+display: grid;
+grid-template-columns: repeat(4, minmax(0, 1fr));
+gap: 10px;
+}
+
+#dashboardView .hospital-availability-group-card {
+display: grid;
+min-width: 0;
+grid-template-columns: auto 1fr;
+align-items: center;
+column-gap: 8px;
+row-gap: 2px;
+padding: 10px;
+border: 1px solid var(--border-color);
+border-radius: var(--radius-md);
+background: var(--bg-color);
+}
+
+#dashboardView .hospital-availability-group-name {
+display: inline-grid;
+min-width: 38px;
+min-height: 34px;
+grid-row: span 2;
+place-items: center;
+border-radius: 7px;
+color: var(--primary-dark);
+background: rgba(211, 47, 47, 0.1);
+font-weight: 700;
+}
+
+#dashboardView .hospital-availability-group-card strong {
+min-width: 0;
+color: var(--text-color);
+font-size: var(--font-size-lg);
+}
+
+#dashboardView .hospital-availability-group-card small {
+color: var(--text-light);
+font-size: 0.72rem;
+}
+
+#dashboardView .hospital-overview-state,
+#dashboardView .hospital-overview-empty {
+display: flex;
+min-height: 110px;
+align-items: center;
+justify-content: center;
+gap: 10px;
+margin: 0;
+padding: 20px;
+color: var(--text-light);
+text-align: center;
+}
+
+#dashboardView .hospital-overview-state > i {
+color: var(--primary-color);
+}
+
+#dashboardView .hospital-attention-list,
+#dashboardView .hospital-recent-request-list {
+display: grid;
+gap: 10px;
+}
+
+#dashboardView .hospital-attention-item {
+display: flex;
+min-width: 0;
+align-items: center;
+justify-content: space-between;
+gap: 12px;
+padding: 12px 0;
+border-bottom: 1px solid var(--border-color);
+}
+
+#dashboardView .hospital-attention-item:last-child {
+border-bottom: 0;
+}
+
+#dashboardView .hospital-attention-main {
+min-width: 0;
+}
+
+#dashboardView .hospital-attention-title {
+display: flex;
+flex-wrap: wrap;
+align-items: center;
+gap: 8px;
+}
+
+#dashboardView .hospital-attention-main p {
+margin: 5px 0 2px;
+color: var(--text-color);
+}
+
+#dashboardView .hospital-attention-main small,
+#dashboardView .hospital-overview-supporting {
+color: var(--text-light);
+}
+
+#dashboardView .hospital-attention-actions {
+flex: 0 0 auto;
+}
+
+#dashboardView .hospital-recent-request {
+display: grid;
+grid-template-columns: minmax(105px, 0.7fr) minmax(160px, 1.4fr) minmax(190px, 1.5fr) auto;
+align-items: center;
+gap: 14px;
+padding: 12px 0;
+border-bottom: 1px solid var(--border-color);
+}
+
+#dashboardView .hospital-recent-request:last-child {
+border-bottom: 0;
+}
+
+#dashboardView .hospital-recent-request-blood,
+#dashboardView .hospital-recent-request-details,
+#dashboardView .hospital-recent-request-meta {
+display: flex;
+min-width: 0;
+flex-wrap: wrap;
+align-items: center;
+gap: 8px;
+}
+
+#dashboardView .hospital-recent-request-details {
+flex-direction: column;
+align-items: flex-start;
+}
+
+#dashboardView .hospital-recent-request-details span,
+#dashboardView .hospital-recent-request-meta > span:not(.request-status),
+#dashboardView .hospital-recent-request-meta time {
+color: var(--text-light);
+font-size: var(--font-size-sm);
+}
+
+#dashboardView .hospital-request-activity {
+min-height: 210px;
+}
+
+#dashboardView .hospital-request-chart {
+display: grid;
+height: 210px;
+grid-template-columns: repeat(6, minmax(0, 1fr));
+align-items: end;
+gap: 10px;
+padding: 8px 4px 0;
+}
+
+#dashboardView .hospital-request-chart-column {
+display: grid;
+height: 100%;
+min-width: 0;
+grid-template-rows: 20px 1fr auto;
+justify-items: center;
+gap: 6px;
+}
+
+#dashboardView .hospital-request-chart-column > strong {
+color: var(--text-color);
+font-size: var(--font-size-sm);
+}
+
+#dashboardView .hospital-request-chart-track {
+display: flex;
+width: min(100%, 34px);
+height: 100%;
+align-items: flex-end;
+overflow: hidden;
+border-radius: 8px;
+background: var(--bg-color);
+}
+
+#dashboardView .hospital-request-chart-track span {
+width: 100%;
+min-height: 0;
+border-radius: 8px 8px 0 0;
+background: var(--primary-color);
+}
+
+#dashboardView .hospital-request-chart-column small {
+color: var(--text-light);
+font-size: 0.7rem;
+text-align: center;
+}
+
+#dashboardView .hospital-quick-actions-list {
+display: grid;
+grid-template-columns: repeat(2, minmax(0, 1fr));
+gap: 10px;
+}
+
+#dashboardView .hospital-quick-actions-list .btn {
+display: flex;
+min-width: 0;
+min-height: 44px;
+align-items: center;
+justify-content: flex-start;
+gap: 9px;
+white-space: normal;
+}
+
+#dashboardView .hospital-recent-activity-list {
+display: grid;
+gap: 0;
+margin: 0;
+padding: 0;
+list-style: none;
+}
+
+#dashboardView .hospital-recent-activity-item {
+display: flex;
+align-items: flex-start;
+gap: 12px;
+padding: 12px 0;
+border-bottom: 1px solid var(--border-color);
+}
+
+#dashboardView .hospital-recent-activity-item:last-child {
+border-bottom: 0;
+}
+
+#dashboardView .hospital-recent-activity-icon {
+display: grid;
+width: 34px;
+height: 34px;
+flex: 0 0 34px;
+place-items: center;
+border-radius: 50%;
+color: var(--primary-color);
+background: rgba(211, 47, 47, 0.09);
+}
+
+#dashboardView .hospital-recent-activity-item p {
+margin: 4px 0;
+color: var(--text-light);
+}
+
+#dashboardView .hospital-recent-activity-item time {
+color: var(--text-light);
+font-size: var(--font-size-sm);
+}
+
+@media (max-width: 1000px) {
+#dashboardView .hospital-request-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#dashboardView .hospital-recent-request {
+  grid-template-columns: minmax(100px, 0.7fr) minmax(140px, 1fr) minmax(170px, 1.2fr) auto;
+  gap: 10px;
+}
+}
+
+@media (max-width: 768px) {
+#dashboardView .hospital-request-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+#dashboardView .hospital-overview-grid {
+  grid-template-columns: 1fr;
+}
+
+#dashboardView .hospital-recent-request {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+#dashboardView .hospital-recent-request-meta {
+  grid-column: 1 / -1;
+}
+
+#dashboardView .hospital-availability-group-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+}
+
+@media (max-width: 480px) {
+#dashboardView .hospital-request-metrics {
+  grid-template-columns: 1fr !important;
+}
+
+#dashboardView .hospital-request-metric {
+  min-height: 78px;
+}
+
+#dashboardView .hospital-overview-card > .card-header {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+#dashboardView .hospital-overview-card > .card-header .btn {
+  width: 100%;
+}
+
+#dashboardView .hospital-availability-group-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#dashboardView .hospital-attention-item {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+#dashboardView .hospital-recent-request {
+  grid-template-columns: 1fr;
+}
+
+#dashboardView .hospital-recent-request-meta {
+  grid-column: auto;
+}
+
+#dashboardView .hospital-recent-request > .btn {
+  width: 100%;
+}
+
+#dashboardView .hospital-quick-actions-list {
+  grid-template-columns: 1fr;
+}
 }
 
 .dashboard-analytics-grid {
@@ -368,6 +926,18 @@ button.btn.btn-sm.btn-danger[data-action^="reject-"]:active {
   color: var(--text-light);
   margin: 4px 0 0 0;
   line-height: 1.5;
+}
+
+/* Make the signed-in organization, hospital, and donor names readable in the sidebar. */
+.sidebar-header #orgName,
+.sidebar-header #hospitalName,
+.sidebar-header #donorName {
+  margin-top: 8px;
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 /* Card Header */
@@ -918,3 +1488,224 @@ button.btn.btn-sm.btn-danger[data-action^="reject-"]:active {
     overflow-y: auto;
   }
 }
+
+  /* Hospital Blood Availability */
+  #blood-availabilityView .hospital-availability-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  #blood-availabilityView .hospital-availability-summary-card {
+    display: flex;
+    min-width: 0;
+    min-height: 132px;
+    align-items: center;
+    gap: 16px;
+    padding: 22px;
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--primary-color);
+    border-radius: var(--radius-lg);
+    background: #ffffff;
+    box-shadow: var(--shadow);
+  }
+
+  #blood-availabilityView .hospital-availability-summary-icon {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    flex: 0 0 48px;
+    place-items: center;
+    border-radius: 50%;
+    color: var(--primary-color);
+    background: rgba(211, 47, 47, 0.1);
+    font-size: 20px;
+  }
+
+  #blood-availabilityView .hospital-availability-summary-card h3 {
+    margin: 0 0 4px;
+    color: var(--text-color);
+    font-size: var(--font-size-2xl);
+  }
+
+  #blood-availabilityView .hospital-availability-summary-card p {
+    margin: 0;
+    color: var(--text-color);
+    font-weight: 600;
+  }
+
+  #blood-availabilityView .hospital-availability-summary-card small {
+    display: block;
+    margin-top: 4px;
+    color: var(--text-light);
+    line-height: 1.4;
+  }
+
+  #blood-availabilityView .hospital-availability-filter-grid {
+    display: grid;
+    grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(145px, 1fr)) auto auto;
+    align-items: center;
+    gap: 12px;
+  }
+
+  #blood-availabilityView .hospital-availability-filter-grid > * {
+    min-width: 0;
+  }
+
+  #blood-availabilityView .hospital-availability-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  #blood-availabilityView .hospital-availability-table {
+    min-width: 900px;
+  }
+
+  #blood-availabilityView .hospital-availability-table th {
+    white-space: nowrap;
+  }
+
+  #blood-availabilityView .hospital-availability-group {
+    display: inline-grid;
+    min-width: 42px;
+    min-height: 36px;
+    place-items: center;
+    border-radius: 8px;
+    color: var(--primary-dark);
+    background: rgba(211, 47, 47, 0.09);
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  #blood-availabilityView .hospital-availability-units {
+    color: var(--text-color);
+    font-size: 1.05rem;
+  }
+
+  #blood-availabilityView .hospital-availability-state {
+    display: flex;
+    min-height: 150px;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 24px;
+    color: var(--text-light);
+    text-align: left;
+  }
+
+  #blood-availabilityView .hospital-availability-state > i {
+    color: var(--primary-color);
+    font-size: 24px;
+  }
+
+  #blood-availabilityView .hospital-availability-state strong {
+    display: block;
+    color: var(--text-color);
+    font-size: 1rem;
+  }
+
+  #blood-availabilityView .hospital-availability-state p {
+    margin: 4px 0 0;
+  }
+
+  #blood-availabilityView .hospital-availability-error > i {
+    color: var(--danger-color, #c62828);
+  }
+
+  @media (max-width: 1100px) {
+    #blood-availabilityView .hospital-availability-filter-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    #blood-availabilityView .hospital-availability-filter-grid .filter-search-input-group {
+      grid-column: span 2;
+    }
+  }
+
+  @media (max-width: 768px) {
+    #blood-availabilityView .hospital-availability-summary {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #blood-availabilityView .hospital-availability-filter-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #blood-availabilityView .hospital-availability-filter-grid .filter-search-input-group {
+      grid-column: 1 / -1;
+    }
+
+    #blood-availabilityView .hospital-availability-table {
+      min-width: 0;
+    }
+
+    #blood-availabilityView .hospital-availability-table thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      clip-path: inset(50%);
+    }
+
+    #blood-availabilityView .hospital-availability-table tbody {
+      display: grid;
+      gap: 12px;
+    }
+
+    #blood-availabilityView .hospital-availability-table tbody tr {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: #ffffff;
+    }
+
+    #blood-availabilityView .hospital-availability-table tbody tr:hover {
+      background: #ffffff;
+    }
+
+    #blood-availabilityView .hospital-availability-table td {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    #blood-availabilityView .hospital-availability-table td::before {
+      color: var(--text-light);
+      content: attr(data-label);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+  }
+
+  @media (max-width: 520px) {
+    #blood-availabilityView .hospital-availability-summary {
+      grid-template-columns: 1fr;
+    }
+
+    #blood-availabilityView .hospital-availability-summary-card {
+      min-height: 112px;
+    }
+
+    #blood-availabilityView .hospital-availability-filter-grid {
+      grid-template-columns: 1fr;
+    }
+
+    #blood-availabilityView .hospital-availability-filter-grid .filter-search-input-group {
+      grid-column: auto;
+    }
+
+    #blood-availabilityView .hospital-availability-table tbody tr {
+      grid-template-columns: 1fr;
+    }
+
+    #blood-availabilityView .hospital-availability-table td:last-child .btn {
+      width: 100%;
+    }
+  }

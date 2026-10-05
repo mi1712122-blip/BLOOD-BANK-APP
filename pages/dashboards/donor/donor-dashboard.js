@@ -1,6 +1,5 @@
 import {
   collection,
-  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -113,7 +112,13 @@ function setupRealtimeListeners() {
     });
   }
 
-  donationsListener = onSnapshot(collection(db, 'donations'), (snapshot) => {
+  if (!donorUid) return;
+
+  const donorDonationsQuery = query(
+    collection(db, 'donations'),
+    where('donorId', '==', donorUid)
+  );
+  donationsListener = onSnapshot(donorDonationsQuery, (snapshot) => {
     donorDonations = [];
     snapshot.forEach((docSnap) => {
       const record = normalizeDonationRecord({ id: docSnap.id, ...docSnap.data() });
@@ -380,11 +385,6 @@ function renderDonationHistory() {
                   <td>${dateStr}</td>
                   <td>${timeStr}</td>
                   <td><span class="badge ${badgeClass}">${status}</span></td>
-                  <td>
-                    <button type="button" class="btn btn-sm btn-danger btn-delete-donation delete-btn" data-id="${d.id}">
-                      <i class="fas fa-trash"></i> Delete
-                    </button>
-                  </td>
                 </tr>
               `;
             }).join('')}
@@ -398,13 +398,6 @@ function renderDonationHistory() {
           </div>
         </div>
       `;
-
-      tableContainer.querySelectorAll('.btn-delete-donation').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const donationId = btn.dataset.id;
-          if (donationId) await deleteDonation(donationId);
-        });
-      });
 
       tableContainer.querySelectorAll('[data-donation-page]').forEach((button) => {
         button.addEventListener('click', () => {
@@ -445,20 +438,6 @@ function renderDonationTimeline(items) {
       </div>
     `;
   }).join('');
-}
-
-async function deleteDonation(donationId) {
-  if (!confirm('Are you sure you want to delete this donation record? This will immediately remove it from your history.')) return;
-  try {
-    await deleteDoc(doc(db, 'donations', donationId));
-    donorDonations = donorDonations.filter((item) => item.id !== donationId);
-    donationTablePage = 1;
-    renderDonationHistory();
-    alert('Donation record deleted successfully.');
-  } catch (error) {
-    console.error('Error deleting donation record:', error);
-    alert('Failed to delete donation record: ' + error.message);
-  }
 }
 
 /* ==========================================================================

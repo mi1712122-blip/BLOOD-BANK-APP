@@ -13,11 +13,12 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
 import { authManager, getApprovalStatus, renderApprovalStatusNotice, requireApprovedAccount } from '../../../assets/js/auth.js';
 import { bloodInventoryManager, getInventoryExpiryDate, isAvailableInventory } from '../../../assets/js/inventory.js';
-import { bloodRequestManager } from '../../../assets/js/requests.js';
+import { bloodRequestManager, compareRequestsByUrgency } from '../../../assets/js/requests.js';
 import { auth, db } from '../../../assets/js/firebase-config.js';
 
 let currentOrganization = null;
 let currentView = 'dashboard';
+let entityDetailsReturnView = 'dashboard';
 // Project configuration: set this to the approved blood product and storage policy.
 const DONATION_BATCH_SHELF_LIFE_DAYS = 42;
 let notificationsListener = null;
@@ -50,6 +51,7 @@ const viewSelectors = {
   inventoryHistory: 'inventoryHistoryView',
   donors: 'donorsView',
   hospitals: 'hospitalsView',
+  entityDetails: 'entityDetailsView',
   sendNotification: 'sendNotificationView',
   notifications: 'notificationsView',
   settings: 'settingsView'
@@ -167,6 +169,7 @@ function setupRealtimeDataListeners() {
     (snapshot) => {
       requestsList = [];
       snapshot.forEach((docSnap) => requestsList.push({ id: docSnap.id, ...docSnap.data() }));
+      requestsList.sort(compareRequestsByUrgency);
       document.getElementById('pendingHospitalRequests').textContent = requestsList.filter((req) => req.status === 'Pending').length;
       document.getElementById('completedRequests').textContent = requestsList.filter((req) => req.status === 'Completed').length;
       renderDashboardCards();
@@ -269,11 +272,14 @@ function setupGlobalSearch() {
       button.addEventListener('click', () => {
         const view = button.dataset.view;
         const group = button.dataset.group;
+        const recordId = button.dataset.id;
         showView(view);
         if (view === 'inventory' && group) {
           document.getElementById('inventoryGroupFilter').value = group;
           renderInventoryTable();
         }
+        if (view === 'donors' && recordId) viewDonorDetails(recordId);
+        if (view === 'hospitals' && recordId) viewHospitalDetails(recordId);
         resultsContainer.classList.add('hidden');
       });
     });
@@ -446,7 +452,7 @@ function renderRecentActivityPreview() {
   issuesList.slice(-3).reverse().forEach((issue) => {
     activities.push({ label: `Issued: ${issue.bloodGroup} to ${issue.hospitalName || 'Hospital'}`, time: issue.issueDate, type: 'issue' });
   });
-  requestsList.slice(-3).reverse().forEach((req) => {
+  [...requestsList].sort((a, b) => getTimestamp(b.createdAt) - getTimestamp(a.createdAt)).slice(0, 3).reverse().forEach((req) => {
     activities.push({ label: `Request: ${req.hospitalName || 'Hospital'} (${req.bloodGroup})`, time: req.createdAt, type: 'request' });
   });
   inventoryHistoryList.slice(-3).reverse().forEach((record) => {
@@ -1662,6 +1668,7 @@ async function markOrganizationNotificationsRead() {
 function showView(view) {
   const viewId = viewSelectors[view];
   if (!viewId) return;
+  if (view !== 'entityDetails' && currentView === 'entityDetails') entityDetailsReturnView = view;
 
   document.querySelectorAll('.dashboard-view').forEach((section) => section.classList.add('hidden'));
   const target = document.getElementById(viewId);
@@ -2019,34 +2026,27 @@ function viewDonorDetails(id) {
   const donorDonations = donationsList
     .filter((donation) => donation.donorId === (donor.uid || donor.id))
     .sort((a, b) => getTimestamp(b.donationDate || b.createdAt) - getTimestamp(a.donationDate || a.createdAt));
-  const history = donorDonations.length
-    ? `<ul>${donorDonations.map((donation) => `<li>${formatDate(donation.donationDate || donation.createdAt)} â€” ${donation.bloodGroup || '-'} (${donation.units || 0} unit${Number(donation.units) === 1 ? '' : 's'})</li>`).join('')}</ul>`
-    : '<p>No donation history for this organization.</p>';
-  const content = document.getElementById('requestDetailsContent');
-  if (!content) return;
-  const title = document.getElementById('requestDetailsTitle');
-  if (title) title.textContent = 'Donor Profile';
-  content.innerHTML = `
-    <div class="details-grid">
-      <div><strong>Name:</strong> ${donor.fullName || 'Unknown'}</div>
-      <div><strong>Blood Group:</strong> ${donor.bloodGroup || '-'}</div>
-      <div><strong>Email:</strong> ${donor.email || '-'}</div>
-      <div><strong>Phone:</strong> ${donor.phone || '-'}</div>
-      <div><strong>Total Donations:</strong> ${Number(donor.totalDonations) || 0}</div>
-      <div><strong>Last Donation:</strong> ${formatDate(donor.lastDonationDate)}</div>
-      <div><strong>Eligibility:</strong> ${donor.isEligible === false ? 'Not Eligible' : 'Eligible'}</div>
-      <div><strong>Status:</strong> ${donor.isActive === false ? 'Inactive' : 'Active'}</div>
-    </div>
-    <div style="margin-top: 18px;"><h3>Donation History</h3>${history}</div>
-    <div class="modal-footer"><button type="button" class="btn btn-primary" id="recordDonationBtn">Record Donation</button></div>
-  `;
-  content.querySelector('#recordDonationBtn')?.addEventListener('click', () => {
-    closeRequestDetailsModal();
-    openRecordDonationModal(donor.uid || donor.id);
+  const historyRows = donorDonations.length
+    ? donorDonations.map((donation) => `<tr><td>${formatDate(donation.donationDate || donation.createdAt)}</td><td>${donation.bloodGroup || '-'}</td><td>${Number(donation.units) || 0} unit${Number(donation.units) === 1 ? '' : 's'}</td><td>${donation.status || 'Recorded'}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="text-center">No donation history for this organization.</td></tr>';
+  const eligible = donor.isEligible !== false;
+  renderEntityDetails({
+    kind: 'donor', icon: 'fa-user', name: donor.fullName || 'Unknown donor', subtitle: `${donor.bloodGroup || 'Blood group unavailable'} donor profile`,
+    identity: donor.uid || donor.id, status: donor.isActive === false ? 'Inactive' : 'Active',
+    metrics: [
+      ['Blood group', donor.bloodGroup || 'Not provided', 'fa-droplet'],
+      ['Total donations', Number(donor.totalDonations) || donorDonations.length, 'fa-hand-holding-heart'],
+      ['Last donation', formatDate(donor.lastDonationDate), 'fa-calendar-check'],
+      ['Eligibility', eligible ? 'Eligible' : 'Not eligible', eligible ? 'fa-circle-check' : 'fa-circle-exclamation']
+    ],
+    sections: [
+      { title: 'Contact information', icon: 'fa-address-card', body: `<div class="entity-info-grid">${entityInfo('Email address', donor.email || 'Not provided', 'fa-envelope')}${entityInfo('Phone number', donor.phone || 'Not provided', 'fa-phone')}${entityInfo('City', donor.city || 'Not provided', 'fa-location-dot')}${entityInfo('Address', donor.address || 'Not provided', 'fa-map-location-dot')}</div>` },
+      { title: 'Donation history', icon: 'fa-clock-rotate-left', body: `<div class="table-responsive"><table class="table"><thead><tr><th>Date</th><th>Blood group</th><th>Units</th><th>Status</th></tr></thead><tbody>${historyRows}</tbody></table></div>` }
+    ],
+    actions: '<button type="button" class="btn btn-primary" id="recordDonationBtn"><i class="fas fa-plus"></i> Record donation</button>'
   });
-  openRequestDetailsModal();
+  document.getElementById('recordDonationBtn')?.addEventListener('click', () => openRecordDonationModal(donor.uid || donor.id));
 }
-
 function openRecordDonationModal(donorId) {
   const donor = donorsList.find((item) => (item.uid || item.id) === donorId || item.id === donorId);
   if (!donor) {
@@ -2362,9 +2362,50 @@ function renderHospitalsTable() {
 function viewHospitalDetails(id) {
   const hospital = hospitalsList.find((item) => item.uid === id);
   if (!hospital) return;
-  alert(`Hospital Details:\n\nName: ${hospital.hospitalName || 'Unknown'}\nEmail: ${hospital.email || '-'}\nPhone: ${hospital.phone || '-'}\nCity: ${hospital.city || '-'}\nStatus: ${hospital.status || 'Active'}`);
+  const hospitalRequests = requestsList.filter((request) => request.hospitalId === hospital.uid);
+  const completed = hospitalRequests.filter((request) => request.status === 'Completed').length;
+  const pending = hospitalRequests.filter((request) => ['Pending', 'Approved', 'Processing'].includes(request.status)).length;
+  const recentRows = [...hospitalRequests]
+    .sort((a, b) => getTimestamp(b.createdAt || b.requestDate) - getTimestamp(a.createdAt || a.requestDate))
+    .slice(0, 8)
+    .map((request) => `<tr><td>${request.id || '-'}</td><td>${request.bloodGroup || '-'}</td><td>${Number(request.units) || 0}</td><td>${request.status || 'Pending'}</td><td>${formatDate(request.createdAt)}</td></tr>`).join('');
+  const requestRows = recentRows || '<tr><td colspan="5" class="text-center">No requests from this hospital yet.</td></tr>';
+  renderEntityDetails({
+    kind: 'hospital', icon: 'fa-hospital', name: hospital.hospitalName || 'Unknown hospital', subtitle: `${hospital.city || 'Location unavailable'} · Hospital partner`,
+    identity: hospital.uid, status: hospital.status || 'Active',
+    metrics: [
+      ['Total requests', hospitalRequests.length, 'fa-file-medical'],
+      ['Pending requests', pending, 'fa-hourglass-half'],
+      ['Completed requests', completed, 'fa-circle-check'],
+      ['City', hospital.city || 'Not provided', 'fa-location-dot']
+    ],
+    sections: [
+      { title: 'Contact and registration', icon: 'fa-address-card', body: `<div class="entity-info-grid">${entityInfo('Email address', hospital.email || 'Not provided', 'fa-envelope')}${entityInfo('Phone number', hospital.phone || 'Not provided', 'fa-phone')}${entityInfo('City', hospital.city || 'Not provided', 'fa-location-dot')}${entityInfo('Address', hospital.address || 'Not provided', 'fa-map-location-dot')}${entityInfo('License number', hospital.licenseNumber || hospital.hospitalLicense || 'Not provided', 'fa-id-card')}</div>` },
+      { title: 'Recent blood requests', icon: 'fa-clock-rotate-left', body: `<div class="table-responsive"><table class="table"><thead><tr><th>Request ID</th><th>Blood group</th><th>Units</th><th>Status</th><th>Date</th></tr></thead><tbody>${requestRows}</tbody></table></div>` }
+    ],
+    actions: '<button type="button" class="btn btn-primary" id="messageHospitalBtn"><i class="fas fa-bell"></i> Send notification</button>'
+  });
+  document.getElementById('messageHospitalBtn')?.addEventListener('click', () => showView('sendNotification'));
 }
 
+function entityInfo(label, value, icon) {
+  return `<div class="entity-info-item"><span class="entity-info-icon"><i class="fas ${icon}"></i></span><div><span class="entity-info-label">${label}</span><strong>${value}</strong></div></div>`;
+}
+
+function renderEntityDetails({ kind, icon, name, subtitle, identity, status, metrics, sections, actions = '' }) {
+  const view = document.getElementById('entityDetailsView');
+  if (!view) return;
+  entityDetailsReturnView = currentView === 'entityDetails' ? entityDetailsReturnView : (currentView || 'dashboard');
+  const initials = name.split(/\s+/).slice(0, 2).map((part) => part[0] || '').join('').toUpperCase();
+  view.innerHTML = `
+    <div class="entity-detail-topbar"><button type="button" class="btn btn-secondary" data-action="back-to-entity-list"><i class="fas fa-arrow-left"></i> Back to ${kind === 'donor' ? 'donors' : 'hospitals'}</button><span class="entity-detail-breadcrumb">Organization <i class="fas fa-chevron-right"></i> ${kind === 'donor' ? 'Donors' : 'Hospitals'} <i class="fas fa-chevron-right"></i> Profile</span></div>
+    <section class="entity-profile-hero"><div class="entity-profile-identity"><div class="entity-avatar entity-avatar-${kind}">${initials || `<i class="fas ${icon}"></i>`}</div><div><div class="entity-eyebrow"><i class="fas ${icon}"></i> ${kind} profile</div><h1>${name}</h1><p>${subtitle}</p></div></div><div class="entity-profile-actions"><span class="entity-status ${String(status).toLowerCase() === 'active' ? 'is-active' : 'is-inactive'}"><span></span>${status}</span>${actions}</div></section>
+    <div class="entity-metrics-grid">${metrics.map(([label, value, metricIcon]) => `<article class="entity-metric-card"><span class="entity-metric-icon"><i class="fas ${metricIcon}"></i></span><div><span>${label}</span><strong>${value}</strong></div></article>`).join('')}</div>
+    <div class="entity-sections-grid">${sections.map((section) => `<section class="card entity-section-card"><div class="entity-section-heading"><span><i class="fas ${section.icon}"></i></span><h2>${section.title}</h2></div><div class="entity-section-body">${section.body}</div></section>`).join('')}</div>
+    <div class="entity-profile-footnote"><i class="fas fa-fingerprint"></i><span>Profile reference <strong>${identity || 'Unavailable'}</strong></span></div>`;
+  view.querySelector('[data-action="back-to-entity-list"]')?.addEventListener('click', () => showView(entityDetailsReturnView));
+  showView('entityDetails');
+}
 function renderIssueHistoryTable() {
   const tableContainer = document.getElementById('issueHistoryTable');
   const search = document.getElementById('issueSearch')?.value.toLowerCase() || '';
