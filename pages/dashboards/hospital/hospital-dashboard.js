@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   query,
   where
@@ -813,6 +814,102 @@ function attachCancelRequestListeners(container) {
   });
 }
 
+function formatHospitalDate(value) {
+  if (!value) return 'N/A';
+  if (value.toDate && typeof value.toDate === 'function') {
+    return value.toDate().toLocaleDateString();
+  }
+  if (value.seconds) {
+    return new Date(value.seconds * 1000).toLocaleDateString();
+  }
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString();
+}
+
+function attachAllocationViewListeners(container) {
+  if (!container) return;
+  container.querySelectorAll('.btn-view-allocation').forEach((button) => {
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const requestId = button.dataset.requestId;
+      const bloodGroup = button.dataset.bloodGroup;
+      const totalUnits = button.dataset.units;
+      const targetContainer = document.getElementById(`allocation-${requestId}`);
+      if (!targetContainer) return;
+
+      if (targetContainer.style.display !== 'none' && targetContainer.dataset.loaded === 'true') {
+        targetContainer.style.display = 'none';
+        button.innerHTML = '<i class="fas fa-layer-group"></i> View Allocation';
+        return;
+      }
+
+      targetContainer.style.display = 'block';
+      targetContainer.innerHTML = '<div style="padding: 10px 0; color: var(--text-light, #64748b); font-size: 13.5px;"><i class="fas fa-spinner fa-spin"></i> Loading allocation details…</div>';
+      button.innerHTML = '<i class="fas fa-chevron-up"></i> Hide Allocation';
+
+      try {
+        const issueSnap = await getDoc(doc(db, 'bloodIssues', requestId));
+        if (issueSnap.exists()) {
+          const issueData = issueSnap.data();
+          const allocations = Array.isArray(issueData.allocationSummary) ? issueData.allocationSummary : [];
+          if (allocations.length > 0) {
+            const rows = allocations.map((batch, idx) => `
+              <tr>
+                <td style="padding: 6px 10px; font-size: 13.5px;">${idx + 1}</td>
+                <td style="padding: 6px 10px; font-size: 13.5px;"><code>${escapeHospitalOverviewText(batch.inventoryId || 'N/A')}</code></td>
+                <td style="padding: 6px 10px; font-size: 13.5px;"><strong>${Number(batch.units) || 0}</strong></td>
+                <td style="padding: 6px 10px; font-size: 13.5px;">${batch.expiryDate ? formatHospitalDate(batch.expiryDate) : '-'}</td>
+              </tr>
+            `).join('');
+
+            targetContainer.innerHTML = `
+              <div style="background: var(--bg-color, #f8fafc); padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border-color, #e2e8f0); margin-top: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 13.5px; font-weight: 600;">
+                  <span><i class="fas fa-boxes-stacked" style="color: var(--primary-color);"></i> Consumed Inventory Batches (FEFO)</span>
+                  <span>Total: <strong>${Number(issueData.units || totalUnits) || 0}</strong> units (${escapeHospitalOverviewText(issueData.bloodGroup || bloodGroup || '')})</span>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-sm" style="margin: 0; font-size: 13.5px;">
+                    <thead>
+                      <tr>
+                        <th style="width: 30px; padding: 6px 10px;">#</th>
+                        <th style="padding: 6px 10px;">Batch / Inventory ID</th>
+                        <th style="padding: 6px 10px;">Units Taken</th>
+                        <th style="padding: 6px 10px;">Batch Expiry</th>
+                      </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                  </table>
+                </div>
+              </div>
+            `;
+          } else {
+            targetContainer.innerHTML = `
+              <div style="padding: 10px 14px; background: var(--bg-color, #f8fafc); border-radius: 6px; border: 1px solid var(--border-color, #e2e8f0); font-size: 13.5px; color: var(--text-light, #64748b); margin-top: 6px;">
+                <i class="fas fa-info-circle"></i> Allocation details unavailable for this historical issue
+              </div>
+            `;
+          }
+        } else {
+          targetContainer.innerHTML = `
+            <div style="padding: 10px 14px; background: var(--bg-color, #f8fafc); border-radius: 6px; border: 1px solid var(--border-color, #e2e8f0); font-size: 13.5px; color: var(--text-light, #64748b); margin-top: 6px;">
+              <i class="fas fa-info-circle"></i> Allocation details unavailable for this historical issue
+            </div>
+          `;
+        }
+        targetContainer.dataset.loaded = 'true';
+      } catch (err) {
+        console.error('Error fetching issue allocation details:', err);
+        targetContainer.innerHTML = `
+          <div style="padding: 10px 14px; background: var(--bg-color, #f8fafc); border-radius: 6px; border: 1px solid var(--border-color, #e2e8f0); font-size: 13.5px; color: var(--text-light, #64748b); margin-top: 6px;">
+            <i class="fas fa-info-circle"></i> Allocation details unavailable for this historical issue
+          </div>
+        `;
+      }
+    });
+  });
+}
+
 function displayRequestHistory(requests) {
   let html = '';
   if (requests.length === 0) {
@@ -821,6 +918,7 @@ function displayRequestHistory(requests) {
     requests.forEach((req) => {
       const statusClass = req.status.toLowerCase();
       const isPending = req.status === 'Pending';
+      const isCompleted = req.status === 'Completed';
       html += `
         <div class="request-card ${statusClass}">
           <div class="request-header">
@@ -850,6 +948,14 @@ function displayRequestHistory(requests) {
               <button type="button" class="btn btn-danger btn-sm btn-cancel-request" data-request-id="${req.id}">Cancel Request</button>
             </div>
           ` : ''}
+          ${isCompleted ? `
+            <div class="request-actions" style="margin-top: 12px; text-align: right;">
+              <button type="button" class="btn btn-secondary btn-sm btn-view-allocation" data-request-id="${escapeHospitalOverviewText(req.id)}" data-blood-group="${escapeHospitalOverviewText(req.bloodGroup || '')}" data-units="${escapeHospitalOverviewText(String(req.units || 0))}">
+                <i class="fas fa-layer-group"></i> View Allocation
+              </button>
+            </div>
+            <div class="allocation-details-container" id="allocation-${escapeHospitalOverviewText(req.id)}" style="display: none; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border-color, #e2e8f0);"></div>
+          ` : ''}
         </div>
       `;
     });
@@ -858,6 +964,7 @@ function displayRequestHistory(requests) {
   if (container) {
     container.innerHTML = html;
     attachCancelRequestListeners(container);
+    attachAllocationViewListeners(container);
   }
 }
 

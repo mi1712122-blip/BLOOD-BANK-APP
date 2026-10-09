@@ -361,36 +361,54 @@ class BloodRequestManager {
     }
   }
 
-  async rejectRequest(requestId, reason) {
+  async rejectRequest(requestId, reason = 'Rejected by organization', organizationId = null, organizationName = null) {
     try {
       const requestDoc = await getDoc(doc(db, 'bloodRequests', requestId));
+      if (!requestDoc.exists()) {
+        return { success: false, error: 'Request not found.' };
+      }
       const request = requestDoc.data();
-      const now = new Date();
+      if (request.status !== this.requestStatus.PENDING) {
+        return { success: false, error: `Cannot reject request in '${request.status}' status.` };
+      }
 
+      const now = new Date();
       const batch = writeBatch(db);
       batch.update(doc(db, 'bloodRequests', requestId), {
         status: this.requestStatus.REJECTED,
-        rejectionReason: reason,
-        rejectedAt: now
-      });
-
-      const donorSafeRef = doc(db, 'donorBloodRequests', requestId);
-      batch.update(donorSafeRef, {
-        status: this.requestStatus.REJECTED,
+        rejectionReason: reason || 'Rejected by organization',
+        rejectedAt: now,
         updatedAt: now
       });
 
+      const donorSafeRef = doc(db, 'donorBloodRequests', requestId);
+      const donorSafeSnap = await getDoc(donorSafeRef);
+      if (donorSafeSnap.exists()) {
+        batch.update(donorSafeRef, {
+          status: this.requestStatus.REJECTED,
+          updatedAt: now
+        });
+      }
+
       await batch.commit();
 
-      await this.broadcastRequestNotification({
-        request: { ...request, id: requestId },
-        event: 'request_rejected',
-        title: 'Request Rejected',
-        message: `Your request for ${request.units} units of ${request.bloodGroup} has been rejected. Reason: ${reason}`,
-        senderId: request.organizationId || null,
-        senderRole: 'organization',
-        senderName: request.organizationName || 'Organization'
-      });
+      try {
+        const senderId = organizationId || request.organizationId || auth.currentUser?.uid || null;
+        const senderName = organizationName || request.organizationName || 'Organization';
+        if (senderId) {
+          await this.broadcastRequestNotification({
+            request: { ...request, id: requestId },
+            event: 'request_rejected',
+            title: 'Request Rejected',
+            message: `Your request for ${request.units} units of ${request.bloodGroup} has been rejected. Reason: ${reason || 'Rejected by organization'}`,
+            senderId,
+            senderRole: 'organization',
+            senderName
+          });
+        }
+      } catch (notifErr) {
+        console.error('Request rejected successfully, but notification failed:', notifErr);
+      }
 
       return { success: true };
     } catch (error) {

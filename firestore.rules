@@ -180,7 +180,7 @@ service cloud.firestore {
               // Reject: Pending -> Rejected
               (resource.data.status == 'Pending'
                 && request.resource.data.status == 'Rejected'
-                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'rejectionReason', 'rejectedAt'])
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'rejectionReason', 'rejectedAt', 'updatedAt'])
                 && request.resource.data.diff(resource.data).affectedKeys().hasAll(['status']))
               ||
               // Issue blood: Processing -> Completed
@@ -268,7 +268,16 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/bloodRequests/$(request.resource.data.requestId)).data.status == 'Completed'
         && getAfter(/databases/$(database)/documents/bloodRequests/$(request.resource.data.requestId)).data.issueDetails.unitsIssued == request.resource.data.units
         && getAfter(/databases/$(database)/documents/bloodRequests/$(request.resource.data.requestId)).data.issueDetails.bloodGroup == request.resource.data.bloodGroup
-        && getAfter(/databases/$(database)/documents/bloodRequests/$(request.resource.data.requestId)).data.issueDetails.organizationId == request.auth.uid;
+        && getAfter(/databases/$(database)/documents/bloodRequests/$(request.resource.data.requestId)).data.issueDetails.organizationId == request.auth.uid
+        && (!('allocationSummary' in request.resource.data) || (
+          request.resource.data.allocationSummary is list
+        ))
+        && request.resource.data.keys().hasOnly([
+             'issueId', 'requestId', 'hospitalId', 'hospitalName',
+             'organizationId', 'organizationName', 'bloodGroup', 'units',
+             'issuedBy', 'issueDate', 'purpose', 'status', 'allocationSummary',
+             'createdAt'
+           ]);
       allow update, delete: if false;
     }
 

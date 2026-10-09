@@ -6,7 +6,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js';
 import { auth, db } from './firebase-config.js';
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   // ==========================================
   // DARK / LIGHT THEME TOGGLE
   // ==========================================
@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', function() {
   updateThemeUI(isDarkMode);
 
   if (themeToggleBtn) {
-    themeToggleBtn.addEventListener('click', function() {
+    themeToggleBtn.addEventListener('click', function () {
       const isCurrentlyDark = document.body.classList.contains('dark-mode') || document.documentElement.classList.contains('dark-mode');
       const nextDark = !isCurrentlyDark;
       updateThemeUI(nextDark);
@@ -128,6 +128,7 @@ document.addEventListener('DOMContentLoaded', function() {
             heroVideo.classList.add('is-visible');
           }).catch(() => {
             // Keep the poster visible if playback cannot resume.
+
           });
         }, 4000);
       });
@@ -178,7 +179,7 @@ document.addEventListener('DOMContentLoaded', function() {
     rootMargin: '0px 0px -50px 0px'
   };
 
-  const observer = 'IntersectionObserver' in window ? new IntersectionObserver(function(entries) {
+  const observer = 'IntersectionObserver' in window ? new IntersectionObserver(function (entries) {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
         entry.target.classList.add('in-view');
@@ -188,7 +189,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }, observerOptions) : null;
 
   document.querySelectorAll('.slide-up-anim').forEach(el => {
-      observer?.observe(el);
+    observer?.observe(el);
   });
 
 
@@ -196,15 +197,15 @@ document.addEventListener('DOMContentLoaded', function() {
   // FAQ ACCORDION LOGIC
   // ==========================================
   const faqQuestions = document.querySelectorAll('.faq-question');
-  
+
   faqQuestions.forEach(question => {
     const answerId = question.getAttribute('aria-controls');
     const controlledAnswer = answerId ? document.getElementById(answerId) : null;
-    question.addEventListener('click', function() {
+    question.addEventListener('click', function () {
       const faqItem = this.parentElement;
       const faqContent = controlledAnswer || faqItem.querySelector('.faq-content');
       const isActive = faqItem.classList.contains('active');
-      
+
       // Close all other active FAQ items
       document.querySelectorAll('.faq-item').forEach(item => {
         if (item !== faqItem) {
@@ -214,7 +215,7 @@ document.addEventListener('DOMContentLoaded', function() {
           item.querySelector('.faq-question')?.setAttribute('aria-expanded', 'false');
         }
       });
-      
+
       // Toggle current FAQ item
       if (isActive) {
         faqItem.classList.remove('active');
@@ -235,14 +236,14 @@ document.addEventListener('DOMContentLoaded', function() {
   const contactContainer = contactForm?.closest('.contact-form-container');
 
   if (contactForm && contactContainer) {
-    contactForm.addEventListener('submit', async function(e) {
+    contactForm.addEventListener('submit', async function (e) {
       e.preventDefault();
-      
+
       const name = document.getElementById('contact-name').value.trim();
       const email = document.getElementById('contact-email').value.trim();
       const subject = document.getElementById('contact-subject').value.trim();
       const message = document.getElementById('contact-message').value.trim();
-      
+
       if (!name || !email || !subject || !message) {
         alert("Please fill in all required fields.");
         return;
@@ -281,15 +282,15 @@ document.addEventListener('DOMContentLoaded', function() {
         contactContainer.style.opacity = 0;
 
         setTimeout(() => {
-        contactContainer.innerHTML = `
+          contactContainer.innerHTML = `
           <div class="contact-success-card animate__animated animate__fadeIn" role="status" aria-live="polite">
             <i class="fas fa-circle-check"></i>
             <h3>Message Sent!</h3>
             <p>Thank you, <strong>${escapeHTML(name)}</strong>. Your message has been submitted.</p>
           </div>
         `;
-        contactContainer.style.opacity = 1;
-      }, 300);
+          contactContainer.style.opacity = 1;
+        }, 300);
       } catch (error) {
         console.error('Error sending contact message:', error);
         alert('Your message could not be sent. Please try again later.');
@@ -302,7 +303,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Utility to escape HTML and prevent XSS
   function escapeHTML(str) {
-    return str.replace(/[&<>'"]/g, 
+    return str.replace(/[&<>'"]/g,
       tag => ({
         '&': '&amp;',
         '<': '&lt;',

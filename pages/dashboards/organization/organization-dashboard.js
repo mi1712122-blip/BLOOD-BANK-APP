@@ -1094,6 +1094,7 @@ async function issueBlood(requestId, targetButton = null) {
         throw new Error(`Insufficient inventory. Requested: ${reqUnits}, Available: ${totalAvailable}.`);
       }
 
+      const allocationSummary = [];
       let remaining = reqUnits;
 
       for (const item of availableItems) {
@@ -1104,6 +1105,12 @@ async function issueBlood(requestId, targetButton = null) {
         const reduceBy = Math.min(currentUnits, remaining);
         const newUnits = currentUnits - reduceBy;
         remaining -= reduceBy;
+
+        allocationSummary.push({
+          inventoryId: item.id,
+          units: reduceBy,
+          expiryDate: item.expiryDate || null
+        });
 
         transaction.update(item.ref, {
           units: newUnits,
@@ -1147,6 +1154,7 @@ async function issueBlood(requestId, targetButton = null) {
         issueDate: now,
         purpose: request.purpose || 'Hospital request',
         status: 'Completed',
+        allocationSummary,
         createdAt: now
       });
 
@@ -1228,6 +1236,82 @@ function openRequestDetailsModal() {
 
 function closeRequestDetailsModal() {
   document.getElementById('requestDetailsModal')?.classList.remove('show');
+  const modalTitle = document.getElementById('requestDetailsModalTitle');
+  if (modalTitle) modalTitle.textContent = 'Request Details';
+}
+
+function escapeOrgHTML(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).replace(/[&<>'"]/g, (tag) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;'
+  }[tag] || tag));
+}
+
+function openIssueAllocationDetails(issueId) {
+  const issue = issuesList.find((item) => item.id === issueId || item.issueId === issueId);
+  if (!issue) return;
+  const content = document.getElementById('requestDetailsContent');
+  if (!content) return;
+
+  const modalTitle = document.getElementById('requestDetailsModalTitle');
+  if (modalTitle) modalTitle.textContent = 'Blood Issue Allocation Details';
+
+  const allocations = Array.isArray(issue.allocationSummary) ? issue.allocationSummary : [];
+  const hasAllocations = allocations.length > 0;
+
+  const allocationRows = hasAllocations
+    ? allocations.map((batch, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td><code>${escapeOrgHTML(batch.inventoryId || 'N/A')}</code></td>
+          <td><strong>${Number(batch.units) || 0}</strong></td>
+          <td>${batch.expiryDate ? formatDate(batch.expiryDate, true) : '-'}</td>
+        </tr>
+      `).join('')
+    : '';
+
+  content.innerHTML = `
+    <div class="details-grid">
+      <div><strong>Hospital:</strong> ${escapeOrgHTML(issue.hospitalName || '-')}</div>
+      <div><strong>Blood Group:</strong> ${escapeOrgHTML(issue.bloodGroup || '-')}</div>
+      <div><strong>Total Units Issued:</strong> ${Number(issue.units) || 0}</div>
+      <div><strong>Status:</strong> ${escapeOrgHTML(issue.status || 'Completed')}</div>
+      <div><strong>Issue Date:</strong> ${formatDate(issue.issueDate, true)}</div>
+      <div><strong>Purpose:</strong> ${escapeOrgHTML(issue.purpose || '-')}</div>
+      <div><strong>Request ID:</strong> <code>${escapeOrgHTML(issue.requestId || issue.id || '-')}</code></div>
+    </div>
+    <div style="margin-top: 20px;">
+      <h4 style="margin-bottom: 12px; font-size: 15px; font-weight: 700;">
+        <i class="fas fa-boxes-stacked" style="color: var(--primary-color);"></i> Consumed Inventory Batches (FEFO)
+      </h4>
+      ${hasAllocations ? `
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width: 40px;">#</th>
+                <th>Batch / Inventory ID</th>
+                <th>Units Taken</th>
+                <th>Batch Expiry Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${allocationRows}
+            </tbody>
+          </table>
+        </div>
+      ` : `
+        <div style="padding: 12px 16px; border-radius: 8px; background: var(--landing-surface-muted, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); color: var(--text-light, #64748b); font-size: 14px;">
+          <i class="fas fa-info-circle"></i> Allocation details unavailable for this historical issue
+        </div>
+      `}
+    </div>
+  `;
+  openRequestDetailsModal();
 }
 
 function openInventoryGroupDetails(group) {
@@ -1927,20 +2011,37 @@ async function approveRequest(requestId) {
 
 function openRejectModal(requestId) {
   const reason = prompt('Please provide a reason for rejection:');
-  if (!reason) return;
-  rejectRequest(requestId, reason);
+  if (reason === null) return;
+  const trimmedReason = reason.trim() || 'Rejected by organization';
+  rejectRequest(requestId, trimmedReason);
 }
 
 async function rejectRequest(requestId, reason) {
   try {
-    const result = await bloodRequestManager.rejectRequest(requestId, reason);
+    const result = await bloodRequestManager.rejectRequest(
+      requestId,
+      reason,
+      currentOrganization?.uid || auth.currentUser?.uid,
+      currentOrganization?.organizationName
+    );
     if (result.success) {
       alert('Request rejected');
+      const target = requestsList.find((r) => r.id === requestId);
+      if (target) {
+        target.status = 'Rejected';
+        target.rejectionReason = reason;
+        target.rejectedAt = new Date();
+      }
+      renderDashboardCards();
+      renderCurrentView();
       await refreshAllData();
+    } else {
+      console.error('Failed to reject request:', result.error);
+      alert('Failed to reject request: ' + (result.error || 'Unknown error'));
     }
   } catch (error) {
     console.error('Error rejecting request:', error);
-    alert('Failed to reject request');
+    alert('Failed to reject request: ' + (error.message || 'Unknown error'));
   }
 }
 
@@ -2371,7 +2472,7 @@ function viewHospitalDetails(id) {
     .map((request) => `<tr><td>${request.id || '-'}</td><td>${request.bloodGroup || '-'}</td><td>${Number(request.units) || 0}</td><td>${request.status || 'Pending'}</td><td>${formatDate(request.createdAt)}</td></tr>`).join('');
   const requestRows = recentRows || '<tr><td colspan="5" class="text-center">No requests from this hospital yet.</td></tr>';
   renderEntityDetails({
-    kind: 'hospital', icon: 'fa-hospital', name: hospital.hospitalName || 'Unknown hospital', subtitle: `${hospital.city || 'Location unavailable'} · Hospital partner`,
+    kind: 'hospital', icon: 'fa-hospital', name: hospital.hospitalName || 'Unknown hospital', subtitle: ${hospital.city || 'Location unavailable'} - Hospital partner,
     identity: hospital.uid, status: hospital.status || 'Active',
     metrics: [
       ['Total requests', hospitalRequests.length, 'fa-file-medical'],
@@ -2419,13 +2520,18 @@ function renderIssueHistoryTable() {
   const paginated = getPaginatedData(filtered, 'issueHistoryTable', 8);
   const rows = paginated.items.map((issue) => `
     <tr>
-      <td>${issue.hospitalName || ''}</td>
-      <td>${issue.bloodGroup || ''}</td>
+      <td>${escapeOrgHTML(issue.hospitalName || '')}</td>
+      <td>${escapeOrgHTML(issue.bloodGroup || '')}</td>
       <td>${issue.units || 0}</td>
-      <td>${issue.issuedBy || ''}</td>
+      <td>${escapeOrgHTML(issue.issuedBy || '')}</td>
       <td>${formatDate(issue.issueDate, true)}</td>
-      <td>${issue.purpose || ''}</td>
-      <td>${issue.status || ''}</td>
+      <td>${escapeOrgHTML(issue.purpose || '')}</td>
+      <td>${escapeOrgHTML(issue.status || '')}</td>
+      <td style="text-align: right;">
+        <button type="button" class="btn btn-secondary btn-sm" data-action="view-issue-allocation" data-issue-id="${issue.id}">
+          <i class="fas fa-layer-group"></i> View Allocation
+        </button>
+      </td>
     </tr>
   `);
   tableContainer.innerHTML = `
@@ -2441,14 +2547,20 @@ function renderIssueHistoryTable() {
               <th>Issue Date</th>
               <th>Purpose</th>
               <th>Status</th>
+              <th style="text-align: right;">Allocation</th>
             </tr>
           </thead>
-          <tbody>${rows.length ? rows.join('') : '<tr><td colspan="7" class="text-center">No issue history found</td></tr>'}</tbody>
+          <tbody>${rows.length ? rows.join('') : '<tr><td colspan="8" class="text-center">No issue history found</td></tr>'}</tbody>
         </table>
       </div>
       ${renderPaginationControls('issueHistoryTable', paginated.page, paginated.totalPages)}
     </div>
   `;
+  tableContainer.querySelectorAll('[data-action="view-issue-allocation"]').forEach((button) => {
+    button.addEventListener('click', () => {
+      openIssueAllocationDetails(button.dataset.issueId);
+    });
+  });
   tableContainer.querySelectorAll('[data-page-target]').forEach((button) => {
     button.addEventListener('click', () => {
       const key = button.dataset.pageTarget;
