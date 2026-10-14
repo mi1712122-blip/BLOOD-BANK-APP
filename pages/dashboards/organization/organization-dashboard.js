@@ -2472,7 +2472,7 @@ function viewHospitalDetails(id) {
     .map((request) => `<tr><td>${request.id || '-'}</td><td>${request.bloodGroup || '-'}</td><td>${Number(request.units) || 0}</td><td>${request.status || 'Pending'}</td><td>${formatDate(request.createdAt)}</td></tr>`).join('');
   const requestRows = recentRows || '<tr><td colspan="5" class="text-center">No requests from this hospital yet.</td></tr>';
   renderEntityDetails({
-    kind: 'hospital', icon: 'fa-hospital', name: hospital.hospitalName || 'Unknown hospital', subtitle: ${hospital.city || 'Location unavailable'} - Hospital partner,
+    kind: 'hospital', icon: 'fa-hospital', name: hospital.hospitalName || 'Unknown hospital', subtitle: `${hospital.city || 'Location unavailable'} - Hospital partner`,
     identity: hospital.uid, status: hospital.status || 'Active',
     metrics: [
       ['Total requests', hospitalRequests.length, 'fa-file-medical'],
