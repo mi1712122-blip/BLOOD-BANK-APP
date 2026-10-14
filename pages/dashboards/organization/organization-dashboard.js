@@ -19,6 +19,10 @@ import { auth, db } from '../../../assets/js/firebase-config.js';
 let currentOrganization = null;
 let currentView = 'dashboard';
 let entityDetailsReturnView = 'dashboard';
+let organizationUserApprovalData = null;
+let organizationProfileApprovalData = null;
+let organizationUserApprovalLoaded = false;
+let organizationProfileApprovalLoaded = false;
 // Project configuration: set this to the approved blood product and storage policy.
 const DONATION_BATCH_SHELF_LIFE_DAYS = 42;
 let notificationsListener = null;
@@ -60,6 +64,65 @@ const viewSelectors = {
 const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 const chartInstances = {};
 
+function syncOrganizationApprovalState() {
+  let approvalStatus = 'Pending';
+  const bothDocumentsExist = organizationUserApprovalLoaded
+    && organizationProfileApprovalLoaded
+    && organizationUserApprovalData !== null
+    && organizationProfileApprovalData !== null;
+
+  if (bothDocumentsExist) {
+    const sources = [organizationUserApprovalData, organizationProfileApprovalData];
+    const statuses = sources.map((account) => {
+      const hasStatus = Object.prototype.hasOwnProperty.call(account, 'status');
+      const rawStatus = account.status;
+      if (!hasStatus) return '';
+      if (typeof rawStatus !== 'string') return 'invalid';
+      const normalized = rawStatus.trim().toLowerCase();
+      return ['approved', 'pending', 'rejected'].includes(normalized) ? normalized : 'invalid';
+    });
+    const recognizedStatuses = statuses.filter((status) => status && status !== 'invalid');
+    const hasInvalidStatus = statuses.includes('invalid');
+    const statusesAgree = recognizedStatuses.every((status) => status === recognizedStatuses[0]);
+    const resolvedStatus = recognizedStatuses[0];
+    const invalidOrConflictingApprovalFlag = sources.some((account) => {
+      if (!Object.prototype.hasOwnProperty.call(account, 'isApproved')) return false;
+      return typeof account.isApproved !== 'boolean'
+        || !resolvedStatus
+        || account.isApproved !== (resolvedStatus === 'approved');
+    });
+
+    if (!hasInvalidStatus && statusesAgree && resolvedStatus && !invalidOrConflictingApprovalFlag) {
+      approvalStatus = resolvedStatus === 'approved'
+        ? 'Approved'
+        : resolvedStatus === 'rejected' ? 'Rejected' : 'Pending';
+    }
+  }
+
+  currentOrganization = { ...currentOrganization, status: approvalStatus, isApproved: approvalStatus === 'Approved' };
+  renderApprovalStatusNotice(currentOrganization, document.getElementById('approvalStatusNotice'));
+  document.querySelectorAll('[data-action="quick-add-blood"], [data-action="quick-issue-blood"], [data-action="quick-notify-donors"], [data-action="open-add-blood-modal"]').forEach((button) => {
+    button.disabled = approvalStatus !== 'Approved';
+  });
+  console.info('Organization approval evaluation', {
+    usersExists: organizationUserApprovalLoaded && organizationUserApprovalData !== null,
+    usersStatus: organizationUserApprovalData && Object.prototype.hasOwnProperty.call(organizationUserApprovalData, 'status')
+      ? organizationUserApprovalData.status
+      : '<missing>',
+    usersIsApproved: organizationUserApprovalData && Object.prototype.hasOwnProperty.call(organizationUserApprovalData, 'isApproved')
+      ? organizationUserApprovalData.isApproved
+      : '<missing>',
+    organizationsExists: organizationProfileApprovalLoaded && organizationProfileApprovalData !== null,
+    organizationsStatus: organizationProfileApprovalData && Object.prototype.hasOwnProperty.call(organizationProfileApprovalData, 'status')
+      ? organizationProfileApprovalData.status
+      : '<missing>',
+    organizationsIsApproved: organizationProfileApprovalData && Object.prototype.hasOwnProperty.call(organizationProfileApprovalData, 'isApproved')
+      ? organizationProfileApprovalData.isApproved
+      : '<missing>',
+    decision: approvalStatus
+  });
+}
+
 async function initDashboard() {
   const isAuthLoaded = await checkAuthAndLoadOrganization();
   if (!isAuthLoaded) return;
@@ -92,9 +155,9 @@ async function checkAuthAndLoadOrganization() {
     return false;
   }
 
-  currentOrganization = user.data;
+  currentOrganization = { ...user.data, status: 'Pending', isApproved: false };
   document.getElementById('orgName').textContent = currentOrganization.organizationName || 'Organization';
-  renderApprovalStatusNotice(currentOrganization, document.getElementById('approvalStatusNotice'));
+  syncOrganizationApprovalState();
 
   if (notificationsListener) notificationsListener();
   notificationsListener = bloodRequestManager.listenNotifications(currentOrganization.uid, (result) => {
@@ -111,16 +174,20 @@ async function checkAuthAndLoadOrganization() {
 
   // Keep approval data synchronized on both profile and role documents.
   onSnapshot(doc(db, 'users', currentOrganization.uid), (docSnap) => {
-    if (!docSnap.exists()) return;
-    currentOrganization = { ...currentOrganization, ...docSnap.data() };
-    renderApprovalStatusNotice(currentOrganization, document.getElementById('approvalStatusNotice'));
-    const blocked = getApprovalStatus(currentOrganization) !== 'Approved';
-    document.querySelectorAll('[data-action="quick-add-blood"], [data-action="quick-issue-blood"], [data-action="quick-notify-donors"], [data-action="open-add-blood-modal"]').forEach((button) => { button.disabled = blocked; });
+    organizationUserApprovalLoaded = true;
+    organizationUserApprovalData = docSnap.exists() ? docSnap.data() : null;
+    if (docSnap.exists()) currentOrganization = { ...currentOrganization, ...organizationUserApprovalData };
+    syncOrganizationApprovalState();
+  }, (error) => {
+    console.error('Error loading organization user approval data:', error);
   });
   onSnapshot(doc(db, 'organizations', currentOrganization.uid), (docSnap) => {
-    if (!docSnap.exists()) return;
-    currentOrganization = { ...currentOrganization, ...docSnap.data() };
-    renderApprovalStatusNotice(currentOrganization, document.getElementById('approvalStatusNotice'));
+    organizationProfileApprovalLoaded = true;
+    organizationProfileApprovalData = docSnap.exists() ? docSnap.data() : null;
+    if (docSnap.exists()) currentOrganization = { ...currentOrganization, ...organizationProfileApprovalData };
+    syncOrganizationApprovalState();
+  }, (error) => {
+    console.error('Error loading organization profile approval data:', error);
   });
 
   return true;
