@@ -42,6 +42,7 @@ let issuesList = [];
 let inventoryHistoryList = [];
 let inventoryItems = [];
 let currentInventorySummary = {};
+let inventoryLoadError = null;
 let donationSaveInProgress = false;
 const tablePaginationState = {};
 
@@ -425,6 +426,7 @@ function renderDashboardCards() {
   if (document.getElementById('activeRequests')) document.getElementById('activeRequests').textContent = activeRequestsCount;
 
   renderLowStockAlerts(summary);
+  renderRareBloodUnits(summary);
   renderInventoryProgress(summary);
   renderPendingRequestsPreview();
   renderRecentNotificationsPreview();
@@ -557,8 +559,13 @@ function getTimestamp(value) {
 function renderLowStockAlerts(inventorySummary) {
   const container = document.getElementById('lowStockAlerts');
   if (!container) return;
+  if (inventoryLoadError) {
+    container.innerHTML = '<p class="text-center">Unable to load inventory. Please try again.</p>';
+    return;
+  }
+
   const lowGroups = Object.entries(inventorySummary)
-    .filter(([group, units]) => units > 0 && units < 6)
+    .filter(([, units]) => units >= 0 && units < 6)
     .sort((a, b) => a[1] - b[1]);
 
   if (!lowGroups.length) {
@@ -588,6 +595,20 @@ function renderLowStockAlerts(inventorySummary) {
   container.querySelectorAll('[data-action="notify-donors"]').forEach((button) => {
     button.addEventListener('click', () => notifyLowStock(button.dataset.bloodGroup));
   });
+}
+
+function renderRareBloodUnits(inventorySummary) {
+  const container = document.getElementById('rareBloodUnits');
+  if (!container) return;
+  if (inventoryLoadError) {
+    container.innerHTML = '<p class="text-center">Unable to load inventory. Please try again.</p>';
+    return;
+  }
+
+  const units = inventorySummary['AB-'] || 0;
+  container.innerHTML = units > 0
+    ? `<p><strong>AB-</strong>: ${units} unit${units === 1 ? '' : 's'} available</p>`
+    : '<p class="text-center">No AB- units are currently available.</p>';
 }
 
 async function loadHospitals() {
@@ -650,14 +671,27 @@ async function loadNotifications() {
 
 async function loadInventorySummary() {
   const inventoryItemsResult = await bloodInventoryManager.getInventoryItemsByOrganization(currentOrganization.uid);
-  inventoryItems = inventoryItemsResult.success ? inventoryItemsResult.data : [];
-  currentInventorySummary = getOrganizationAvailableInventorySummary(inventoryItems, currentOrganization.uid);
+  if (inventoryItemsResult.success) {
+    inventoryLoadError = null;
+    inventoryItems = inventoryItemsResult.data;
+    currentInventorySummary = getOrganizationAvailableInventorySummary(inventoryItems, currentOrganization.uid);
+  } else {
+    inventoryLoadError = inventoryItemsResult.error || 'Inventory could not be loaded.';
+    console.error('Error loading organization inventory:', inventoryLoadError);
+  }
   displayInventoryOverview(currentInventorySummary);
   calculateTotalUnits(currentInventorySummary);
 
   if (inventoryListener) inventoryListener();
   inventoryListener = bloodInventoryManager.listenOrganizationInventory(currentOrganization.uid, (result) => {
-    if (!result.success) return;
+    if (!result.success) {
+      inventoryLoadError = result.error || 'Inventory could not be loaded.';
+      console.error('Error listening to organization inventory:', inventoryLoadError);
+      renderLowStockAlerts(currentInventorySummary);
+      renderRareBloodUnits(currentInventorySummary);
+      return;
+    }
+    inventoryLoadError = null;
     inventoryItems = result.data;
     currentInventorySummary = getOrganizationAvailableInventorySummary(inventoryItems, currentOrganization.uid);
     displayInventoryOverview(currentInventorySummary);

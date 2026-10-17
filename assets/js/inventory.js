@@ -118,8 +118,12 @@ class BloodInventoryManager {
 
   async getInventoryByOrganization(organizationId) {
     try {
+      if (typeof organizationId !== 'string' || !organizationId.trim()) {
+        return { success: false, error: 'Organization ID is required.' };
+      }
+
       const inventoryConstraints = [where('status', '==', 'Available')];
-      if (organizationId) inventoryConstraints.unshift(where('organizationId', '==', organizationId));
+      inventoryConstraints.unshift(where('organizationId', '==', organizationId));
       const inventoryQuery = query(collection(db, 'bloodInventory'), ...inventoryConstraints);
       const snapshot = await getDocs(inventoryQuery);
 
@@ -139,7 +143,11 @@ class BloodInventoryManager {
 
   async getInventoryItemsByOrganization(organizationId) {
     try {
-      const inventoryConstraints = organizationId ? [where('organizationId', '==', organizationId)] : [];
+      if (typeof organizationId !== 'string' || !organizationId.trim()) {
+        return { success: false, error: 'Organization ID is required.' };
+      }
+
+      const inventoryConstraints = [where('organizationId', '==', organizationId)];
       const inventoryQuery = query(collection(db, 'bloodInventory'), ...inventoryConstraints);
       const snapshot = await getDocs(inventoryQuery);
       const items = [];
@@ -154,7 +162,12 @@ class BloodInventoryManager {
 
   listenOrganizationInventory(organizationId, callback) {
     try {
-      const inventoryConstraints = organizationId ? [where('organizationId', '==', organizationId)] : [];
+      if (typeof organizationId !== 'string' || !organizationId.trim()) {
+        callback({ success: false, error: 'Organization ID is required.' });
+        return () => {};
+      }
+
+      const inventoryConstraints = [where('organizationId', '==', organizationId)];
       const inventoryQuery = query(collection(db, 'bloodInventory'), ...inventoryConstraints);
       return onSnapshot(
         inventoryQuery,
